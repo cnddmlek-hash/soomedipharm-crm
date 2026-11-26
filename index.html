@@ -76,6 +76,22 @@
      color: #cbd5e1;
      margin-top: 4px;
    }
+   /* 상단 로고 마크 — 알약 이모지 대신 SMP 앱 아이콘 (둥근 모서리 사각 배지) */
+   .brand-mark {
+     display: inline-block;
+     width: 26px;
+     height: 26px;
+     border-radius: 6px;
+     vertical-align: middle;
+     margin: -4px 7px 0 0;
+     object-fit: cover;
+     background: #dbe9f7;
+     box-shadow: 0 1px 4px rgba(15, 23, 42, 0.22);
+   }
+   .login-brand .brand-mark { width: 28px; height: 28px; margin-top: -5px; }
+   @media (max-width: 768px) {
+     .mobile-header .brand-mark { width: 24px; height: 24px; margin: -4px 6px 0 0; }
+   }
    .sidebar-nav {
      flex: 1;
      padding: 12px 10px;
@@ -629,7 +645,7 @@
  <div id="login-overlay" class="login-overlay">
    <div class="login-card">
      <div class="login-brand">
-       <div class="t">💊 수메디팜 미니 CRM<span class="ver-chip dark">v1.3</span></div>
+       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.3</span></div>
        <div class="s">담당자 아이디로 로그인해 주세요</div>
      </div>
      <div class="form-group" style="margin-bottom:10px;">
@@ -642,7 +658,9 @@
      </div>
      <div class="login-error" id="login-error"></div>
      <button class="btn btn-primary" style="width:100%;margin-top:6px;" id="login-btn" onclick="submitLogin()">로그인</button>
+     <button class="btn btn-outline" style="width:100%;margin-top:8px;" onclick="openRegisterModal()">회원가입 신청</button>
      <div class="login-hint">
+       가입 신청한 계정은 <strong>마스터 승인 후</strong> 로그인할 수 있습니다.<br />
        계정은 구글 시트 <strong>[사용자]</strong> 탭에서 추가·수정합니다.<br />
        MASTER는 전체 거래처, STAFF는 자기 담당 거래처만 조회·주문할 수 있습니다.
      </div>
@@ -701,6 +719,74 @@
      </div>
      <div class="modal-footer">
        <button class="btn btn-primary" style="width:100%;" onclick="submitPin()">잠금 해제</button>
+     </div>
+   </div>
+ </div>
+
+ <!-- 비밀번호 변경 모달 (MASTER · STAFF 모두) -->
+ <div id="pw-modal" class="modal-backdrop">
+   <div class="modal" style="max-width:380px;">
+     <div class="modal-header">
+       <span>🔑 비밀번호 변경</span>
+       <button class="btn btn-outline btn-sm" onclick="closeModal('pw-modal')">✕</button>
+     </div>
+     <div class="modal-body">
+       <p style="margin-top:0;color:var(--muted);font-size:12.5px;" id="pw-who"></p>
+       <div class="form-group">
+         <label>현재 비밀번호</label>
+         <input type="password" id="pw-cur" autocomplete="current-password" placeholder="지금 쓰는 비밀번호" />
+       </div>
+       <div class="form-group">
+         <label>새 비밀번호 (4자 이상)</label>
+         <input type="password" id="pw-new" autocomplete="new-password" placeholder="새 비밀번호" />
+       </div>
+       <div class="form-group">
+         <label>새 비밀번호 확인</label>
+         <input type="password" id="pw-new2" autocomplete="new-password" placeholder="새 비밀번호 한 번 더"
+                onkeydown="if(event.key==='Enter')submitChangePassword()" />
+       </div>
+       <div id="pw-error" style="color:var(--danger);font-size:12px;min-height:16px;line-height:1.5;"></div>
+       <small style="color:var(--muted);font-size:11.5px;line-height:1.6;">비밀번호에는 공백을 쓸 수 없고, 4자 이상이어야 합니다.<br />바꾸면 다음 로그인부터 새 비밀번호를 쓰시면 됩니다.</small>
+     </div>
+     <div class="modal-footer">
+       <button class="btn btn-outline" onclick="closeModal('pw-modal')">취소</button>
+       <button class="btn btn-primary" id="pw-save-btn" onclick="submitChangePassword()">변경하기</button>
+     </div>
+   </div>
+ </div>
+
+ <!-- 회원가입 신청 모달 (승인제) -->
+ <div id="reg-modal" class="modal-backdrop">
+   <div class="modal" style="max-width:380px;">
+     <div class="modal-header">
+       <span>👥 회원가입 신청</span>
+       <button class="btn btn-outline btn-sm" onclick="closeModal('reg-modal')">✕</button>
+     </div>
+     <div class="modal-body">
+       <p style="margin-top:0;color:var(--muted);font-size:12.5px;line-height:1.6;">신청한 계정은 <strong>STAFF(직원)</strong> 권한으로 등록되고,<br />마스터가 승인해야 로그인할 수 있습니다.</p>
+       <div class="form-group">
+         <label>아이디 (영문·숫자 3~20자)</label>
+         <input type="text" id="rg-id" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="예: kim01" />
+       </div>
+       <div class="form-group">
+         <label>담당자명 (이름)</label>
+         <input type="text" id="rg-name" autocomplete="name" placeholder="예: 김아름" />
+       </div>
+       <div class="form-group">
+         <label>비밀번호 (4자 이상)</label>
+         <input type="password" id="rg-pw" autocomplete="new-password" placeholder="비밀번호" />
+       </div>
+       <div class="form-group">
+         <label>비밀번호 확인</label>
+         <input type="password" id="rg-pw2" autocomplete="new-password" placeholder="비밀번호 한 번 더"
+                onkeydown="if(event.key==='Enter')submitRegister()" />
+       </div>
+       <div id="rg-error" style="color:var(--danger);font-size:12px;min-height:16px;line-height:1.5;"></div>
+       <div id="rg-done" style="display:none;background:var(--success-bg);color:#065f46;border:1px solid #a7f3d0;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.6;"></div>
+     </div>
+     <div class="modal-footer">
+       <button class="btn btn-outline" onclick="closeModal('reg-modal')">닫기</button>
+       <button class="btn btn-primary" id="rg-save-btn" onclick="submitRegister()">가입 신청</button>
      </div>
    </div>
  </div>
@@ -890,7 +976,7 @@
    <!-- PC 사이드바 -->
    <aside class="sidebar">
      <div class="sidebar-brand">
-       <h1>💊 <span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.3</span></h1>
+       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.3</span></h1>
        <div class="sub" id="brand-sub">로딩 중...</div>
      </div>
      <nav class="sidebar-nav" id="sidebar-nav"></nav>
@@ -899,15 +985,17 @@
          <div id="sidebar-user">Google Sheets 실시간 연동</div>
          <button class="btn btn-outline btn-sm" id="logout-btn" style="display:none;" onclick="doLogout()">로그아웃</button>
        </div>
+       <button class="btn btn-outline btn-sm" id="pw-btn" style="display:none;margin-top:8px;width:100%;" onclick="openPasswordModal()">🔑 비밀번호 변경</button>
        <button class="btn btn-outline btn-sm" style="margin-top:8px;width:100%;" onclick="refreshBootstrap()">🔄 데이터 새로고침</button>
      </div>
    </aside>
 
    <!-- 모바일 상단 헤더 -->
    <header class="mobile-header">
-     <h1>💊 <span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.3</span></h1>
+     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.3</span></h1>
      <div style="display:flex;gap:6px;align-items:center;">
-       <span id="m-user" class="ver-chip" style="display:none;"></span>
+       <span id="m-user" class="ver-chip" style="display:none;" onclick="openPasswordModal()" title="내 계정 · 비밀번호 변경"></span>
+       <button class="btn btn-sm" id="pw-btn-m" title="비밀번호 변경" aria-label="비밀번호 변경" style="display:none;background:rgba(255,255,255,0.16);color:#fff;" onclick="openPasswordModal()">🔑</button>
        <button class="btn btn-sm" style="background:rgba(255,255,255,0.16);color:#fff;" onclick="refreshBootstrap()">🔄</button>
        <button class="btn btn-sm" id="logout-btn-m" style="display:none;background:rgba(255,255,255,0.16);color:#fff;" onclick="doLogout()">나가기</button>
      </div>
@@ -939,6 +1027,7 @@
      today: '',
      currentMonth: '',
      userEmail: '',
+     userList: null,          // MASTER 설정 탭 — 사용자 목록·가입 승인 (getUsersList)
      // 주문/회전일 탭
      turnoverSubtab: 'dashboard',   // 'dashboard' | 'order' | 'products'
      productFilter: '',             // '' (전체) | '급여' | '비급여'
@@ -1604,6 +1693,10 @@
      const lbtnM = document.getElementById('logout-btn-m');
      if (lbtn) lbtn.style.display = 'inline-flex';
      if (lbtnM) lbtnM.style.display = 'inline-flex';
+     const pwBtn = document.getElementById('pw-btn');
+     const pwBtnM = document.getElementById('pw-btn-m');
+     if (pwBtn) pwBtn.style.display = 'inline-block';
+     if (pwBtnM) pwBtnM.style.display = 'inline-block';
 
      document.title = comp + ' 미니 CRM ' + APP_VERSION;
    }
@@ -1628,6 +1721,10 @@
      document.getElementById('login-overlay').classList.remove('hidden');
      document.getElementById('logout-btn').style.display = 'none';
      document.getElementById('logout-btn-m').style.display = 'none';
+     const pwBtn = document.getElementById('pw-btn');
+     const pwBtnM = document.getElementById('pw-btn-m');
+     if (pwBtn) pwBtn.style.display = 'none';
+     if (pwBtnM) pwBtnM.style.display = 'none';
      document.getElementById('login-error').textContent = message || '';
      setTimeout(function () {
        const el = document.getElementById('login-id');
@@ -1709,6 +1806,120 @@
      } finally {
        btn.disabled = false;
        btn.textContent = '로그인';
+     }
+   }
+
+   // =========================================================================
+   // 4-C. 내 계정 — 비밀번호 변경 / 회원가입 신청(승인제)
+   // =========================================================================
+   const SERVER_REDEPLOY_HINT = '시트 서버(Code.gs)가 예전 버전입니다. Apps Script에 최신 Code.gs를 붙여넣고 [배포 관리 → 수정 → 새 버전]으로 한 번 재배포해 주세요.';
+
+   function isMissingFunctionError_(err) {
+     const msg = String((err && err.message) || err || '');
+     return /허용되지 않은 함수|NOT_ALLOWED|is not defined|not a function/i.test(msg);
+   }
+
+   function setFieldValue_(id, value) {
+     const el = document.getElementById(id);
+     if (el) el.value = value;
+   }
+
+   function openPasswordModal() {
+     if (!STATE.user) { showLoginScreen('로그인이 필요합니다.'); return; }
+     ['pw-cur', 'pw-new', 'pw-new2'].forEach(function (id) { setFieldValue_(id, ''); });
+     document.getElementById('pw-error').textContent = '';
+     document.getElementById('pw-who').textContent =
+       (STATE.user.담당자명 || STATE.user.아이디) + ' (' + STATE.user.아이디 + ') 계정의 비밀번호를 바꿉니다.';
+     openModal('pw-modal');
+     setTimeout(function () { const el = document.getElementById('pw-cur'); if (el) el.focus(); }, 120);
+   }
+
+   async function submitChangePassword() {
+     const cur = document.getElementById('pw-cur').value;
+     const nw = document.getElementById('pw-new').value;
+     const nw2 = document.getElementById('pw-new2').value;
+     const errEl = document.getElementById('pw-error');
+     const btn = document.getElementById('pw-save-btn');
+     errEl.textContent = '';
+
+     if (!cur) { errEl.textContent = '현재 비밀번호를 입력해 주세요.'; return; }
+     if (!nw) { errEl.textContent = '새 비밀번호를 입력해 주세요.'; return; }
+     if (/\s/.test(nw)) { errEl.textContent = '비밀번호에는 공백을 쓸 수 없습니다.'; return; }
+     if (nw.length < 4) { errEl.textContent = '새 비밀번호는 4자 이상이어야 합니다.'; return; }
+     if (nw !== nw2) { errEl.textContent = '새 비밀번호가 서로 다릅니다. 다시 확인해 주세요.'; return; }
+     if (cur === nw) { errEl.textContent = '현재 비밀번호와 다른 비밀번호를 입력해 주세요.'; return; }
+
+     const oldLabel = btn.textContent;
+     btn.disabled = true;
+     btn.textContent = '변경 중...';
+     try {
+       const res = await runServer('changePassword', [cur, nw], { silent: true });
+       if (!res || res.success !== true) {
+         errEl.textContent = (res && res.message) || '비밀번호를 변경하지 못했습니다.';
+         return;
+       }
+       closeModal('pw-modal');
+       showToast(res.message || '비밀번호가 변경되었습니다.');
+     } catch (e) {
+       errEl.textContent = isMissingFunctionError_(e) ? SERVER_REDEPLOY_HINT : friendlyError_(e);
+     } finally {
+       btn.disabled = false;
+       btn.textContent = oldLabel;
+     }
+   }
+
+   function openRegisterModal() {
+     ['rg-id', 'rg-name', 'rg-pw', 'rg-pw2'].forEach(function (id) { setFieldValue_(id, ''); });
+     document.getElementById('rg-error').textContent = '';
+     const done = document.getElementById('rg-done');
+     done.style.display = 'none';
+     done.textContent = '';
+     const btn = document.getElementById('rg-save-btn');
+     btn.disabled = false;
+     btn.textContent = '가입 신청';
+     openModal('reg-modal');
+     setTimeout(function () { const el = document.getElementById('rg-id'); if (el) el.focus(); }, 120);
+   }
+
+   async function submitRegister() {
+     const id = document.getElementById('rg-id').value.trim();
+     const name = document.getElementById('rg-name').value.trim();
+     const pw = document.getElementById('rg-pw').value;
+     const pw2 = document.getElementById('rg-pw2').value;
+     const errEl = document.getElementById('rg-error');
+     const done = document.getElementById('rg-done');
+     const btn = document.getElementById('rg-save-btn');
+     errEl.textContent = '';
+
+     if (!/^[A-Za-z0-9]{3,20}$/.test(id)) { errEl.textContent = '아이디는 영문·숫자 3~20자로 입력해 주세요.'; return; }
+     if (name.length < 2) { errEl.textContent = '담당자명(이름)은 2자 이상 입력해 주세요.'; return; }
+     if (!pw) { errEl.textContent = '비밀번호를 입력해 주세요.'; return; }
+     if (/\s/.test(pw)) { errEl.textContent = '비밀번호에는 공백을 쓸 수 없습니다.'; return; }
+     if (pw.length < 4) { errEl.textContent = '비밀번호는 4자 이상이어야 합니다.'; return; }
+     if (pw !== pw2) { errEl.textContent = '비밀번호가 서로 다릅니다. 다시 확인해 주세요.'; return; }
+
+     btn.disabled = true;
+     btn.textContent = '신청 중...';
+     try {
+       const res = await runServer('registerUser', [id, pw, name], { silent: true });
+       if (!res || res.success !== true) {
+         errEl.textContent = (res && res.message) || '가입 신청에 실패했습니다.';
+         btn.disabled = false;
+         btn.textContent = '가입 신청';
+         return;
+       }
+       done.textContent = (res.message || '가입 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.') +
+         ' 아이디 ' + id + ' 로 로그인하시면 됩니다.';
+       done.style.display = 'block';
+       btn.textContent = '신청 완료';
+       setFieldValue_('rg-pw', '');
+       setFieldValue_('rg-pw2', '');
+       const loginId = document.getElementById('login-id');
+       if (loginId) loginId.value = id;
+     } catch (e) {
+       errEl.textContent = isMissingFunctionError_(e) ? SERVER_REDEPLOY_HINT : friendlyError_(e);
+       btn.disabled = false;
+       btn.textContent = '가입 신청';
      }
    }
 
@@ -4043,11 +4254,96 @@
      if (!STATE.isMaster) { renderMasterOnlyNotice(document.getElementById('main-content')); return; }
      const results = await Promise.all([
        runServer('getMailLogs', [50]),
-       runServer('getHiraKeyStatus', [], { silent: true }).catch(function () { return { configured: false }; })
+       runServer('getHiraKeyStatus', [], { silent: true }).catch(function () { return { configured: false }; }),
+       runServer('getUsersList', [], { silent: true }).catch(function (e) {
+         return { success: false, users: [], pendingCount: 0, failed: true, message: isMissingFunctionError_(e) ? SERVER_REDEPLOY_HINT : friendlyError_(e) };
+       })
      ]);
      STATE.mailLogs = results[0] || [];
      STATE.hiraConfigured = Boolean(results[1] && results[1].configured);
+     STATE.userList = results[2] || { users: [] };
      renderActiveMenu();
+   }
+
+   /** 설정 탭 — 사용자 목록·가입 승인 카드 (MASTER 전용) */
+   function usersSectionHtml_() {
+     const data = STATE.userList || {};
+     const list = (data.users || []).slice().sort(function (a, b) {
+       const pa = a.대기중 ? 0 : 1;
+       const pb = b.대기중 ? 0 : 1;
+       if (pa !== pb) return pa - pb;
+       return String(a.아이디).localeCompare(String(b.아이디));
+     });
+     const pending = Number(data.pendingCount || 0);
+
+     if (data.failed) {
+       return '<div class="card">' +
+         '<div class="card-title"><span>👥 사용자 목록 · 가입 승인</span></div>' +
+         '<div style="padding:14px 4px;font-size:12.5px;line-height:1.7;color:var(--warn);font-weight:600;">' +
+           esc(data.message || '사용자 목록을 불러오지 못했습니다.') +
+         '</div>' +
+       '</div>';
+     }
+
+     const rows = list.length ? list.map(function (u) {
+       const isMe = STATE.user && normalizeNameLite_(STATE.user.아이디) === normalizeNameLite_(u.아이디);
+       const stateBadge = u.대기중
+         ? '<span class="badge badge-amber">승인 대기</span>'
+         : '<span class="badge badge-success">사용 중</span>';
+       const roleBadge = u.권한 === 'MASTER'
+         ? '<span class="badge badge-blue">MASTER</span>'
+         : '<span class="badge badge-muted">STAFF</span>';
+       let action = '';
+       if (isMe) {
+         action = '<span style="color:var(--muted);font-size:11.5px;">본인 계정</span>';
+       } else if (u.대기중) {
+         action = '<button class="btn btn-primary btn-sm" data-uid="' + esc(u.아이디) + '" onclick="userSetActive(this.dataset.uid, \'Y\')">✓ 승인</button>';
+       } else {
+         action = '<button class="btn btn-outline btn-sm" data-uid="' + esc(u.아이디) + '" onclick="userSetActive(this.dataset.uid, \'N\')">비활성</button>';
+       }
+       return '<tr' + (u.대기중 ? ' style="background:#fffbeb;"' : '') + '>' +
+         '<td><strong>' + esc(u.아이디) + '</strong>' + (isMe ? ' <small style="color:var(--muted);">(나)</small>' : '') + '</td>' +
+         '<td>' + esc(u.담당자명) + '</td>' +
+         '<td class="center">' + roleBadge + '</td>' +
+         '<td class="center">' + stateBadge + '</td>' +
+         '<td class="center">' + action + '</td>' +
+       '</tr>';
+     }).join('') : '<tr><td colspan="5" class="center" style="padding:20px;color:var(--muted);">등록된 계정이 없습니다.</td></tr>';
+
+     return '<div class="card">' +
+       '<div class="card-title"><span>👥 사용자 목록 · 가입 승인' +
+         (pending ? ' <span class="badge badge-amber">대기 ' + pending + '명</span>' : '') + '</span>' +
+         '<button class="btn btn-outline btn-sm" onclick="loadMailLogsModule()">새로고침</button></div>' +
+       (pending
+         ? '<div style="background:var(--warn-bg);border:1px solid #fde68a;border-radius:8px;padding:9px 12px;font-size:12.5px;color:#92400e;margin-bottom:10px;line-height:1.6;">승인 대기 ' + pending + '명이 있습니다. [✓ 승인]을 누르면 바로 로그인할 수 있습니다.</div>'
+         : '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">가입 신청한 계정은 사용여부 <strong>N</strong>으로 들어오며, 승인해야 로그인됩니다.</div>') +
+       '<div class="table-wrap"><table><thead><tr>' +
+         '<th>아이디</th><th>담당자명</th><th class="center">권한</th><th class="center">상태</th><th class="center">관리</th>' +
+       '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+       '<small style="display:block;margin-top:8px;color:var(--muted);font-size:11.5px;line-height:1.6;">* 비밀번호는 서버에서도 화면으로 내려보내지 않습니다. 본인은 상단 🔑 버튼에서 직접 변경합니다.</small>' +
+     '</div>';
+   }
+
+   function normalizeNameLite_(v) {
+     return String(v == null ? '' : v).replace(/\s+/g, '').toLowerCase();
+   }
+
+   /** 가입 승인(Y) / 비활성(N) 전환 */
+   async function userSetActive(userId, flag) {
+     if (!STATE.isMaster) { showToast('MASTER 권한 전용 기능입니다.'); return; }
+     const approve = flag === 'Y';
+     if (!approve && !confirm(userId + ' 계정을 비활성화할까요?\n비활성화하면 그 계정으로는 로그인할 수 없습니다.')) return;
+     try {
+       const res = await runServer('toggleUserActive', [userId, flag], { silent: true });
+       if (!res || res.success !== true) {
+         showToast('오류: ' + ((res && res.message) || '처리하지 못했습니다.'));
+         return;
+       }
+       showToast(res.message || (approve ? '승인했습니다.' : '비활성화했습니다.'));
+       await loadMailLogsModule();
+     } catch (e) {
+       showToast(isMissingFunctionError_(e) ? '시트 서버(Code.gs)를 최신 버전으로 재배포해 주세요.' : ('오류: ' + friendlyError_(e)));
+     }
    }
 
    // ---------------- 발송이력 · 설정 ----------------
@@ -4080,12 +4376,13 @@
            '</div>' +
          '</div>' +
          '<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
-           '<small style="color:var(--muted);">* 접근 PIN 번호 변경은 구글 시트 [설정] 탭의 접근PIN 행에서 직접 수정하세요.<br />* 계정 추가·비밀번호 변경은 [사용자] 탭에서 합니다. (아이디/비밀번호/담당자명/권한/사용여부)</small>' +
+           '<small style="color:var(--muted);">* 접근 PIN 번호 변경은 구글 시트 [설정] 탭의 접근PIN 행에서 직접 수정하세요.<br />* 내 비밀번호는 상단 🔑 [비밀번호 변경]에서 직접 바꿀 수 있습니다.<br />* 계정 추가·중지·가입 승인은 아래 [👥 사용자 목록 · 가입 승인]에서 합니다.</small>' +
            (STATE.isMaster
              ? '<button class="btn btn-primary" onclick="saveAppSettings()">설정 저장</button>'
              : '<small style="color:var(--warn);font-weight:700;">설정 저장은 MASTER 권한만 가능합니다.</small>') +
          '</div>' +
        '</div>' +
+       usersSectionHtml_() +
        '<div class="card">' +
          '<div class="card-title"><span>📨 최근 이메일 발송이력 (최신 50건)</span><button class="btn btn-outline btn-sm" onclick="loadMailLogsModule()">새로고침</button></div>' +
          '<div class="table-wrap"><table><thead><tr>' +
