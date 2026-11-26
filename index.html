@@ -445,6 +445,8 @@
      padding: 14px;
    }
    .modal-backdrop.open { display: flex; }
+   /* 로그인 화면(z-index 300)보다 위에 떠야 하는 모달 — 회원가입 신청 · 비밀번호 변경 */
+   #reg-modal.modal-backdrop, #pw-modal.modal-backdrop { z-index: 320; }
    .modal {
      background: #fff;
      border-radius: 12px;
