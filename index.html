@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
- <title>수메디팜 미니 CRM v1.1</title>
+ <title>수메디팜 미니 CRM v1.2</title>
 
  <!-- ---------------- PWA (홈 화면 앱) 설정 ---------------- -->
  <meta name="description" content="수메디팜 미니 CRM — 거래처·주문·수금·회전일을 구글 시트로 실시간 관리하는 영업 앱" />
@@ -320,6 +320,8 @@
    .badge-success { background: var(--success-bg); color: var(--success); border: 1px solid #a7f3d0; }
    .badge-muted { background: #f1f5f9; color: var(--muted); }
    .badge-blue { background: #e0f2fe; color: #0369a1; }
+   .badge-amber { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+   .badge-green { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
 
    /* ---------------- v1.1: 로그인 화면 ---------------- */
    .login-overlay {
@@ -347,7 +349,11 @@
      border: 1px solid #cbd5e1; border-radius: 8px;
      box-shadow: 0 10px 26px rgba(15,23,42,0.18);
      max-height: 290px; overflow-y: auto; display: none; min-width: 220px;
+     overscroll-behavior: contain;
+     -webkit-overflow-scrolling: touch;
+     touch-action: pan-y;
    }
+   .ac-list .ac-item .badge { margin-left: 6px; padding: 1px 6px; font-size: 10.5px; }
    .ac-list.open { display: block; }
    .ac-item { padding: 8px 11px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
    .ac-item:last-child { border-bottom: none; }
@@ -587,7 +593,7 @@
  <div id="login-overlay" class="login-overlay">
    <div class="login-card">
      <div class="login-brand">
-       <div class="t">💊 수메디팜 미니 CRM<span class="ver-chip dark">v1.1</span></div>
+       <div class="t">💊 수메디팜 미니 CRM<span class="ver-chip dark">v1.2</span></div>
        <div class="s">담당자 아이디로 로그인해 주세요</div>
      </div>
      <div class="form-group" style="margin-bottom:10px;">
@@ -786,6 +792,18 @@
            <label>수수료율 (%)</label>
            <input type="number" id="p-rate" step="0.1" placeholder="예: 35" />
          </div>
+         <div class="form-group">
+           <label>급여구분</label>
+           <select id="p-gubun" onchange="toggleProductMarket()">
+             <option value="">선택 안 함</option>
+             <option value="급여">급여</option>
+             <option value="비급여">비급여</option>
+           </select>
+         </div>
+         <div class="form-group">
+           <label>시장가 (비급여)</label>
+           <input type="number" id="p-market" placeholder="급여 제품은 비워 둡니다" />
+         </div>
        </div>
      </div>
      <div class="modal-footer">
@@ -836,7 +854,7 @@
    <!-- PC 사이드바 -->
    <aside class="sidebar">
      <div class="sidebar-brand">
-       <h1>💊 <span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.1</span></h1>
+       <h1>💊 <span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.2</span></h1>
        <div class="sub" id="brand-sub">로딩 중...</div>
      </div>
      <nav class="sidebar-nav" id="sidebar-nav"></nav>
@@ -851,7 +869,7 @@
 
    <!-- 모바일 상단 헤더 -->
    <header class="mobile-header">
-     <h1>💊 <span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.1</span></h1>
+     <h1>💊 <span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.2</span></h1>
      <div style="display:flex;gap:6px;align-items:center;">
        <span id="m-user" class="ver-chip" style="display:none;"></span>
        <button class="btn btn-sm" style="background:rgba(255,255,255,0.16);color:#fff;" onclick="refreshBootstrap()">🔄</button>
@@ -870,7 +888,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.1';
+   const APP_VERSION = 'v1.2';
 
    const STATE = {
      // 로그인/권한
@@ -887,6 +905,8 @@
      userEmail: '',
      // 주문/회전일 탭
      turnoverSubtab: 'dashboard',   // 'dashboard' | 'order' | 'products'
+     productFilter: '',             // '' (전체) | '급여' | '비급여'
+     productQuery: '',
      turnoverData: null,
      turnoverOnlyWarn: false,
      recentTxs: [],
@@ -1194,6 +1214,7 @@
    // =========================================================================
    function destroyAutocompletes() {
      STATE.acInstances.forEach(function (inst) {
+       if (inst && typeof inst.destroy === 'function') { try { inst.destroy(); } catch (e) {} return; }
        try {
          if (inst.list && inst.list.parentNode) inst.list.parentNode.removeChild(inst.list);
        } catch (e) {}
@@ -1220,9 +1241,23 @@
      function position() {
        const r = input.getBoundingClientRect();
        const width = Math.max(r.width, 240);
-       list.style.left = Math.max(8, Math.min(r.left, window.innerWidth - width - 10)) + 'px';
-       list.style.top = (r.bottom + 2) + 'px';
+       const margin = 8;
+       const vh = window.innerHeight || document.documentElement.clientHeight || 800;
+       const spaceBelow = vh - r.bottom - margin;
+       const spaceAbove = r.top - margin;
+       /* 아래 공간이 좁고 위가 넓으면 위쪽으로 펼침 (폰에서 목록이 화면 밖으로 나가 스크롤이 안 되던 문제) */
+       const openUp = spaceBelow < 190 && spaceAbove > spaceBelow;
+       const avail = Math.max(120, openUp ? spaceAbove : spaceBelow);
+       list.style.maxHeight = Math.min(290, avail) + 'px';
+       list.style.left = Math.max(margin, Math.min(r.left, window.innerWidth - width - 10)) + 'px';
        list.style.width = width + 'px';
+       if (openUp) {
+         list.style.top = 'auto';
+         list.style.bottom = (vh - r.top + 2) + 'px';
+       } else {
+         list.style.bottom = 'auto';
+         list.style.top = (r.bottom + 2) + 'px';
+       }
      }
 
      function open(q) {
@@ -1239,6 +1274,7 @@
        } else {
          list.innerHTML = shown.map(function (it, i) {
            return '<div class="ac-item" data-idx="' + i + '">' + esc(it.label) +
+             (it.badge ? ' <span class="badge ' + esc(it.badgeClass || 'badge-muted') + '">' + esc(it.badge) + '</span>' : '') +
              (it.sub ? ' <span class="sub">' + esc(it.sub) + '</span>' : '') + '</div>';
          }).join('');
        }
@@ -1293,12 +1329,25 @@
          close();
        }
      });
-     input.addEventListener('blur', function () {
-       setTimeout(close, 130);
-     });
-     window.addEventListener('scroll', close, true);
+     input.addEventListener('blur', function () { setTimeout(close, 130); });
+
+     /* 목록 자체를 휠로 스크롤할 때는 닫지 않고, 페이지가 움직일 때만 위치를 따라가게 함 */
+     function onWindowScroll(ev) {
+       if (!list.classList.contains('open')) return;
+       const t = ev.target;
+       if (t === list || (t && list.contains && list.contains(t))) return;   // 목록 안 스크롤은 무시
+       position();
+     }
+     function onResize() { if (list.classList.contains('open')) position(); }
+     window.addEventListener('scroll', onWindowScroll, true);
+     window.addEventListener('resize', onResize);
 
      const inst = { input: input, list: list };
+     inst.destroy = function () {
+       window.removeEventListener('scroll', onWindowScroll, true);
+       window.removeEventListener('resize', onResize);
+       try { if (list.parentNode) list.parentNode.removeChild(list); } catch (e) {}
+     };
      STATE.acInstances.push(inst);
      return inst;
    }
@@ -1316,14 +1365,25 @@
 
    function productAcItems() {
      return STATE.products.map(function (p, i) {
+       const parts = [p.보험코드, p.규격, '기준 ' + fmtNum(p.기준단가) + '원'];
+       if (p.급여구분 === '비급여' && Number(p.시장가 || 0) > 0) parts.push('시장가 ' + fmtNum(p.시장가) + '원');
        return {
          key: p.보험코드 || p.제품명,
          label: p.제품명,
-         sub: [p.보험코드, p.규격, fmtNum(p.기준단가) + '원'].filter(function (x) { return x; }).join(' · '),
+         sub: parts.filter(function (x) { return x; }).join(' · '),
+         badge: p.급여구분 || '',
+         badgeClass: p.급여구분 === '비급여' ? 'badge-amber' : 'badge-green',
          data: p,
          index: i
        };
      });
+   }
+
+   /** 급여/비급여 배지 HTML */
+   function payTypeBadge(gubun) {
+     if (gubun === '비급여') return '<span class="badge badge-amber">비급여</span>';
+     if (gubun === '급여') return '<span class="badge badge-green">급여</span>';
+     return '<span class="badge badge-muted">-</span>';
    }
 
    // =========================================================================
@@ -2241,9 +2301,10 @@
            '</div>' +
            '<div class="form-group span-2 sale-only">' +
              '<label>품목명 (선택 후 직접 수정 가능)</label>' +
-             '<input type="text" id="tx-prodname" placeholder="품목명" />' +
+             '<input type="text" id="tx-prodname" placeholder="품목명" oninput="syncOrderProductInfo()" />' +
              '<input type="hidden" id="tx-inscode" />' +
            '</div>' +
+           '<div class="form-group span-4 sale-only"><div id="tx-product-info" class="info-strip" style="display:none;"></div></div>' +
            '<div class="form-group sale-only">' +
              '<label>수량</label>' +
              '<input type="number" id="tx-qty" value="1" oninput="calcSaleAmounts()" />' +
@@ -2414,7 +2475,40 @@
      document.getElementById('tx-inscode').value = p.보험코드 || '';
      document.getElementById('tx-prodname').value = p.제품명 || '';
      document.getElementById('tx-price').value = p.기준단가 || 0;
+     renderOrderProductInfo(p);
      calcSaleAmounts();
+   }
+
+   /** 주문 등록란의 품목 정보 줄 — 급여/비급여와 시장가를 바로 보이게 */
+   function renderOrderProductInfo(p) {
+     const strip = document.getElementById('tx-product-info');
+     if (!strip) return;
+     if (!p || !p.제품명) { strip.style.display = 'none'; strip.innerHTML = ''; return; }
+     const market = Number(p.시장가 || 0);
+     const parts = [];
+     parts.push(payTypeBadge(p.급여구분));
+     parts.push('<span><strong>' + esc(p.제품명) + '</strong>' + (p.규격 ? ' · ' + esc(p.규격) : '') + (p.보험코드 ? ' · ' + esc(p.보험코드) : '') + '</span>');
+     parts.push('<span>기준단가 ' + fmtNum(p.기준단가) + '원</span>');
+     if (p.급여구분 === '비급여' && market) {
+       parts.push('<span style="color:#b45309;font-weight:700;">시장가 ' + fmtNum(market) + '원</span>');
+       parts.push('<span style="color:var(--muted);">비급여는 시장가를 보고 단가를 정하세요</span>');
+     }
+     strip.innerHTML = parts.join('');
+     strip.style.display = 'flex';
+   }
+
+   /** 입력된 보험코드·품명으로 제품마스터에서 찾아 정보 줄 갱신 */
+   function syncOrderProductInfo() {
+     const code = String((document.getElementById('tx-inscode') || {}).value || '').trim();
+     const name = String((document.getElementById('tx-prodname') || {}).value || '').trim();
+     let hit = null;
+     if (code) hit = STATE.products.filter(function (p) { return String(p.보험코드 || '').trim() === code; })[0] || null;
+     if (!hit && name) hit = STATE.products.filter(function (p) { return String(p.제품명 || '').trim() === name; })[0] || null;
+     if (hit) renderOrderProductInfo(hit);
+     else {
+       const strip = document.getElementById('tx-product-info');
+       if (strip) { strip.style.display = 'none'; strip.innerHTML = ''; }
+     }
    }
 
    function refillOrderLine(index) {
@@ -2431,6 +2525,7 @@
      document.getElementById('tx-price').value = o.단가 || 0;
      const dateEl = document.getElementById('tx-date');
      if (dateEl) dateEl.value = STATE.today;
+     syncOrderProductInfo();
      calcSaleAmounts();
      showToast('지난 주문을 담았습니다. 수량·단가를 확인해 주세요.');
    }
@@ -2506,19 +2601,92 @@
    }
 
    function renderProductsTab(el) {
+     const total = STATE.products.length;
+     const cntPaid = STATE.products.filter(function (p) { return p.급여구분 === '급여'; }).length;
+     const cntFree = STATE.products.filter(function (p) { return p.급여구분 === '비급여'; }).length;
+     const hasGubun = STATE.products.some(function (p) { return !!p.급여구분; });
+     const f = STATE.productFilter || '';
+
+     const filterBtn = function (value, label) {
+       const on = f === value;
+       return '<button class="btn btn-sm ' + (on ? 'btn-primary' : 'btn-outline') + '" data-filter="' + value + '" ' +
+         'onclick="setProductFilter(\'' + value + '\')">' + label + '</button>';
+     };
+
      el.innerHTML =
        '<div class="card">' +
-         '<div class="card-title"><span>💊 제품마스터 목록 (' + STATE.products.length + ')</span>' +
+         '<div class="card-title"><span>💊 제품마스터 목록 (' + total + ')</span>' +
            (STATE.isMaster ? '<button class="btn btn-primary btn-sm" onclick="openModal(\'product-modal\')">+ 제품 추가</button>' : '<small style="color:var(--muted);font-weight:500;">제품 추가는 마스터만 가능</small>') +
          '</div>' +
-         '<div class="table-wrap"><table><thead><tr>' +
-           '<th>보험코드</th><th>제품명</th><th>규격</th><th class="num">기준단가</th><th class="num">수수료율(%)</th>' +
+         '<div class="toolbar" style="flex-wrap:wrap;gap:8px;">' +
+           '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+             filterBtn('', '전체 ' + total) +
+             filterBtn('급여', '급여 ' + cntPaid) +
+             filterBtn('비급여', '비급여 ' + cntFree) +
+           '</div>' +
+           '<input type="text" id="pm-search" style="max-width:280px;" placeholder="제품명·보험코드·규격으로 검색" autocomplete="off" value="' + esc(STATE.productQuery || '') + '" oninput="applyProductFilter()" />' +
+           '<span id="pm-count" style="color:var(--muted);font-size:12.5px;"></span>' +
+         '</div>' +
+         (hasGubun ? '' : '<p style="margin:0 0 10px;font-size:12.5px;color:var(--muted);">ⓘ 급여구분·시장가가 아직 안 보이면 시트 서버(Code.gs)를 새 버전으로 다시 배포하면 표시됩니다.</p>') +
+         '<div class="table-wrap"><table id="pm-table"><thead><tr>' +
+           '<th>보험코드</th><th>제품명</th><th>규격</th><th class="center">급여구분</th><th class="num">기준단가</th><th class="num">시장가</th><th class="num">수수료율(%)</th>' +
          '</tr></thead><tbody>' +
-         (STATE.products.length ? STATE.products.map(function (p) {
-           return '<tr><td>' + esc(p.보험코드) + '</td><td><strong>' + esc(p.제품명) + '</strong></td><td>' + esc(p.규격) + '</td><td class="num">' + fmtNum(p.기준단가) + '원</td><td class="num">' + p.수수료율 + '%</td></tr>';
-         }).join('') : '<tr><td colspan="5" class="center" style="padding:20px;color:var(--muted);">등록된 제품이 없습니다.</td></tr>') +
+         (total ? STATE.products.map(function (p) {
+           const market = Number(p.시장가 || 0);
+           const q = [p.제품명, p.보험코드, p.규격].join(' ').toLowerCase();
+           return '<tr data-gubun="' + esc(p.급여구분 || '') + '" data-q="' + esc(q) + '">' +
+             '<td>' + esc(p.보험코드) + '</td>' +
+             '<td><strong>' + esc(p.제품명) + '</strong></td>' +
+             '<td>' + esc(p.규격) + '</td>' +
+             '<td class="center">' + payTypeBadge(p.급여구분) + '</td>' +
+             '<td class="num">' + fmtNum(p.기준단가) + '원</td>' +
+             '<td class="num">' + (p.급여구분 === '비급여' && market ? '<strong style="color:#b45309;">' + fmtNum(market) + '원</strong>' : '<span style="color:var(--muted);">-</span>') + '</td>' +
+             '<td class="num">' + p.수수료율 + '%</td></tr>';
+         }).join('') : '<tr><td colspan="7" class="center" style="padding:20px;color:var(--muted);">등록된 제품이 없습니다.</td></tr>') +
          '</tbody></table></div>' +
        '</div>';
+
+     applyProductFilter();
+   }
+
+   /** 전체/급여/비급여 필터 + 키워드 검색을 현재 목록에 바로 적용 (다시 그리지 않아 입력 중 포커스가 유지됨) */
+   function applyProductFilter() {
+     const table = document.getElementById('pm-table');
+     if (!table) return;
+     const f = STATE.productFilter || '';
+     const qEl = document.getElementById('pm-search');
+     const q = String(qEl ? qEl.value : (STATE.productQuery || '')).trim().toLowerCase();
+     STATE.productQuery = q;
+     let shown = 0;
+     const rows = table.querySelectorAll('tbody tr');
+     for (let i = 0; i < rows.length; i++) {
+       const row = rows[i];
+       const g = row.getAttribute('data-gubun') || '';
+       const hay = row.getAttribute('data-q') || '';
+       const ok = (!f || g === f) && (!q || hay.indexOf(q) !== -1);
+       row.style.display = ok ? '' : 'none';
+       if (ok) shown++;
+     }
+     const label = document.getElementById('pm-count');
+     if (label) label.textContent = '표시 ' + shown + '건';
+   }
+
+   function setProductFilter(value) {
+     STATE.productFilter = value || '';
+     const table = document.getElementById('pm-table');
+     if (!table) { renderActiveMenu(); return; }
+     // 버튼 표시만 다시 그리고 목록은 그대로 두어 검색어를 유지
+     const f = STATE.productFilter;
+     const bar = table.closest('.card').querySelector('.toolbar');
+     if (bar) {
+       const btns = bar.querySelectorAll('button');
+       for (let i = 0; i < btns.length; i++) {
+         const b = btns[i];
+         const val = b.getAttribute('data-filter') || '';
+         b.className = 'btn btn-sm ' + (val === f ? 'btn-primary' : 'btn-outline');
+       }
+     }
+     applyProductFilter();
    }
 
    async function submitProductForm() {
@@ -2527,15 +2695,29 @@
        제품명: document.getElementById('p-name').value.trim(),
        규격: document.getElementById('p-spec').value.trim(),
        기준단가: Number(document.getElementById('p-price').value || 0),
-       수수료율: Number(document.getElementById('p-rate').value || 0)
+       수수료율: Number(document.getElementById('p-rate').value || 0),
+       급여구분: document.getElementById('p-gubun').value,
+       시장가: Number(document.getElementById('p-market').value || 0)
      };
      if (!payload.제품명) { showToast('제품명을 입력해 주세요.'); return; }
      const res = await runServer('saveProduct', [payload]);
      STATE.products = res.products;
      closeModal('product-modal');
-     ['p-code','p-name','p-spec','p-price','p-rate'].forEach(function(id){ document.getElementById(id).value = ''; });
+     ['p-code','p-name','p-spec','p-price','p-rate','p-gubun','p-market'].forEach(function(id){ document.getElementById(id).value = ''; });
+     toggleProductMarket();
      showToast('제품이 등록되었습니다.');
      renderActiveMenu();
+   }
+
+   /** 제품 등록 모달 — 급여 선택 시 시장가 입력 잠금 */
+   function toggleProductMarket() {
+     const g = document.getElementById('p-gubun');
+     const m = document.getElementById('p-market');
+     if (!g || !m) return;
+     const isFree = g.value === '비급여';
+     m.disabled = !isFree;
+     if (!isFree) m.value = '';
+     m.placeholder = isFree ? '시장가 (예: 25000)' : '급여 제품은 비워 둡니다';
    }
 
    // =========================================================================
