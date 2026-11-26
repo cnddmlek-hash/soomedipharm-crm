@@ -3251,7 +3251,7 @@
 
        '<div class="card" id="rx-search-card">' +
          '<div class="card-title">' +
-           '<span>🔎 새 약 추가 — 이엘파마 9,100품목 검색</span>' +
+           '<span>🔎 새 약 추가 — 이엘파마 ' + (STATE.elpharmaCount ? fmtNum(STATE.elpharmaCount) : '9,100') + '품목 검색</span>' +
            '<small id="rx-cache-count" style="font-weight:500;font-size:12px;color:var(--muted);"></small>' +
          '</div>' +
          '<input type="text" id="rx-search" placeholder="품목명 · 보험코드 · 제약사 · 성분명 (2글자 이상)" autocomplete="off" oninput="onRxSearchInput()" />' +
@@ -3693,7 +3693,7 @@
      if (!r || !r.query) {
        const freq = (STATE.rxFrequent || []).slice(0, 8);
        if (!freq.length) {
-         el.innerHTML = '<div class="rx-empty" style="padding:12px;">품목명 2글자 이상 입력하면 이엘파마 9,100품목에서 찾아 드립니다.</div>';
+         el.innerHTML = '<div class="rx-empty" style="padding:12px;">품목명 2글자 이상 입력하면 이엘파마 ' + (STATE.elpharmaCount ? fmtNum(STATE.elpharmaCount) : '9,100') + '품목에서 찾아 드립니다.</div>';
          return;
        }
        el.innerHTML = '<div style="font-size:11.5px;color:var(--muted);margin-bottom:2px;">최근에 자주 쓴 품목 (전체 처방 기준)</div>' +
@@ -3704,7 +3704,7 @@
      const items = r.items || [];
      if (!items.length) {
        el.innerHTML = '<div class="rx-empty" style="padding:12px;">' +
-         (STATE.rxSearching ? '이엘파마 9,100품목에서 찾는 중...' : '검색 결과가 없습니다. 다른 이름(성분명·제약사)으로 찾아보세요.') + '</div>';
+         (STATE.rxSearching ? '이엘파마 ' + (STATE.elpharmaCount ? fmtNum(STATE.elpharmaCount) : '9,100') + '품목에서 찾는 중...' : '검색 결과가 없습니다. 다른 이름(성분명·제약사)으로 찾아보세요.') + '</div>';
        return;
      }
 
