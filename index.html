@@ -1453,7 +1453,7 @@
      {
        id: 'turnover',
        label: '주문 · 회전일 관리',
-       shortLabel: '주문/회전일',
+       shortLabel: '주문',
        icon: '📊',
        render: renderTurnoverPage,
        onEnter: loadTurnoverModule
@@ -1469,7 +1469,7 @@
      {
        id: 'perf',
        label: '월별 실적',
-       shortLabel: '월별실적',
+       shortLabel: '실적',
        icon: '📈',
        render: renderPerfPage,
        onEnter: loadPerfModule
@@ -1485,7 +1485,7 @@
      {
        id: 'ledger',
        label: '거래원장 · 명세서',
-       shortLabel: '거래원장',
+       shortLabel: '원장',
        icon: '📑',
        render: renderLedgerPage,
        onEnter: function () { renderActiveMenu(); }
@@ -1493,7 +1493,7 @@
      {
        id: 'docs',
        label: '발송이력 · 설정',
-       shortLabel: '발송/설정',
+       shortLabel: '설정',
        icon: '✉️',
        masterOnly: true,          // MASTER 전용 — STAFF 에게는 메뉴도 화면도 내보내지 않음
        render: renderDocsSettingsPage,
@@ -2947,7 +2947,20 @@
      };
 
      const maxSales = Math.max.apply(null, [1].concat(managers.map(function (m) { return m.당월.매출합계 || 0; })));
-     const maxMonth = Math.max.apply(null, [1].concat((d.totals.series || []).map(function (s) { return s.매출합계 || 0; })));
+     /* 담당자 필터가 걸리면 추이·매트릭스 합계도 그 담당자 것만 합산 (화면 간 숫자가 어긋나지 않게) */
+     const trendSeries = (mf && managers.length)
+       ? (d.months || []).map(function (m) {
+           const acc = { month: m, 매출합계: 0, 매출공급가: 0, 매출건수: 0, 수금합계: 0, 수금건수: 0 };
+           managers.forEach(function (mg) {
+             const s = (mg.series || []).filter(function (x) { return x.month === m; })[0];
+             if (!s) return;
+             acc.매출합계 += s.매출합계 || 0; acc.매출공급가 += s.매출공급가 || 0; acc.매출건수 += s.매출건수 || 0;
+             acc.수금합계 += s.수금합계 || 0; acc.수금건수 += s.수금건수 || 0;
+           });
+           return acc;
+         })
+       : (d.totals.series || []);
+     const maxMonth = Math.max.apply(null, [1].concat(trendSeries.map(function (s) { return s.매출합계 || 0; })));
 
      const managerOptions = ['<option value="">전체 담당자</option>'].concat((d.managers || []).map(function (m) {
        return '<option value="' + esc(m.담당자) + '"' + (mf === m.담당자 ? ' selected' : '') + '>' + esc(m.담당자) + '</option>';
@@ -2980,7 +2993,7 @@
        '</div>';
      }).join('') : '<p style="text-align:center;color:var(--muted);">데이터가 없습니다.</p>';
 
-     const trendRows = (d.totals.series || []).map(function (s) {
+     const trendRows = trendSeries.map(function (s) {
        const isTarget = s.month === d.targetMonth;
        return '<tr' + (isTarget ? ' style="background:#eff6ff;"' : '') + '>' +
          '<td><strong>' + esc(s.month) + '</strong>' + (isTarget ? ' <span class="badge badge-blue">기준월</span>' : '') + '</td>' +
@@ -2998,12 +3011,17 @@
        const total = (m.series || []).reduce(function (acc, s) { return acc + (s.매출합계 || 0); }, 0);
        return '<tr><td><strong>' + esc(m.담당자) + '</strong></td>' + cells + '<td class="num"><strong>' + fmtNum(total) + '</strong></td></tr>';
      }).join('') : '';
+     const matrixMonthTotals = (d.months || []).map(function (m) {
+       let v = 0;
+       managers.forEach(function (mg) {
+         const s = (mg.series || []).filter(function (x) { return x.month === m; })[0];
+         v += s ? (s.매출합계 || 0) : 0;
+       });
+       return v;
+     });
      const matrixTotal = '<tr style="background:#f8fafc;font-weight:700;"><td>합계</td>' +
-       (d.months || []).map(function (m) {
-         const v = (d.totals.series || []).filter(function (s) { return s.month === m; })[0];
-         return '<td class="num">' + fmtNum(v ? v.매출합계 : 0) + '</td>';
-       }).join('') +
-       '<td class="num">' + fmtNum((d.totals.series || []).reduce(function (a, s) { return a + (s.매출합계 || 0); }, 0)) + '</td></tr>';
+       matrixMonthTotals.map(function (v) { return '<td class="num">' + fmtNum(v) + '</td>'; }).join('') +
+       '<td class="num">' + fmtNum(matrixMonthTotals.reduce(function (a, v) { return a + v; }, 0)) + '</td></tr>';
 
      const clientRows = (d.clients || []).filter(function (c) { return !mf || String(c.담당자 || '').trim() === mf; });
      const clientTable = clientRows.length ? clientRows.map(function (c) {
