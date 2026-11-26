@@ -357,7 +357,6 @@
    .login-brand .t { font-size: 20px; font-weight: 800; color: var(--primary); }
    .login-brand .s { font-size: 12px; color: var(--muted); margin-top: 6px; }
    .login-error { color: var(--danger); font-size: 12.5px; min-height: 17px; margin: 9px 0 2px; }
-   .login-hint { font-size: 11.5px; color: var(--muted); margin-top: 12px; line-height: 1.55; }
 
    /* ---------------- v1.1: 자동완성(타이핑 검색) ---------------- */
    .ac-list {
@@ -612,7 +611,6 @@
    .setup-help summary { cursor: pointer; font-weight: 700; color: var(--primary); }
    .setup-help ol { margin: 8px 0 0; padding-left: 18px; line-height: 1.7; }
    .setup-help code { background: #f1f5f9; padding: 1px 4px; border-radius: 4px; font-size: 11.5px; }
-   .server-link { color: var(--accent); font-weight: 700; text-decoration: none; cursor: pointer; }
    #setup-url { word-break: break-all; }
 
    /* ---------------- PWA: 홈 화면 추가 안내 ---------------- */
@@ -661,12 +659,6 @@
      <div class="login-error" id="login-error"></div>
      <button class="btn btn-primary" style="width:100%;margin-top:6px;" id="login-btn" onclick="submitLogin()">로그인</button>
      <button class="btn btn-outline" style="width:100%;margin-top:8px;" onclick="openRegisterModal()">회원가입 신청</button>
-     <div class="login-hint">
-       가입 신청한 계정은 <strong>마스터 승인 후</strong> 로그인할 수 있습니다.<br />
-       계정은 구글 시트 <strong>[사용자]</strong> 탭에서 추가·수정합니다.<br />
-       MASTER는 전체 거래처, STAFF는 자기 담당 거래처만 조회·주문할 수 있습니다.
-     </div>
-     <div class="login-hint" id="login-server-row" style="border-top:1px solid var(--border);padding-top:10px;"></div>
    </div>
  </div>
 
@@ -1113,11 +1105,6 @@
      if (/^[A-Za-z0-9_\-]{30,}$/.test(raw)) return 'https://script.google.com/macros/s/' + raw + '/exec';
      if (/^https?:\/\//i.test(raw)) return raw;
      return '';
-   }
-
-   function shortServerUrl(url) {
-     const m = String(url || '').match(/\/macros\/s\/([A-Za-z0-9_\-]{6})[A-Za-z0-9_\-]*/);
-     return m ? 'script.google.com/.../' + m[1] + '.../exec' : String(url || '');
    }
 
    function serverError_(message) {
@@ -1743,7 +1730,6 @@
      buildNavMenus();
      registerServiceWorker();
      setupInstallPrompt();
-     renderLoginServerRow();
 
      // GitHub Pages(PWA)인데 웹앱 주소가 아직 없으면 연결 화면부터 보여줌
      if (!isAppsScriptHost() && !getServerUrl()) {
@@ -1998,17 +1984,6 @@
      showSetupOverlay();
    }
 
-   function renderLoginServerRow() {
-     const el = document.getElementById('login-server-row');
-     if (!el) return;
-     if (isAppsScriptHost()) { el.innerHTML = ''; el.style.display = 'none'; return; }
-     el.style.display = '';
-     const url = getServerUrl();
-     el.innerHTML = url
-       ? '🔗 시트 서버: <strong>' + esc(shortServerUrl(url)) + '</strong> · <span class="server-link" onclick="openServerSetup()">변경</span>'
-       : '🔗 시트 서버가 아직 연결되지 않았습니다. <span class="server-link" onclick="openServerSetup()">연결하기</span>';
-   }
-
    /** 웹앱 생존 확인 (JSONP 우선 → 안 되면 fetch) */
    async function pingSheetServer(url) {
      try {
@@ -2077,7 +2052,6 @@
      setServerUrl(url);
      hideSetupOverlay();
      setSetupMsg('');
-     renderLoginServerRow();
      showLoginScreen('');
      showToast('시트 서버가 연결되었습니다. 로그인해 주세요.');
    }
