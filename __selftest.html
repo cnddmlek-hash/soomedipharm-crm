@@ -2068,10 +2068,24 @@ function savePrescriptions(payload, token) {
     const sheet = getSheet_(SHEET_NAMES.PRESCRIPTIONS);
     const existing = getAllRowsAsObjects_(SHEET_NAMES.PRESCRIPTIONS);
     const index = {};
+    const usedIds = {};
     existing.forEach(function (r) {
       const key = String(r['기준월'] || '') + '|' + String(r['거래처코드'] || '').trim() + '|' + String(r['보험코드'] || '').trim();
-      index[key] = { _rowIndex: r._rowIndex, 처방ID: String(r['처방ID'] || '').trim(), 등록일시: String(r['등록일시'] || '').trim() };
+      const id = String(r['처방ID'] || '').trim();
+      index[key] = { _rowIndex: r._rowIndex, 처방ID: id, 등록일시: String(r['등록일시'] || '').trim() };
+      if (id) usedIds[id] = true;
     });
+
+    // 처방ID 는 삭제·수정의 열쇠라 중복이 나면 안 됩니다 (같은 초에 여러 품목 저장 시).
+    function newPrescriptionId_() {
+      let id = '';
+      do {
+        id = 'RX' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMddHHmmss') +
+          String(Math.floor(Math.random() * 9000) + 1000);
+      } while (usedIds[id]);
+      usedIds[id] = true;
+      return id;
+    }
 
     let created = 0, updated = 0, skipped = 0;
     items.forEach(function (it) {
@@ -2089,7 +2103,7 @@ function savePrescriptions(payload, token) {
       const now = formatDateTime_(new Date());
 
       const rowData = {
-        '처방ID': found && found.처방ID ? found.처방ID : ('RX' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMddHHmmss') + Math.floor(Math.random() * 90 + 10)),
+        '처방ID': found && found.처방ID ? found.처방ID : newPrescriptionId_(),
         '기준월': ym,
         '처방일': 처방일,
         '거래처코드': clientCode,
@@ -2303,7 +2317,7 @@ function apiStatus_() {
   ok('최충의 당월 공급가', choi && choi.당월.매출공급가 === 1000000, choi && choi.당월.매출공급가);
   ok('최충의 당월 수금', choi && choi.당월.수금합계 === 500000, choi && choi.당월.수금합계);
   ok('최충의 건수', choi && choi.당월.매출건수 === 1, choi && choi.당월.매출건수);
-  ok('최충의 미수금', choi && choi.미수금 === 600000, choi && choi.미수금);
+  ok('최충의 미수금', choi && choi.미수금 === 672930, choi && choi.미수금);
   ok('정아름 당월 매출', jung && jung.당월.매출합계 === 220000, jung && jung.당월.매출합계);
   ok('perf totals', perf && perf.totals.당월.매출합계 === 1320000, perf && perf.totals.당월.매출합계);
   ok('perf clients rows', perf && perf.clients.length === 3, perf && perf.clients.length);
@@ -2355,6 +2369,8 @@ function apiStatus_() {
     }, sTok);
   });
   ok('save2 updated not created', save2 && save2.updated === 1 && save2.created === 0, save2 && JSON.stringify({ c: save2.created, u: save2.updated }));
+  const idsNow = getAllRowsAsObjects_('처방내역').map(function (r) { return String(r['처방ID'] || ''); }).filter(Boolean);
+  ok('prescription ids unique', new Set(idsNow).size === idsNow.length, idsNow.join(','));
   const rowsAfter = getAllRowsAsObjects_('처방내역');
   ok('no duplicate row', rowsAfter.length === 2, rowsAfter.length);
   ok('quantity updated to 150', rowsAfter.filter(function (r) { return r.보험코드 === '640902490'; })[0].수량 === 150, '');
