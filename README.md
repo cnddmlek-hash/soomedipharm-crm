@@ -2,8 +2,8 @@
 
 거래처·주문(매출)·수금·회전일을 **구글 시트**에 그대로 쌓으면서, 폰에서는 **앱처럼** 쓰는 수메디팜 전용 미니 CRM입니다.
 
-- 라이브(현재): **https://cnddmlek-hash.github.io/soomedipharm/crm/**
-  (전용 저장소 `soomedipharm-crm`이 만들어지면 https://cnddmlek-hash.github.io/soomedipharm-crm/ 로 옮깁니다. 파일은 그대로 쓰면 됩니다.)
+- 라이브: **https://cnddmlek-hash.github.io/soomedipharm-crm/**
+  (전용 저장소 `cnddmlek-hash/soomedipharm-crm` 의 `gh-pages` 브랜치 루트를 게시합니다. 예전 임시 주소 `/soomedipharm/crm/` 는 정리했습니다.)
 - 화면/기능: 기존 Apps Script 웹앱 v1.1과 동일 (타이핑 검색 자동완성, MASTER/STAFF 로그인, 심평원 확인 + 다처방 TOP5, 거래처 상세 모달, 지난 주문 다시 담기 등)
 - 서버: 구글 시트에 붙인 Apps Script 웹앱 (`downloads/Code.gs` → 시트의 Apps Script에 배포)
 
@@ -31,7 +31,7 @@
 
 ## 3. 앞으로 화면/기능을 고칠 때
 
-이 저장소(`main` 브랜치 루트)에 push하면 GitHub Pages가 1~2분 안에 자동 반영합니다.
+`gh-pages` 브랜치 루트에 push하면 GitHub Pages가 1~2분 안에 자동 반영합니다(`main`은 같은 내용의 사본). 위 폴더에서 `./deploy.sh` 를 실행하면 이 과정을 대신 해 줍니다.
 서비스워커가 **네트워크 우선**이라, 앱을 다시 열면 새 화면이 바로 뜹니다(오프라인일 때만 캐시 사용).
 
 ```
