@@ -2,7 +2,8 @@
 
 거래처·주문(매출)·수금·회전일을 **구글 시트**에 그대로 쌓으면서, 폰에서는 **앱처럼** 쓰는 수메디팜 전용 미니 CRM입니다.
 
-- 라이브: https://cnddmlek-hash.github.io/soomedipharm-crm/
+- 라이브(현재): **https://cnddmlek-hash.github.io/soomedipharm/crm/**
+  (전용 저장소 `soomedipharm-crm`이 만들어지면 https://cnddmlek-hash.github.io/soomedipharm-crm/ 로 옮깁니다. 파일은 그대로 쓰면 됩니다.)
 - 화면/기능: 기존 Apps Script 웹앱 v1.1과 동일 (타이핑 검색 자동완성, MASTER/STAFF 로그인, 심평원 확인 + 다처방 TOP5, 거래처 상세 모달, 지난 주문 다시 담기 등)
 - 서버: 구글 시트에 붙인 Apps Script 웹앱 (`downloads/Code.gs` → 시트의 Apps Script에 배포)
 
