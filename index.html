@@ -1243,6 +1243,8 @@
        const width = Math.max(r.width, 240);
        const margin = 8;
        const vh = window.innerHeight || document.documentElement.clientHeight || 800;
+       /* 입력칸이 화면 밖으로 밀려나면 목록도 접음 */
+       if (r.bottom < 0 || r.top > vh - 20) { close(); return false; }
        const spaceBelow = vh - r.bottom - margin;
        const spaceAbove = r.top - margin;
        /* 아래 공간이 좁고 위가 넓으면 위쪽으로 펼침 (폰에서 목록이 화면 밖으로 나가 스크롤이 안 되던 문제) */
@@ -1258,6 +1260,7 @@
          list.style.bottom = 'auto';
          list.style.top = (r.bottom + 2) + 'px';
        }
+       return true;
      }
 
      function open(q) {
@@ -1278,7 +1281,7 @@
              (it.sub ? ' <span class="sub">' + esc(it.sub) + '</span>' : '') + '</div>';
          }).join('');
        }
-       position();
+       if (position() === false) { list.classList.remove('open'); return; }
        list.classList.add('open');
      }
 
