@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
- <title>수메디팜 미니 CRM v1.2</title>
+ <title>수메디팜 미니 CRM v1.3</title>
 
  <!-- ---------------- PWA (홈 화면 앱) 설정 ---------------- -->
  <meta name="description" content="수메디팜 미니 CRM — 거래처·주문·수금·회전일을 구글 시트로 실시간 관리하는 영업 앱" />
@@ -507,6 +507,42 @@
    /* Print Container (Hidden on Screen) */
    #print-area { display: none; }
 
+   /* ---------------- v1.3: 월별 실적 · 처방전 빠른 입력 ---------------- */
+   .perf-bar { height: 8px; border-radius: 999px; background: #e2e8f0; overflow: hidden; min-width: 70px; }
+   .perf-bar > i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+   .delta-up { color: #15803d; font-weight: 700; }
+   .delta-down { color: #dc2626; font-weight: 700; }
+   .delta-flat { color: var(--muted); font-weight: 700; }
+
+   .rx-row { display: flex; align-items: center; gap: 10px; padding: 9px 6px; border-bottom: 1px solid var(--border); }
+   .rx-row.saved { background: #f0fdf4; }
+   .rx-main { flex: 1 1 220px; min-width: 0; }
+   .rx-name { font-weight: 700; font-size: 13.5px; line-height: 1.35; }
+   .rx-name .badge { margin-left: 5px; font-weight: 700; }
+   .rx-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+   .rx-qty { flex: 0 0 116px; display: flex; align-items: center; gap: 4px; }
+   .rx-qty input { text-align: right; font-weight: 700; font-size: 15px; padding: 7px 8px; }
+   .rx-qty .u { font-size: 12px; color: var(--muted); }
+   .rx-amt { flex: 0 0 138px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+   .rx-amt b { font-size: 13.5px; color: var(--primary); }
+   .rx-amt small { display: block; color: var(--muted); font-size: 11px; }
+   .rx-x { flex: 0 0 auto; }
+   .rx-sum { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 13px; }
+   .rx-sum b { color: var(--primary); font-size: 15px; }
+   .rx-hit { display: flex; align-items: center; gap: 8px; padding: 7px 2px; border-bottom: 1px dashed var(--border); }
+   .rx-hit .h-main { flex: 1; min-width: 0; }
+   .rx-hit .h-name { font-weight: 700; font-size: 13px; }
+   .rx-hit .h-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+   .rx-empty { padding: 22px 10px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.7; }
+   .rx-step { display: inline-flex; width: 20px; height: 20px; border-radius: 50%; background: var(--primary); color: #fff;
+     align-items: center; justify-content: center; font-size: 11px; font-weight: 700; margin-right: 6px; vertical-align: 1px; }
+   @media (max-width: 768px) {
+     .rx-row { flex-wrap: wrap; gap: 6px; }
+     .rx-main { flex: 1 1 100%; }
+     .rx-qty { flex: 1 1 110px; }
+     .rx-amt { flex: 1 1 100px; }
+   }
+
    /* ---------------- Responsive Mobile Breakpoint ---------------- */
    @media (max-width: 768px) {
      .sidebar { display: none; }
@@ -593,7 +629,7 @@
  <div id="login-overlay" class="login-overlay">
    <div class="login-card">
      <div class="login-brand">
-       <div class="t">💊 수메디팜 미니 CRM<span class="ver-chip dark">v1.2</span></div>
+       <div class="t">💊 수메디팜 미니 CRM<span class="ver-chip dark">v1.3</span></div>
        <div class="s">담당자 아이디로 로그인해 주세요</div>
      </div>
      <div class="form-group" style="margin-bottom:10px;">
@@ -854,7 +890,7 @@
    <!-- PC 사이드바 -->
    <aside class="sidebar">
      <div class="sidebar-brand">
-       <h1>💊 <span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.2</span></h1>
+       <h1>💊 <span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.3</span></h1>
        <div class="sub" id="brand-sub">로딩 중...</div>
      </div>
      <nav class="sidebar-nav" id="sidebar-nav"></nav>
@@ -869,7 +905,7 @@
 
    <!-- 모바일 상단 헤더 -->
    <header class="mobile-header">
-     <h1>💊 <span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.2</span></h1>
+     <h1>💊 <span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.3</span></h1>
      <div style="display:flex;gap:6px;align-items:center;">
        <span id="m-user" class="ver-chip" style="display:none;"></span>
        <button class="btn btn-sm" style="background:rgba(255,255,255,0.16);color:#fff;" onclick="refreshBootstrap()">🔄</button>
@@ -888,7 +924,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.2';
+   const APP_VERSION = 'v1.3';
 
    const STATE = {
      // 로그인/권한
@@ -925,6 +961,25 @@
      mailLogs: [],
      hiraConfigured: false,
      emailDraft: null,
+     // 월별 실적 (v1.3)
+     perfMonth: '',
+     perfMonths: 6,
+     perfManager: '',
+     perfData: null,
+     perfShowClients: false,
+     // 처방전 입력 (v1.3)
+     rxClient: '',
+     rxMonth: '',
+     rxDate: '',
+     rxRows: [],
+     rxSaved: null,
+     rxFrequent: [],
+     rxQuery: '',
+     rxResults: null,
+     rxSearching: false,
+     rxDirty: false,
+     rxReqSeq: 0,
+     elpharmaCount: 0,
      // 자동완성 인스턴스
      acInstances: []
    };
@@ -988,7 +1043,9 @@
    // 응답만 못 받았을 때(GET 1회 재시도)에도 안전한 읽기 전용 서버 함수
    const READONLY_FNS = ['login', 'logout', 'getBootstrapData', 'verifyPin', 'getClients', 'getProducts',
      'getRecentTransactions', 'getTurnoverDashboard', 'getLedgerData', 'getClientDetail',
-     'getRecentOrdersByClient', 'getHiraHospitalInfo', 'getMailLogs', 'getHiraKeyStatus'];
+     'getRecentOrdersByClient', 'getHiraHospitalInfo', 'getMailLogs', 'getHiraKeyStatus',
+     'getMonthlyPerformance', 'searchElpharmaProducts', 'getFrequentElpharmaProducts',
+     'getPrescriptionQuickItems', 'getPrescriptions'];
 
    /** Apps Script 웹앱에 JSON 본문을 text/plain 으로 POST (CORS preflight 회피) */
    function postToSheetServer(fnName, fullArgs) {
@@ -1402,6 +1459,22 @@
        onEnter: loadTurnoverModule
      },
      {
+       id: 'prescription',
+       label: '처방전 입력',
+       shortLabel: '처방전',
+       icon: '💊',
+       render: renderPrescriptionPage,
+       onEnter: loadPrescriptionModule
+     },
+     {
+       id: 'perf',
+       label: '월별 실적',
+       shortLabel: '월별실적',
+       icon: '📈',
+       render: renderPerfPage,
+       onEnter: loadPerfModule
+     },
+     {
        id: 'clients',
        label: '거래처 등록/관리',
        shortLabel: '거래처',
@@ -1495,6 +1568,7 @@
      STATE.settings = data.settings || {};
      STATE.clients = data.clients || [];
      STATE.products = data.products || [];
+     STATE.elpharmaCount = Number(data.elpharmaCount || 0);
      STATE.today = data.today || new Date().toISOString().slice(0, 10);
      STATE.currentMonth = data.currentMonth || STATE.today.slice(0, 7);
      STATE.userEmail = data.userEmail || '';
@@ -2791,6 +2865,891 @@
      m.disabled = !isFree;
      if (!isFree) m.value = '';
      m.placeholder = isFree ? '시장가 (예: 25000)' : '급여 제품은 비워 둡니다';
+   }
+
+   // =========================================================================
+   // 6-C. MODULE 8: 월별 실적 (담당자별 매출·수금)
+   // =========================================================================
+   async function loadPerfModule() {
+     STATE.perfData = null;
+     renderActiveMenu();
+     try {
+       const d = await runServer('getMonthlyPerformance', [STATE.perfMonth || '', STATE.perfMonths || 6, '']);
+       STATE.perfData = d;
+       if (!STATE.perfMonth) STATE.perfMonth = d.targetMonth;
+       renderActiveMenu();
+     } catch (e) { /* runServer 가 토스트로 알림 */ }
+   }
+
+   function changePerfMonth(v) {
+     STATE.perfMonth = v || '';
+     loadPerfModule();
+   }
+
+   function setPerfMonths(v) {
+     STATE.perfMonths = Number(v || 6);
+     loadPerfModule();
+   }
+
+   function setPerfManager(v) {
+     STATE.perfManager = v || '';
+     renderActiveMenu();
+   }
+
+   function togglePerfClients() {
+     STATE.perfShowClients = !STATE.perfShowClients;
+     renderActiveMenu();
+   }
+
+   function perfDeltaHtml(rate) {
+     if (rate === null || rate === undefined) return '<span class="delta-flat">-</span>';
+     if (rate > 0) return '<span class="delta-up">▲ ' + rate + '%</span>';
+     if (rate < 0) return '<span class="delta-down">▼ ' + Math.abs(rate) + '%</span>';
+     return '<span class="delta-flat">0%</span>';
+   }
+
+   function perfSumRows(rows) {
+     const s = { 거래처수: 0, 매출합계: 0, 매출공급가: 0, 매출건수: 0, 수금합계: 0, 수금건수: 0, 미수금: 0, 전월매출: 0 };
+     (rows || []).forEach(function (r) {
+       s.거래처수 += r.거래처수 || 0;
+       s.매출합계 += r.당월.매출합계 || 0;
+       s.매출공급가 += r.당월.매출공급가 || 0;
+       s.매출건수 += r.당월.매출건수 || 0;
+       s.수금합계 += r.당월.수금합계 || 0;
+       s.수금건수 += r.당월.수금건수 || 0;
+       s.미수금 += r.미수금 || 0;
+       s.전월매출 += r.전월매출 || 0;
+     });
+     s.전월대비 = s.전월매출 > 0 ? Math.round(((s.매출합계 - s.전월매출) / s.전월매출) * 1000) / 10 : null;
+     return s;
+   }
+
+   function renderPerfPage(container) {
+     const d = STATE.perfData;
+     if (!d) {
+       container.innerHTML = '<div class="page-header"><h2 class="page-title">📈 월별 실적</h2></div>' +
+         '<div class="card"><div class="rx-empty">실적을 불러오는 중입니다...</div></div>';
+       return;
+     }
+
+     const mf = STATE.perfManager || '';
+     const managers = (d.managers || []).filter(function (m) { return !mf || m.담당자 === mf; });
+     const sum = mf ? perfSumRows(managers) : {
+       거래처수: d.totals.거래처수,
+       매출합계: d.totals.당월.매출합계,
+       매출공급가: d.totals.당월.매출공급가,
+       매출건수: d.totals.당월.매출건수,
+       수금합계: d.totals.당월.수금합계,
+       수금건수: d.totals.당월.수금건수,
+       미수금: d.totals.미수금,
+       전월매출: d.totals.전월매출,
+       전월대비: d.totals.전월대비
+     };
+
+     const maxSales = Math.max.apply(null, [1].concat(managers.map(function (m) { return m.당월.매출합계 || 0; })));
+     const maxMonth = Math.max.apply(null, [1].concat((d.totals.series || []).map(function (s) { return s.매출합계 || 0; })));
+
+     const managerOptions = ['<option value="">전체 담당자</option>'].concat((d.managers || []).map(function (m) {
+       return '<option value="' + esc(m.담당자) + '"' + (mf === m.담당자 ? ' selected' : '') + '>' + esc(m.담당자) + '</option>';
+     })).join('');
+
+     const managerRowsHtml = managers.length ? managers.map(function (m) {
+       return '<tr>' +
+         '<td><strong>' + esc(m.담당자) + '</strong></td>' +
+         '<td class="center">' + m.거래처수 + '</td>' +
+         '<td class="num"><strong>' + fmtNum(m.당월.매출합계) + '</strong></td>' +
+         '<td class="num">' + fmtNum(m.당월.매출공급가) + '</td>' +
+         '<td class="center">' + fmtNum(m.당월.매출건수) + '건</td>' +
+         '<td class="num">' + fmtNum(m.당월.수금합계) + '</td>' +
+         '<td class="center">' + fmtNum(m.당월.수금건수) + '건</td>' +
+         '<td class="num">' + fmtNum(m.전월매출) + '</td>' +
+         '<td class="center">' + perfDeltaHtml(m.전월대비) + '</td>' +
+         '<td class="num">' + fmtNum(m.미수금) + '</td>' +
+         '<td><div class="perf-bar"><i style="width:' + Math.round(((m.당월.매출합계 || 0) / maxSales) * 100) + '%;"></i></div></td>' +
+       '</tr>';
+     }).join('') : '<tr><td colspan="11" class="center" style="padding:20px;color:var(--muted);">해당 기간 거래내역이 없습니다.</td></tr>';
+
+     const managerCardsHtml = managers.length ? managers.map(function (m) {
+       return '<div class="m-card">' +
+         '<div class="m-card-head"><span>' + esc(m.담당자) + '</span><span>' + perfDeltaHtml(m.전월대비) + '</span></div>' +
+         '<div class="m-card-row"><span class="k">당월 매출(합계)</span><strong>' + fmtNum(m.당월.매출합계) + '원</strong></div>' +
+         '<div class="m-card-row"><span class="k">공급가액</span><span>' + fmtNum(m.당월.매출공급가) + '원</span></div>' +
+         '<div class="m-card-row"><span class="k">당월 수금</span><span style="color:var(--success);font-weight:700;">' + fmtNum(m.당월.수금합계) + '원</span></div>' +
+         '<div class="m-card-row"><span class="k">미수금</span><span>' + fmtNum(m.미수금) + '원</span></div>' +
+         '<div class="m-card-row"><span class="k">건수 · 거래처</span><span>' + fmtNum(m.당월.매출건수) + '건 / ' + m.거래처수 + '곳</span></div>' +
+       '</div>';
+     }).join('') : '<p style="text-align:center;color:var(--muted);">데이터가 없습니다.</p>';
+
+     const trendRows = (d.totals.series || []).map(function (s) {
+       const isTarget = s.month === d.targetMonth;
+       return '<tr' + (isTarget ? ' style="background:#eff6ff;"' : '') + '>' +
+         '<td><strong>' + esc(s.month) + '</strong>' + (isTarget ? ' <span class="badge badge-blue">기준월</span>' : '') + '</td>' +
+         '<td class="num">' + fmtNum(s.매출합계) + '</td>' +
+         '<td class="num">' + fmtNum(s.매출공급가) + '</td>' +
+         '<td class="center">' + fmtNum(s.매출건수) + '건</td>' +
+         '<td class="num" style="color:var(--success);">' + fmtNum(s.수금합계) + '</td>' +
+         '<td><div class="perf-bar"><i style="width:' + Math.round(((s.매출합계 || 0) / maxMonth) * 100) + '%;"></i></div></td>' +
+       '</tr>';
+     }).join('');
+
+     const matrixHead = '<th>담당자</th>' + (d.months || []).map(function (m) { return '<th class="num">' + esc(m.slice(5)) + '월</th>'; }).join('') + '<th class="num">합계</th>';
+     const matrixRows = managers.length ? managers.map(function (m) {
+       const cells = (m.series || []).map(function (s) { return '<td class="num">' + (s.매출합계 ? fmtNum(s.매출합계) : '<span style="color:var(--muted);">-</span>') + '</td>'; }).join('');
+       const total = (m.series || []).reduce(function (acc, s) { return acc + (s.매출합계 || 0); }, 0);
+       return '<tr><td><strong>' + esc(m.담당자) + '</strong></td>' + cells + '<td class="num"><strong>' + fmtNum(total) + '</strong></td></tr>';
+     }).join('') : '';
+     const matrixTotal = '<tr style="background:#f8fafc;font-weight:700;"><td>합계</td>' +
+       (d.months || []).map(function (m) {
+         const v = (d.totals.series || []).filter(function (s) { return s.month === m; })[0];
+         return '<td class="num">' + fmtNum(v ? v.매출합계 : 0) + '</td>';
+       }).join('') +
+       '<td class="num">' + fmtNum((d.totals.series || []).reduce(function (a, s) { return a + (s.매출합계 || 0); }, 0)) + '</td></tr>';
+
+     const clientRows = (d.clients || []).filter(function (c) { return !mf || String(c.담당자 || '').trim() === mf; });
+     const clientTable = clientRows.length ? clientRows.map(function (c) {
+       return '<tr>' +
+         '<td><strong>' + esc(c.거래처명) + '</strong> <small style="color:var(--muted);">(' + esc(c.거래처코드) + ')</small></td>' +
+         '<td>' + esc(c.담당자 || '-') + '</td>' +
+         '<td class="num">' + (c.매출합계 ? fmtNum(c.매출합계) : '<span style="color:var(--muted);">-</span>') + '</td>' +
+         '<td class="center">' + (c.매출건수 || 0) + '건</td>' +
+         '<td class="num">' + (c.수금합계 ? fmtNum(c.수금합계) : '<span style="color:var(--muted);">-</span>') + '</td>' +
+         '<td class="num">' + (c.미수금 ? fmtNum(c.미수금) : '<span style="color:var(--muted);">-</span>') + '</td>' +
+       '</tr>';
+     }).join('') : '<tr><td colspan="6" class="center" style="padding:20px;color:var(--muted);">표시할 거래처가 없습니다.</td></tr>';
+
+     container.innerHTML =
+       '<div class="page-header">' +
+         '<h2 class="page-title">📈 월별 실적 (담당자별 매출 · 수금)' +
+           (d.isMaster ? '' : '<small style="font-size:12px;color:var(--muted);font-weight:500;"> · 내 담당 거래처만 표시</small>') +
+         '</h2>' +
+         '<span class="badge badge-blue">기준월 ' + esc(d.targetMonth) + ' · 집계 ' + esc(d.monthEnd) + '까지</span>' +
+       '</div>' +
+       '<div class="card">' +
+         '<div class="toolbar">' +
+           '<input type="month" id="perf-month" style="max-width:155px;" value="' + esc(d.targetMonth) + '" onchange="changePerfMonth(this.value)" />' +
+           '<select style="max-width:120px;" onchange="setPerfMonths(this.value)">' +
+             [3, 6, 12].map(function (n) { return '<option value="' + n + '"' + (Number(d.months.length) === n ? ' selected' : '') + '>' + n + '개월 추이</option>'; }).join('') +
+           '</select>' +
+           (d.isMaster ? '<select style="max-width:150px;" onchange="setPerfManager(this.value)">' + managerOptions + '</select>' : '') +
+           '<div style="margin-left:auto;"><button class="btn btn-outline btn-sm" onclick="loadPerfModule()">🔄 새로고침</button></div>' +
+         '</div>' +
+         (d.managers.length ? '' : '<p style="margin:0 0 8px;font-size:12.5px;color:var(--muted);">ⓘ 아직 ‘매출/수금 등록’에 거래내역이 없어 실적이 0으로 나옵니다. 주문을 등록하면 이 화면에 쌓입니다.</p>') +
+       '</div>' +
+       '<div class="kpi-grid">' +
+         '<div class="kpi-card"><div class="kpi-label">당월 매출 (합계금액)</div><div class="kpi-val primary">' + fmtNum(sum.매출합계) + '원</div></div>' +
+         '<div class="kpi-card"><div class="kpi-label">당월 수금</div><div class="kpi-val success">' + fmtNum(sum.수금합계) + '원</div></div>' +
+         '<div class="kpi-card"><div class="kpi-label">미수금 (누적)</div><div class="kpi-val' + (sum.미수금 > 0 ? ' danger' : '') + '">' + fmtNum(sum.미수금) + '원</div></div>' +
+         '<div class="kpi-card"><div class="kpi-label">전월 대비</div><div class="kpi-val">' + perfDeltaHtml(sum.전월대비) + '</div></div>' +
+       '</div>' +
+       '<div class="card">' +
+         '<div class="card-title"><span>👥 담당자별 ' + esc(d.targetMonth) + ' 실적</span><small style="font-weight:500;font-size:12px;color:var(--muted);">공급가액 = 부가세 제외</small></div>' +
+         '<div class="table-wrap desktop-table"><table><thead><tr>' +
+           '<th>담당자</th><th class="center">거래처</th><th class="num">매출(합계)</th><th class="num">공급가액</th><th class="center">매출건수</th>' +
+           '<th class="num">수금</th><th class="center">수금건수</th><th class="num">전월매출</th><th class="center">전월비</th><th class="num">미수금</th><th style="min-width:80px;">비중</th>' +
+         '</tr></thead><tbody>' + managerRowsHtml +
+           '<tr style="background:#f1f5f9;font-weight:700;"><td>합계</td><td class="center">' + sum.거래처수 + '</td><td class="num">' + fmtNum(sum.매출합계) + '</td><td class="num">' + fmtNum(sum.매출공급가) + '</td><td class="center">' + fmtNum(sum.매출건수) + '건</td><td class="num">' + fmtNum(sum.수금합계) + '</td><td class="center">' + fmtNum(sum.수금건수) + '건</td><td class="num">' + fmtNum(sum.전월매출) + '</td><td class="center">' + perfDeltaHtml(sum.전월대비) + '</td><td class="num">' + fmtNum(sum.미수금) + '</td><td></td></tr>' +
+         '</tbody></table></div>' +
+         '<div class="mobile-cards">' + managerCardsHtml + '</div>' +
+       '</div>' +
+       '<div class="card">' +
+         '<div class="card-title"><span>📅 월별 추이 (최근 ' + d.months.length + '개월 · 합계)</span></div>' +
+         '<div class="table-wrap"><table><thead><tr>' +
+           '<th>기준월</th><th class="num">매출(합계)</th><th class="num">공급가액</th><th class="center">건수</th><th class="num">수금</th><th style="min-width:90px;">추이</th>' +
+         '</tr></thead><tbody>' + trendRows + '</tbody></table></div>' +
+       '</div>' +
+       '<div class="card">' +
+         '<div class="card-title"><span>🧮 담당자 × 월 매출(합계)</span></div>' +
+         '<div class="table-wrap"><table><thead><tr>' + matrixHead + '</tr></thead><tbody>' + (matrixRows || '<tr><td colspan="' + ((d.months || []).length + 2) + '" class="center" style="padding:18px;color:var(--muted);">데이터가 없습니다.</td></tr>') + matrixTotal + '</tbody></table></div>' +
+       '</div>' +
+       '<div class="card">' +
+         '<div class="card-title"><span>🏥 병원별 ' + esc(d.targetMonth) + ' 실적 (' + clientRows.length + '곳)</span>' +
+           '<button class="btn btn-outline btn-sm" onclick="togglePerfClients()">' + (STATE.perfShowClients ? '접기' : '펼치기') + '</button>' +
+         '</div>' +
+         (STATE.perfShowClients
+           ? '<div class="table-wrap"><table><thead><tr><th>거래처</th><th>담당자</th><th class="num">매출(합계)</th><th class="center">건수</th><th class="num">수금</th><th class="num">미수금</th></tr></thead><tbody>' + clientTable + '</tbody></table></div>'
+           : '<p style="margin:0;font-size:12.5px;color:var(--muted);">거래처별 내역은 [펼치기]를 누르면 보입니다.</p>') +
+       '</div>';
+   }
+
+   // =========================================================================
+   // 6-D. MODULE 9: 처방전 입력 (하이브리드 캐시 — 한 번 담으면 수량만 입력)
+   // =========================================================================
+   const RX_CACHE_KEY = 'crm_rx_cache_v2';
+
+   function rxCacheRead() {
+     try {
+       const raw = localStorage.getItem(RX_CACHE_KEY);
+       const o = raw ? JSON.parse(raw) : null;
+       if (o && o.products && o.byClient) return o;
+     } catch (e) {}
+     return { products: {}, byClient: {} };
+   }
+
+   function rxCacheWrite(c) {
+     try { localStorage.setItem(RX_CACHE_KEY, JSON.stringify(c)); } catch (e) {}
+   }
+
+   function rxTrim_(obj, limit) {
+     const keys = Object.keys(obj);
+     if (keys.length <= limit) return;
+     keys.sort(function (a, b) { return (obj[a].at || 0) - (obj[b].at || 0); });
+     keys.slice(0, keys.length - limit).forEach(function (k) { delete obj[k]; });
+   }
+
+   /** 이 병원 품목으로 캐시에 기록 — 다음 입력부터 서버 조회 없이 바로 뜸 */
+   function rxCachePut(clientCode, item) {
+     if (!clientCode || !item || !item.보험코드) return;
+     const c = rxCacheRead();
+     const now = Date.now();
+     c.products[item.보험코드] = {
+       보험코드: item.보험코드,
+       품목명: item.품목명 || '',
+       규격: item.규격 || '',
+       제약사: item.제약사 || '',
+       약가: Number(item.약가 || 0),
+       수수료율: Number(item.수수료율 || 0),
+       at: now
+     };
+     rxTrim_(c.products, 800);
+     if (!c.byClient[clientCode]) c.byClient[clientCode] = {};
+     c.byClient[clientCode][item.보험코드] = {
+       lastQty: Number(item.수량 || item.lastQty || 0),
+       lastMonth: STATE.rxMonth || '',
+       at: now
+     };
+     rxTrim_(c.byClient[clientCode], 120);
+     rxCacheWrite(c);
+   }
+
+   function rxRowsFromCache(clientCode) {
+     const c = rxCacheRead();
+     const mine = (c.byClient && c.byClient[clientCode]) || {};
+     return Object.keys(mine).sort(function (a, b) { return (mine[b].at || 0) - (mine[a].at || 0); }).map(function (bc) {
+       const p = c.products[bc] || {};
+       return {
+         보험코드: bc,
+         품목명: p.품목명 || bc,
+         규격: p.규격 || '',
+         제약사: p.제약사 || '',
+         약가: Number(p.약가 || 0),
+         수수료율: Number(p.수수료율 || 0),
+         수량: '',
+         지난수량: Number(mine[bc].lastQty || 0),
+         지난월: mine[bc].lastMonth || '',
+         saved: false
+       };
+     });
+   }
+
+   function rxLocalSearch(q) {
+     const query = String(q || '').trim().toLowerCase();
+     if (!query) return [];
+     const c = rxCacheRead();
+     const pool = [];
+     const seen = {};
+     Object.keys(c.products || {}).forEach(function (k) {
+       const p = c.products[k];
+       if (!seen[p.보험코드]) { seen[p.보험코드] = 1; p.fromCache = true; pool.push(p); }
+     });
+     (STATE.rxFrequent || []).forEach(function (p) {
+       if (!seen[p.보험코드]) { seen[p.보험코드] = 1; pool.push(p); }
+     });
+     return pool.filter(function (p) {
+       const hay = (String(p.품목명 || '') + ' ' + String(p.보험코드 || '') + ' ' + String(p.제약사 || '')).toLowerCase();
+       return hay.indexOf(query) !== -1;
+     }).sort(function (a, b) {
+       const an = String(a.품목명 || '').toLowerCase();
+       const bn = String(b.품목명 || '').toLowerCase();
+       const ap = an.indexOf(query) === 0 ? 0 : 1;
+       const bp = bn.indexOf(query) === 0 ? 0 : 1;
+       if (ap !== bp) return ap - bp;
+       return an.length - bn.length;
+     }).slice(0, 20);
+   }
+
+   async function loadPrescriptionModule() {
+     if (!STATE.rxMonth) STATE.rxMonth = STATE.currentMonth || (STATE.today || '').slice(0, 7);
+     if (!STATE.rxDate) STATE.rxDate = STATE.today || '';
+     STATE.rxRows = [];
+     STATE.rxSaved = null;
+     renderActiveMenu();
+     loadFrequentProducts();
+     if (STATE.rxClient) loadRxData({ keepRows: false });
+     else loadRxMonthSummary();
+   }
+
+   async function loadFrequentProducts() {
+     try {
+       const res = await runServer('getFrequentElpharmaProducts', [60], { silent: true });
+       STATE.rxFrequent = (res && res.items) || [];
+       const tag = document.getElementById('rx-cache-count');
+       if (tag) tag.textContent = '빠른 목록 ' + STATE.rxFrequent.length + '개 · 사이트 캐시 ' + Object.keys(rxCacheRead().products).length + '개';
+       if (STATE.rxQuery) renderRxResults(rxLocalSearch(STATE.rxQuery));
+     } catch (e) {}
+   }
+
+   function renderPrescriptionPage(container) {
+     const clientCount = (STATE.clients || []).filter(function (c) { return c.사용여부 !== 'N'; }).length;
+     container.innerHTML =
+       '<div class="page-header">' +
+         '<h2 class="page-title">💊 처방전 입력 <small style="font-size:12px;color:var(--muted);font-weight:500;">병원을 고르면 지난 품목이 펼쳐집니다 · 개수만 입력</small></h2>' +
+         '<span class="badge ' + (STATE.elpharmaCount > 0 ? 'badge-success' : 'badge-amber') + '">' +
+           (STATE.elpharmaCount > 0 ? '이엘파마 ' + fmtNum(STATE.elpharmaCount) + '품목 서버 검색' : '이엘파마품목 시트 확인 필요') +
+         '</span>' +
+       '</div>' +
+       '<div class="card">' +
+         '<div class="form-grid">' +
+           '<div class="form-group span-2">' +
+             '<label><span class="rx-step">1</span>병원(거래처) 선택 — ' + clientCount + '곳</label>' +
+             '<input type="text" id="rx-client-ac" placeholder="병원명 또는 거래처코드로 타이핑" autocomplete="off" />' +
+             '<input type="hidden" id="rx-client" />' +
+           '</div>' +
+           '<div class="form-group">' +
+             '<label><span class="rx-step">2</span>기준월</label>' +
+             '<input type="month" id="rx-month" value="' + esc(STATE.rxMonth) + '" onchange="changeRxMonth(this.value)" />' +
+           '</div>' +
+           '<div class="form-group">' +
+             '<label><span class="rx-step">3</span>처방일</label>' +
+             '<input type="date" id="rx-date" value="' + esc(STATE.rxDate) + '" onchange="STATE.rxDate=this.value" />' +
+           '</div>' +
+         '</div>' +
+         '<div id="rx-client-strip" class="info-strip" style="margin-top:10px;display:none;"></div>' +
+       '</div>' +
+
+       '<div class="card" id="rx-quick-card">' +
+         '<div class="card-title">' +
+           '<span>💊 빠른 입력 — 알약 사용 개수만 입력하세요</span>' +
+           '<small id="rx-sum-tag" style="font-weight:500;font-size:12px;color:var(--muted);"></small>' +
+         '</div>' +
+         '<div class="toolbar">' +
+           '<button class="btn btn-outline btn-sm" onclick="fillRxLastQty()">지난 수량 채우기</button>' +
+           '<button class="btn btn-outline btn-sm" onclick="clearRxQty()">수량 비우기</button>' +
+           '<span style="flex:1"></span>' +
+           '<button class="btn btn-primary" id="rx-save-btn" onclick="saveRxRows()">💾 입력한 수량 일괄 저장</button>' +
+         '</div>' +
+         '<div id="rx-rows"></div>' +
+         '<div id="rx-sum" class="rx-sum" style="margin-top:10px;"></div>' +
+       '</div>' +
+
+       '<div class="card" id="rx-search-card">' +
+         '<div class="card-title">' +
+           '<span>🔎 새 약 추가 — 이엘파마 9,100품목 검색</span>' +
+           '<small id="rx-cache-count" style="font-weight:500;font-size:12px;color:var(--muted);"></small>' +
+         '</div>' +
+         '<input type="text" id="rx-search" placeholder="품목명 · 보험코드 · 제약사 · 성분명 (2글자 이상)" autocomplete="off" oninput="onRxSearchInput()" />' +
+         '<div id="rx-results" style="margin-top:8px;"></div>' +
+       '</div>' +
+
+       '<div class="card" id="rx-saved-card">' +
+         '<div class="card-title">' +
+           '<span id="rx-saved-title">📋 저장된 처방</span>' +
+           '<button class="btn btn-outline btn-sm" onclick="loadRxData({ keepRows: true })">🔄 새로고침</button>' +
+         '</div>' +
+         '<div id="rx-saved"></div>' +
+       '</div>';
+
+     createAutocomplete(document.getElementById('rx-client-ac'), {
+       items: clientAcItems(),
+       emptyText: '거래처가 없습니다.',
+       onSelect: function (item) { selectRxClient(item.key); }
+     });
+
+     if (STATE.rxClient) restoreRxClient();
+     renderRxRows();
+     renderRxSaved();
+     renderRxResults();
+     updateRxSummary();
+   }
+
+   function rxClientInfoStrip(c) {
+     const el = document.getElementById('rx-client-strip');
+     if (!el) return;
+     if (!c) { el.style.display = 'none'; el.innerHTML = ''; return; }
+     el.style.display = 'flex';
+     el.innerHTML =
+       '<span><strong>' + esc(c.거래처명) + '</strong> (' + esc(c.거래처코드) + ')</span>' +
+       '<span>' + esc(c.유통구분 || '-') + ' · ' + esc(c.진료과 || '-') + '</span>' +
+       '<span>담당 ' + esc(c.담당자 || '-') + '</span>' +
+       '<span>' + esc(c.연락처 || '-') + '</span>' +
+       '<button class="btn-link" onclick="openClientDetail(\'' + esc(c.거래처코드) + '\')">상세정보</button>';
+   }
+
+   function selectRxClient(code) {
+     const c = findClient(code);
+     if (!c) return;
+     STATE.rxClient = c.거래처코드;
+     STATE.rxDirty = false;
+     const hidden = document.getElementById('rx-client');
+     if (hidden) hidden.value = c.거래처코드;
+     const ac = document.getElementById('rx-client-ac');
+     if (ac) ac.value = c.거래처명;
+     rxClientInfoStrip(c);
+     loadRxData({ keepRows: false });
+   }
+
+   function restoreRxClient() {
+     const c = findClient(STATE.rxClient);
+     if (!c) { STATE.rxClient = ''; return; }
+     const hidden = document.getElementById('rx-client');
+     if (hidden) hidden.value = c.거래처코드;
+     const ac = document.getElementById('rx-client-ac');
+     if (ac) ac.value = c.거래처명;
+     rxClientInfoStrip(c);
+   }
+
+   function changeRxMonth(v) {
+     if (STATE.rxDirty && !confirm('입력 중인 수량이 있습니다. 월을 바꾸면 다시 불러옵니다. 계속할까요?')) {
+       const el = document.getElementById('rx-month');
+       if (el) el.value = STATE.rxMonth;
+       return;
+     }
+     STATE.rxMonth = v || STATE.currentMonth || (STATE.today || '').slice(0, 7);
+     STATE.rxDirty = false;
+     if (STATE.rxClient) loadRxData({ keepRows: false });
+     else loadRxMonthSummary();
+   }
+
+   async function loadRxMonthSummary() {
+     const seq = ++STATE.rxReqSeq;
+     try {
+       const d = await runServer('getPrescriptions', [STATE.rxMonth, ''], { silent: true });
+       if (seq !== STATE.rxReqSeq) return;
+       STATE.rxSaved = d;
+       renderRxSaved();
+     } catch (e) {}
+   }
+
+   async function loadRxData(opts) {
+     const o = opts || {};
+     const clientCode = STATE.rxClient;
+     const ym = STATE.rxMonth;
+     if (!clientCode) { loadRxMonthSummary(); renderRxRows(); return; }
+
+     const seq = ++STATE.rxReqSeq;
+     if (!o.keepRows) {
+       STATE.rxRows = rxRowsFromCache(clientCode);
+       STATE.rxDirty = false;
+       renderRxRows();
+       updateRxSummary();
+     }
+
+     let quick = null, saved = null, failed = null;
+     try {
+       const res = await Promise.all([
+         runServer('getPrescriptionQuickItems', [clientCode], { silent: true }),
+         runServer('getPrescriptions', [ym, clientCode], { silent: true })
+       ]);
+       quick = res[0];
+       saved = res[1];
+     } catch (e) {
+       failed = e;
+     }
+     if (seq !== STATE.rxReqSeq) return;
+
+     if (saved) { STATE.rxSaved = saved; renderRxSaved(); }
+     if (failed) {
+       showToast('시트 서버에서 처방 내역을 불러오지 못했습니다: ' + friendlyError_(failed));
+       return;
+     }
+
+     const typed = {};
+     STATE.rxRows.forEach(function (r) { if (Number(r.수량) > 0) typed[r.보험코드] = r.수량; });
+     const rows = [];
+     const seen = {};
+     ((saved && saved.rows) || []).forEach(function (s) {
+       rows.push({
+         보험코드: s.보험코드, 품목명: s.품목명, 규격: s.규격, 제약사: s.제약사,
+         약가: s.약가, 수수료율: s.수수료율, 수량: s.수량, 지난수량: 0, 지난월: '',
+         saved: true, 처방ID: s.처방ID
+       });
+       seen[s.보험코드] = true;
+     });
+     ((quick && quick.items) || []).forEach(function (it) {
+       if (seen[it.보험코드]) return;
+       rows.push({
+         보험코드: it.보험코드, 품목명: it.품목명, 규격: it.규격, 제약사: it.제약사,
+         약가: it.약가, 수수료율: it.수수료율, 수량: typed[it.보험코드] || '',
+         지난수량: it.최근수량 || 0, 지난월: it.최근월 || '', saved: false
+       });
+       seen[it.보험코드] = true;
+     });
+     const cache = rxCacheRead();
+     const mine = (cache.byClient && cache.byClient[clientCode]) || {};
+     Object.keys(mine).sort(function (a, b) { return (mine[b].at || 0) - (mine[a].at || 0); }).forEach(function (bc) {
+       if (seen[bc]) return;
+       const p = (cache.products || {})[bc] || {};
+       rows.push({
+         보험코드: bc, 품목명: p.품목명 || bc, 규격: p.규격 || '', 제약사: p.제약사 || '',
+         약가: Number(p.약가 || 0), 수수료율: Number(p.수수료율 || 0),
+         수량: typed[bc] || '', 지난수량: Number(mine[bc].lastQty || 0), 지난월: mine[bc].lastMonth || '', saved: false
+       });
+       seen[bc] = true;
+     });
+
+     STATE.rxRows = rows;
+     renderRxRows();
+     updateRxSummary();
+   }
+
+   function renderRxRows() {
+     const el = document.getElementById('rx-rows');
+     if (!el) return;
+     if (!STATE.rxClient) {
+       el.innerHTML = '<div class="rx-empty">병원을 선택하면 <strong>이 병원에 입력했던 품목이 여기에 펼쳐집니다.</strong><br />' +
+         '그다음 줄마다 <strong>사용 개수만</strong> 입력하고 [💾 일괄 저장]을 누르면 끝입니다.<br />' +
+         '처음 쓰는 약은 아래 <strong>[🔎 새 약 추가]</strong>에서 찾아 담으면 다음부터는 자동으로 이 목록에 남습니다.</div>';
+       return;
+     }
+     if (!STATE.rxRows.length) {
+       el.innerHTML = '<div class="rx-empty">이 병원에 저장된 처방 품목이 아직 없습니다.<br />아래 <strong>[🔎 새 약 추가]</strong>에서 품목을 검색해 담아 주세요.<br />' +
+         '한 번 담으면 다음 달부터는 이 목록에서 <strong>개수만</strong> 입력하면 됩니다.</div>';
+       return;
+     }
+
+     el.innerHTML = STATE.rxRows.map(function (r, i) {
+       const qty = Number(r.수량) || 0;
+       const amount = qty * (Number(r.약가) || 0);
+       const fee = Math.round(amount * (Number(r.수수료율) || 0) / 100);
+       const val = (r.수량 === '' || r.수량 === null || r.수량 === undefined) ? '' : r.수량;
+       return '<div class="rx-row' + (r.saved ? ' saved' : '') + '">' +
+         '<div class="rx-main">' +
+           '<div class="rx-name">' + esc(r.품목명) +
+             (r.규격 ? ' <span style="font-weight:500;color:var(--muted);font-size:11.5px;">' + esc(r.규격) + '</span>' : '') +
+             (r.saved ? ' <span class="badge badge-success">저장됨</span>' : '') +
+             (r.수수료율 ? ' <span class="badge badge-muted">수수료 ' + r.수수료율 + '%</span>' : '') +
+           '</div>' +
+           '<div class="rx-sub">' + esc(r.보험코드) + (r.제약사 ? ' · ' + esc(r.제약사) : '') +
+             ' · 약가 ' + fmtNum(r.약가) + '원' +
+             (r.지난수량 ? ' · 최근 ' + fmtNum(r.지난수량) + '개' + (r.지난월 ? ' (' + esc(r.지난월) + ')' : '') : '') +
+           '</div>' +
+         '</div>' +
+         '<div class="rx-qty">' +
+           '<input type="number" inputmode="numeric" min="0" id="rx-q-' + i + '" value="' + esc(String(val)) + '" placeholder="' + (r.지난수량 ? String(r.지난수량) : '0') + '" oninput="onRxQtyInput(' + i + ', this.value)" onfocus="this.select()" />' +
+           '<span class="u">개</span>' +
+         '</div>' +
+         '<div class="rx-amt" id="rx-amt-' + i + '"><b>' + (amount ? fmtNum(amount) + '원' : '-') + '</b><small>' + (fee ? '수수료 ' + fmtNum(fee) + '원' : '수수료 -') + '</small></div>' +
+         '<button class="btn btn-outline btn-sm rx-x" title="이번 입력에서만 빼기" onclick="removeRxRow(' + i + ')">✕</button>' +
+       '</div>';
+     }).join('');
+   }
+
+   function onRxQtyInput(i, v) {
+     const r = STATE.rxRows[i];
+     if (!r) return;
+     STATE.rxDirty = true;
+     r.수량 = (v === '' || v === null) ? '' : Math.max(0, Math.floor(Number(v) || 0));
+     const qty = Number(r.수량) || 0;
+     const amount = qty * (Number(r.약가) || 0);
+     const fee = Math.round(amount * (Number(r.수수료율) || 0) / 100);
+     const amt = document.getElementById('rx-amt-' + i);
+     if (amt) amt.innerHTML = '<b>' + (amount ? fmtNum(amount) + '원' : '-') + '</b><small>' + (fee ? '수수료 ' + fmtNum(fee) + '원' : '수수료 -') + '</small>';
+     updateRxSummary();
+   }
+
+   function rxTotals() {
+     let count = 0, qty = 0, amount = 0, fee = 0;
+     STATE.rxRows.forEach(function (r) {
+       const q = Number(r.수량) || 0;
+       if (q <= 0) return;
+       const a = q * (Number(r.약가) || 0);
+       count++;
+       qty += q;
+       amount += a;
+       fee += Math.round(a * (Number(r.수수료율) || 0) / 100);
+     });
+     return { count: count, qty: qty, amount: amount, fee: fee };
+   }
+
+   function updateRxSummary() {
+     const t = rxTotals();
+     const sum = document.getElementById('rx-sum');
+     if (sum) {
+       sum.innerHTML = '<span>입력 품목 <b>' + t.count + '</b>개</span>' +
+         '<span>총 사용 <b>' + fmtNum(t.qty) + '</b>개</span>' +
+         '<span>처방금액 <b>' + fmtNum(t.amount) + '</b>원</span>' +
+         '<span>예상수수료 <b>' + fmtNum(t.fee) + '</b>원</span>' +
+         (STATE.rxMonth ? '<span style="color:var(--muted);font-size:12px;">' + esc(STATE.rxMonth) + ' 기준</span>' : '');
+     }
+     const tag = document.getElementById('rx-sum-tag');
+     if (tag) {
+       tag.textContent = STATE.rxClient
+         ? '빈칸·0개 품목은 저장하지 않습니다'
+         : '먼저 병원을 선택해 주세요';
+     }
+   }
+
+   function fillRxLastQty() {
+     let n = 0;
+     STATE.rxRows.forEach(function (r, i) {
+       if ((Number(r.수량) || 0) > 0) return;
+       if (!r.지난수량) return;
+       r.수량 = r.지난수량;
+       n++;
+       const el = document.getElementById('rx-q-' + i);
+       if (el) el.value = String(r.수량);
+       const amt = document.getElementById('rx-amt-' + i);
+       const amount = Number(r.수량) * (Number(r.약가) || 0);
+       const fee = Math.round(amount * (Number(r.수수료율) || 0) / 100);
+       if (amt) amt.innerHTML = '<b>' + fmtNum(amount) + '원</b><small>' + (fee ? '수수료 ' + fmtNum(fee) + '원' : '수수료 -') + '</small>';
+     });
+     if (n) STATE.rxDirty = true;
+     updateRxSummary();
+     showToast(n ? n + '개 품목에 지난 수량을 채웠습니다. 다른 수량은 직접 고쳐 주세요.' : '채울 지난 수량이 없습니다.');
+   }
+
+   function clearRxQty() {
+     STATE.rxRows.forEach(function (r, i) {
+       r.수량 = '';
+       const el = document.getElementById('rx-q-' + i);
+       if (el) el.value = '';
+       const amt = document.getElementById('rx-amt-' + i);
+       if (amt) amt.innerHTML = '<b>-</b><small>수수료 -</small>';
+     });
+     STATE.rxDirty = true;
+     updateRxSummary();
+   }
+
+   function removeRxRow(i) {
+     const r = STATE.rxRows[i];
+     if (!r) return;
+     if (r.saved) {
+       showToast('저장된 기록입니다. 목록에서만 뺍니다(기록 삭제는 아래 저장 목록에서).');
+     }
+     STATE.rxRows.splice(i, 1);
+     STATE.rxDirty = true;
+     renderRxRows();
+     updateRxSummary();
+   }
+
+   async function saveRxRows() {
+     if (!STATE.rxClient) { showToast('먼저 병원(거래처)을 선택해 주세요.'); return; }
+     const items = STATE.rxRows.filter(function (r) { return (Number(r.수량) || 0) > 0; }).map(function (r) {
+       return {
+         보험코드: r.보험코드, 품목명: r.품목명, 규격: r.규격, 제약사: r.제약사,
+         약가: Number(r.약가) || 0, 수량: Number(r.수량) || 0, 수수료율: Number(r.수수료율) || 0
+       };
+     });
+     if (!items.length) { showToast('수량을 입력한 품목이 없습니다. 개수를 입력해 주세요.'); return; }
+
+     const c = findClient(STATE.rxClient);
+     const t = rxTotals();
+     const msg = (c ? c.거래처명 : STATE.rxClient) + ' · ' + STATE.rxMonth + '\n' +
+       items.length + '품목 / ' + t.qty + '개\n' +
+       '처방금액 ' + fmtNum(t.amount) + '원 · 예상수수료 ' + fmtNum(t.fee) + '원\n\n저장할까요?';
+     if (!confirm(msg)) return;
+
+     const btn = document.getElementById('rx-save-btn');
+     if (btn) { btn.disabled = true; btn.textContent = '저장 중...'; }
+     try {
+       const res = await runServer('savePrescriptions', [{
+         기준월: STATE.rxMonth,
+         처방일: STATE.rxDate,
+         거래처코드: STATE.rxClient,
+         items: items
+       }]);
+       items.forEach(function (it) { rxCachePut(STATE.rxClient, it); });
+       STATE.rxDirty = false;
+       showToast('저장 완료 — 새 ' + (res.created || 0) + '건 / 갱신 ' + (res.updated || 0) + '건');
+       await loadRxData({ keepRows: false });
+     } catch (e) {
+       /* runServer 토스트 */
+     } finally {
+       if (btn) { btn.disabled = false; btn.textContent = '💾 입력한 수량 일괄 저장'; }
+     }
+   }
+
+   function renderRxSaved() {
+     const el = document.getElementById('rx-saved');
+     const title = document.getElementById('rx-saved-title');
+     if (!el) return;
+     const d = STATE.rxSaved;
+
+     if (!STATE.rxClient) {
+       if (title) title.textContent = '📋 ' + (STATE.rxMonth || '') + ' 저장된 처방 (병원별 요약)';
+       if (!d || !d.byClient || !d.byClient.length) {
+         el.innerHTML = '<div class="rx-empty">' + esc(STATE.rxMonth || '') + '에 저장된 처방이 아직 없습니다.<br />병원을 선택해 처방을 입력하면 여기에 병원별 합계가 나옵니다.</div>';
+         return;
+       }
+       el.innerHTML = '<div class="table-wrap"><table><thead><tr>' +
+         '<th>병원</th><th>담당자</th><th class="center">품목</th><th class="num">총수량</th><th class="num">처방금액</th><th class="num">예상수수료</th><th class="center">보기</th>' +
+         '</tr></thead><tbody>' + d.byClient.map(function (b) {
+           return '<tr>' +
+             '<td><strong>' + esc(b.거래처명) + '</strong> <small style="color:var(--muted);">(' + esc(b.거래처코드) + ')</small></td>' +
+             '<td>' + esc(b.담당자 || '-') + '</td>' +
+             '<td class="center">' + b.품목수 + '</td>' +
+             '<td class="num">' + fmtNum(b.수량합) + '</td>' +
+             '<td class="num">' + fmtNum(b.처방금액) + '</td>' +
+             '<td class="num"><strong>' + fmtNum(b.예상수수료) + '</strong></td>' +
+             '<td class="center"><button class="btn btn-outline btn-sm" onclick="selectRxClient(\'' + esc(b.거래처코드) + '\')">열기</button></td>' +
+           '</tr>';
+         }).join('') + '</tbody></table></div>' +
+         '<div class="rx-sum" style="margin-top:10px;"><span>합계 <b>' + fmtNum(d.summary.처방금액) + '</b>원 · 예상수수료 <b>' + fmtNum(d.summary.예상수수료) + '</b>원 (' + d.summary.건수 + '건)</span></div>';
+       return;
+     }
+
+     if (title) title.textContent = '📋 ' + (STATE.rxMonth || '') + ' 저장된 처방 — ' + (findClient(STATE.rxClient) || {}).거래처명;
+     if (!d || !d.rows || !d.rows.length) {
+       el.innerHTML = '<div class="rx-empty">이 병원 · 이 달에 저장된 처방이 아직 없습니다. 위에서 수량을 입력해 저장해 주세요.</div>';
+       return;
+     }
+     el.innerHTML = '<div class="table-wrap"><table><thead><tr>' +
+       '<th>품목</th><th class="center">수량</th><th class="num">약가</th><th class="num">처방금액</th><th class="num">수수료율</th><th class="num">예상수수료</th><th>처방일</th><th class="center">삭제</th>' +
+     '</tr></thead><tbody>' + d.rows.map(function (r) {
+       return '<tr>' +
+         '<td><strong>' + esc(r.품목명) + '</strong>' + (r.규격 ? ' <small style="color:var(--muted);">' + esc(r.규격) + '</small>' : '') + ' <small style="color:var(--muted);">' + esc(r.보험코드) + '</small></td>' +
+         '<td class="center">' + fmtNum(r.수량) + '</td>' +
+         '<td class="num">' + fmtNum(r.약가) + '</td>' +
+         '<td class="num">' + fmtNum(r.처방금액) + '</td>' +
+         '<td class="num">' + r.수수료율 + '%</td>' +
+         '<td class="num"><strong>' + fmtNum(r.예상수수료) + '</strong></td>' +
+         '<td>' + esc(r.처방일) + '</td>' +
+         '<td class="center"><button class="btn btn-danger-soft btn-sm" onclick="removePrescription(\'' + esc(r.처방ID) + '\')">삭제</button></td>' +
+       '</tr>';
+     }).join('') +
+     '<tr style="background:#f1f5f9;font-weight:700;"><td>합계</td><td class="center">' + fmtNum(d.summary.건수) + '품목</td><td class="num"></td><td class="num">' + fmtNum(d.summary.처방금액) + '</td><td class="num"></td><td class="num">' + fmtNum(d.summary.예상수수료) + '</td><td></td><td></td></tr>' +
+     '</tbody></table></div>';
+   }
+
+   async function removePrescription(id) {
+     if (!id) return;
+     if (!confirm('이 처방 기록을 삭제할까요? (구글 시트 처방내역에서 지워집니다)')) return;
+     try {
+       await runServer('deletePrescription', [id]);
+       showToast('처방 기록을 삭제했습니다.');
+       await loadRxData({ keepRows: false });
+     } catch (e) {}
+   }
+
+   let _rxSearchTimer = null;
+
+   function onRxSearchInput() {
+     const el = document.getElementById('rx-search');
+     if (!el) return;
+     const q = el.value.trim();
+     STATE.rxQuery = q;
+     STATE.rxResults = { items: rxLocalSearch(q), query: q, local: true };
+     renderRxResults();
+     clearTimeout(_rxSearchTimer);
+     if (q.replace(/\s/g, '').length < 2) return;
+     _rxSearchTimer = setTimeout(function () { rxServerSearch(q); }, 350);
+   }
+
+   async function rxServerSearch(q) {
+     if (q !== STATE.rxQuery) return;
+     STATE.rxSearching = true;
+     renderRxResults();
+     try {
+       const res = await runServer('searchElpharmaProducts', [q, 30], { silent: true });
+       if (q !== STATE.rxQuery) return;
+       const merged = [];
+       const seen = {};
+       rxLocalSearch(q).forEach(function (it) { if (!seen[it.보험코드]) { seen[it.보험코드] = 1; merged.push(it); } });
+       ((res && res.items) || []).forEach(function (it) {
+         if (seen[it.보험코드]) return;
+         seen[it.보험코드] = 1;
+         it.fromServer = true;
+         merged.push(it);
+       });
+       STATE.rxResults = {
+         items: merged.slice(0, 40),
+         total: (res && res.total) || merged.length,
+         query: q,
+         server: true,
+         message: (res && res.message) || ''
+       };
+     } catch (e) {
+       STATE.rxResults = { items: rxLocalSearch(q), query: q, error: friendlyError_(e) };
+     } finally {
+       STATE.rxSearching = false;
+       renderRxResults();
+     }
+   }
+
+   function renderRxResults() {
+     const el = document.getElementById('rx-results');
+     if (!el) return;
+     const r = STATE.rxResults;
+     const tag = document.getElementById('rx-cache-count');
+     if (tag) tag.textContent = '빠른 목록 ' + (STATE.rxFrequent || []).length + '개 · 사이트 캐시 ' + Object.keys(rxCacheRead().products).length + '개';
+
+     if (!r || !r.query) {
+       const freq = (STATE.rxFrequent || []).slice(0, 8);
+       if (!freq.length) {
+         el.innerHTML = '<div class="rx-empty" style="padding:12px;">품목명 2글자 이상 입력하면 이엘파마 9,100품목에서 찾아 드립니다.</div>';
+         return;
+       }
+       el.innerHTML = '<div style="font-size:11.5px;color:var(--muted);margin-bottom:2px;">최근에 자주 쓴 품목 (전체 처방 기준)</div>' +
+         freq.map(function (it) { return rxHitHtml(it); }).join('');
+       return;
+     }
+
+     const items = r.items || [];
+     if (!items.length) {
+       el.innerHTML = '<div class="rx-empty" style="padding:12px;">' +
+         (STATE.rxSearching ? '이엘파마 9,100품목에서 찾는 중...' : '검색 결과가 없습니다. 다른 이름(성분명·제약사)으로 찾아보세요.') + '</div>';
+       return;
+     }
+
+     const head = '<div style="font-size:11.5px;color:var(--muted);margin-bottom:2px;">' +
+       (r.error ? '서버 검색 실패 — 사이트에 저장된 품목만 보입니다' :
+         ('캐시/최근 ' + items.filter(function (i) { return !i.fromServer; }).length + '건 · 서버 ' + items.filter(function (i) { return i.fromServer; }).length + '건' +
+           (r.total ? ' (전체 ' + fmtNum(r.total) + '건 중 상위)' : '') + (STATE.rxSearching ? ' · 찾는 중...' : ''))) + '</div>';
+     el.innerHTML = head + items.map(function (it) { return rxHitHtml(it); }).join('');
+   }
+
+   function rxHitHtml(it) {
+     const badge = (it.분류 ? '<span class="badge badge-blue">' + esc(it.분류) + '</span>' : '') +
+       (it.fromCache ? '<span class="badge badge-muted">캐시</span>' : '');
+     return '<div class="rx-hit">' +
+       '<div class="h-main">' +
+         '<div class="h-name">' + esc(it.품목명) + (it.규격 ? ' <span style="font-weight:500;color:var(--muted);font-size:11.5px;">' + esc(it.규격) + '</span>' : '') + '</div>' +
+         '<div class="h-sub">' + esc(it.보험코드) + (it.제약사 ? ' · ' + esc(it.제약사) : '') +
+           ' · 약가 ' + fmtNum(it.약가) + '원' + (it.수수료율 ? ' · 수수료 ' + it.수수료율 + '%' : '') + ' ' + badge + '</div>' +
+       '</div>' +
+       '<button class="btn btn-outline btn-sm" onclick="addRxItem(\'' + esc(it.보험코드) + '\')">＋ 담기</button>' +
+     '</div>';
+   }
+
+   function rxFindProduct(code) {
+     const c = String(code || '').trim();
+     if (!c) return null;
+     const inResults = ((STATE.rxResults && STATE.rxResults.items) || []).filter(function (i) { return i.보험코드 === c; })[0];
+     if (inResults) return inResults;
+     const inFreq = (STATE.rxFrequent || []).filter(function (i) { return i.보험코드 === c; })[0];
+     if (inFreq) return inFreq;
+     const cache = rxCacheRead();
+     const p = (cache.products || {})[c];
+     return p || null;
+   }
+
+   function addRxItem(code) {
+     if (!STATE.rxClient) { showToast('먼저 병원(거래처)을 선택해 주세요.'); return; }
+     const it = rxFindProduct(code);
+     if (!it) return;
+     const existsIdx = STATE.rxRows.findIndex(function (r) { return r.보험코드 === it.보험코드; });
+     if (existsIdx !== -1) {
+       showToast('이미 목록에 있습니다. 개수만 입력하세요.');
+       const el = document.getElementById('rx-q-' + existsIdx);
+       if (el) { el.focus(); el.select(); }
+       return;
+     }
+     STATE.rxRows.push({
+       보험코드: it.보험코드, 품목명: it.품목명, 규격: it.규격 || '', 제약사: it.제약사 || '',
+       약가: Number(it.약가 || 0), 수수료율: Number(it.수수료율 || 0),
+       수량: '', 지난수량: 0, 지난월: '', saved: false
+     });
+     rxCachePut(STATE.rxClient, it);
+     renderRxRows();
+     updateRxSummary();
+     const idx = STATE.rxRows.length - 1;
+     const qel = document.getElementById('rx-q-' + idx);
+     if (qel) { qel.focus(); qel.select(); }
+     const search = document.getElementById('rx-search');
+     if (search) search.value = '';
+     STATE.rxQuery = '';
+     STATE.rxResults = null;
+     renderRxResults();
+     showToast(it.품목명 + ' 담았습니다 — 개수를 입력하세요.');
    }
 
    // =========================================================================
