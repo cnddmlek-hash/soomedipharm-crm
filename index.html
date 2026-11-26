@@ -1591,8 +1591,13 @@
      ov.classList.remove('hidden');
      const input = document.getElementById('setup-url');
      if (input && !input.value) input.value = getServerUrl();
+     if (input) { try { input.scrollLeft = 0; } catch (e) {} }
      setSetupMsg(message || '');
-     setTimeout(function () { if (input) input.focus(); }, 150);
+     setTimeout(function () {
+       if (!input) return;
+       input.focus();
+       try { input.scrollLeft = 0; } catch (e) {}
+     }, 150);
    }
 
    function hideSetupOverlay() {
@@ -1602,7 +1607,7 @@
 
    function openServerSetup() {
      const input = document.getElementById('setup-url');
-     if (input) input.value = getServerUrl();
+     if (input) { input.value = getServerUrl(); try { input.scrollLeft = 0; } catch (e) {} }
      showSetupOverlay();
    }
 
