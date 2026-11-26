@@ -1839,80 +1839,118 @@
    // =========================================================================
    // 5. MODULE 1: 거래처 등록/관리 + 거래처 상세정보
    // =========================================================================
+   function clientHaystack(c) {
+     return (String(c.거래처코드 || '') + ' ' + String(c.거래처명 || '') + ' ' + String(c.진료과 || '') + ' ' +
+       String(c.담당자 || '') + ' ' + String(c.연락처 || '')).toLowerCase();
+   }
+
    function renderClientsPage(container) {
-     const q = STATE.clientSearch.toLowerCase();
-     const filtered = STATE.clients.filter(function (c) {
-       if (!STATE.clientShowInactive && c.사용여부 === 'N') return false;
-       if (STATE.clientDistFilter && c.유통구분 !== STATE.clientDistFilter) return false;
-       if (q) {
-         const hay = (c.거래처코드 + ' ' + c.거래처명 + ' ' + c.진료과 + ' ' + c.담당자 + ' ' + c.연락처).toLowerCase();
-         if (hay.indexOf(q) === -1) return false;
-       }
-       return true;
-     });
+     const list = STATE.clients || [];
 
      container.innerHTML =
        '<div class="page-header">' +
-         '<h2 class="page-title">🏥 거래처 등록 / 관리 (' + filtered.length + '건)' +
+         '<h2 class="page-title">🏥 거래처 등록 / 관리 (<span id="client-count">0</span>건)' +
            (STATE.isMaster ? '' : '<small style="font-size:12px;color:var(--muted);font-weight:500;"> · 내 담당 거래처만 표시</small>') +
          '</h2>' +
          '<button class="btn btn-primary" onclick="openClientModal()">+ 신규 거래처 등록</button>' +
        '</div>' +
-       '<div class="card">' +
+       '<div class="card" id="client-card">' +
          '<div class="toolbar">' +
-           '<input type="text" style="max-width:260px;" placeholder="거래처명, 코드, 담당자, 진료과 검색" value="' + esc(STATE.clientSearch) + '" oninput="STATE.clientSearch=this.value;renderClientsPage(document.getElementById(\'main-content\'))" />' +
-           '<select style="max-width:130px;" onchange="STATE.clientDistFilter=this.value;renderClientsPage(document.getElementById(\'main-content\'))">' +
+           '<input type="text" id="client-search" style="max-width:260px;" placeholder="거래처명, 코드, 담당자, 진료과 검색" autocomplete="off" value="' + esc(STATE.clientSearch) + '" oninput="applyClientFilter()" oncompositionend="applyClientFilter()" />' +
+           '<select id="client-dist" style="max-width:130px;" onchange="STATE.clientDistFilter=this.value;applyClientFilter()">' +
              '<option value="">전체 유통구분</option>' +
              ['의원','병원','약국','도매'].map(function(d){ return '<option value="'+d+'" '+(STATE.clientDistFilter===d?'selected':'')+'>'+d+'</option>'; }).join('') +
            '</select>' +
            '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:500;">' +
-             '<input type="checkbox" style="width:auto;" ' + (STATE.clientShowInactive ? 'checked' : '') + ' onchange="STATE.clientShowInactive=this.checked;renderClientsPage(document.getElementById(\'main-content\'))" /> 비활성 거래처 포함' +
+             '<input type="checkbox" id="client-inactive" style="width:auto;" ' + (STATE.clientShowInactive ? 'checked' : '') + ' onchange="STATE.clientShowInactive=this.checked;applyClientFilter()" /> 비활성 거래처 포함' +
            '</label>' +
          '</div>' +
-         '<div class="table-wrap desktop-table">' +
-           '<table><thead><tr>' +
-             '<th>코드</th><th>거래처명</th><th>유통구분</th><th>진료과</th><th>담당자</th><th>연락처</th><th>이메일</th><th class="center">경고기준</th><th class="center">상태</th><th class="center">관리</th>' +
-           '</tr></thead><tbody>' +
-           (filtered.length ? filtered.map(function (c) {
-             return '<tr class="clickable-row" onclick="openClientDetail(\'' + esc(c.거래처코드) + '\')">' +
-               '<td>' + esc(c.거래처코드) + '</td>' +
-               '<td><strong>' + esc(c.거래처명) + '</strong></td>' +
-               '<td><span class="badge badge-blue">' + esc(c.유통구분) + '</span></td>' +
-               '<td>' + esc(c.진료과) + '</td>' +
-               '<td>' + esc(c.담당자) + '</td>' +
-               '<td>' + esc(c.연락처) + '</td>' +
-               '<td>' + esc(c.이메일) + '</td>' +
-               '<td class="center">' + c.회전일경고기준 + '일</td>' +
-               '<td class="center">' + (c.사용여부 === 'Y' ? '<span class="badge badge-success">사용</span>' : '<span class="badge badge-muted">비활성</span>') + '</td>' +
-               '<td class="center" style="white-space:nowrap;">' +
-                 '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openClientDetail(\'' + esc(c.거래처코드) + '\')">상세</button> ' +
-                 '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();openClientModal(' + c._rowIndex + ')">수정</button> ' +
-                 (c.사용여부 === 'Y'
-                   ? '<button class="btn btn-danger-soft btn-sm" onclick="event.stopPropagation();toggleClient(' + c._rowIndex + ',\'N\')">비활성</button>'
-                   : '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();toggleClient(' + c._rowIndex + ',\'Y\')">복구</button>') +
-               '</td></tr>';
-           }).join('') : '<tr><td colspan="10" class="center" style="padding:24px;color:var(--muted);">조건에 맞는 거래처가 없습니다.</td></tr>') +
-           '</tbody></table>' +
-         '</div>' +
-         '<div class="mobile-cards">' +
-           (filtered.length ? filtered.map(function (c) {
-             return '<div class="m-card" onclick="openClientDetail(\'' + esc(c.거래처코드) + '\')">' +
-               '<div class="m-card-head"><span>' + esc(c.거래처명) + ' <small style="color:var(--muted);">(' + esc(c.거래처코드) + ')</small></span>' +
-               '<span class="badge badge-blue">' + esc(c.유통구분) + '</span></div>' +
-               '<div class="m-card-row"><span class="k">진료과 / 담당자</span><span>' + esc(c.진료과 || '-') + ' / ' + esc(c.담당자 || '-') + '</span></div>' +
-               '<div class="m-card-row"><span class="k">연락처</span><span>' + esc(c.연락처 || '-') + '</span></div>' +
-               '<div class="m-card-row"><span class="k">이메일</span><span>' + esc(c.이메일 || '-') + '</span></div>' +
-               '<div class="m-card-row"><span class="k">경고기준 / 상태</span><span>' + c.회전일경고기준 + '일 / ' + (c.사용여부 === 'Y' ? '사용' : '비활성') + '</span></div>' +
-               '<div style="display:flex;gap:6px;margin-top:10px;">' +
-                 '<button class="btn btn-primary btn-sm" style="flex:1;" onclick="event.stopPropagation();openClientDetail(\'' + esc(c.거래처코드) + '\')">상세정보</button>' +
-                 '<button class="btn btn-outline btn-sm" style="flex:1;" onclick="event.stopPropagation();openClientModal(' + c._rowIndex + ')">수정</button>' +
-                 (c.사용여부 === 'Y'
-                   ? '<button class="btn btn-danger-soft btn-sm" style="flex:1;" onclick="event.stopPropagation();toggleClient(' + c._rowIndex + ',\'N\')">비활성</button>'
-                   : '<button class="btn btn-outline btn-sm" style="flex:1;" onclick="event.stopPropagation();toggleClient(' + c._rowIndex + ',\'Y\')">복구</button>') +
-               '</div></div>';
-           }).join('') : '<p style="text-align:center;color:var(--muted);">거래처가 없습니다.</p>') +
+         '<div id="client-list">' +
+           '<div class="table-wrap desktop-table">' +
+             '<table><thead><tr>' +
+               '<th>코드</th><th>거래처명</th><th>유통구분</th><th>진료과</th><th>담당자</th><th>연락처</th><th>이메일</th><th class="center">경고기준</th><th class="center">상태</th><th class="center">관리</th>' +
+             '</tr></thead><tbody>' +
+             (list.length ? list.map(function (c) {
+               return '<tr class="clickable-row" data-client-item="1" data-q="' + esc(clientHaystack(c)) + '" data-dist="' + esc(c.유통구분 || '') + '" data-inactive="' + esc(c.사용여부 || '') + '" onclick="openClientDetail(\'' + esc(c.거래처코드) + '\')">' +
+                 '<td>' + esc(c.거래처코드) + '</td>' +
+                 '<td><strong>' + esc(c.거래처명) + '</strong></td>' +
+                 '<td><span class="badge badge-blue">' + esc(c.유통구분) + '</span></td>' +
+                 '<td>' + esc(c.진료과) + '</td>' +
+                 '<td>' + esc(c.담당자) + '</td>' +
+                 '<td>' + esc(c.연락처) + '</td>' +
+                 '<td>' + esc(c.이메일) + '</td>' +
+                 '<td class="center">' + c.회전일경고기준 + '일</td>' +
+                 '<td class="center">' + (c.사용여부 === 'Y' ? '<span class="badge badge-success">사용</span>' : '<span class="badge badge-muted">비활성</span>') + '</td>' +
+                 '<td class="center" style="white-space:nowrap;">' +
+                   '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openClientDetail(\'' + esc(c.거래처코드) + '\')">상세</button> ' +
+                   '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();openClientModal(' + c._rowIndex + ')">수정</button> ' +
+                   (c.사용여부 === 'Y'
+                     ? '<button class="btn btn-danger-soft btn-sm" onclick="event.stopPropagation();toggleClient(' + c._rowIndex + ',\'N\')">비활성</button>'
+                     : '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();toggleClient(' + c._rowIndex + ',\'Y\')">복구</button>') +
+                 '</td></tr>';
+             }).join('') : '') +
+             '<tr id="client-empty-row" style="display:none;"><td colspan="10" class="center" style="padding:24px;color:var(--muted);">조건에 맞는 거래처가 없습니다.</td></tr>' +
+             '</tbody></table>' +
+           '</div>' +
+           '<div class="mobile-cards">' +
+             (list.length ? list.map(function (c) {
+               return '<div class="m-card client-card" data-client-item="1" data-q="' + esc(clientHaystack(c)) + '" data-dist="' + esc(c.유통구분 || '') + '" data-inactive="' + esc(c.사용여부 || '') + '" onclick="openClientDetail(\'' + esc(c.거래처코드) + '\')">' +
+                 '<div class="m-card-head"><span>' + esc(c.거래처명) + ' <small style="color:var(--muted);">(' + esc(c.거래처코드) + ')</small></span>' +
+                 '<span class="badge badge-blue">' + esc(c.유통구분) + '</span></div>' +
+                 '<div class="m-card-row"><span class="k">진료과 / 담당자</span><span>' + esc(c.진료과 || '-') + ' / ' + esc(c.담당자 || '-') + '</span></div>' +
+                 '<div class="m-card-row"><span class="k">연락처</span><span>' + esc(c.연락처 || '-') + '</span></div>' +
+                 '<div class="m-card-row"><span class="k">이메일</span><span>' + esc(c.이메일 || '-') + '</span></div>' +
+                 '<div class="m-card-row"><span class="k">경고기준 / 상태</span><span>' + c.회전일경고기준 + '일 / ' + (c.사용여부 === 'Y' ? '사용' : '비활성') + '</span></div>' +
+                 '<div style="display:flex;gap:6px;margin-top:10px;">' +
+                   '<button class="btn btn-primary btn-sm" style="flex:1;" onclick="event.stopPropagation();openClientDetail(\'' + esc(c.거래처코드) + '\')">상세정보</button>' +
+                   '<button class="btn btn-outline btn-sm" style="flex:1;" onclick="event.stopPropagation();openClientModal(' + c._rowIndex + ')">수정</button>' +
+                   (c.사용여부 === 'Y'
+                     ? '<button class="btn btn-danger-soft btn-sm" style="flex:1;" onclick="event.stopPropagation();toggleClient(' + c._rowIndex + ',\'N\')">비활성</button>'
+                     : '<button class="btn btn-outline btn-sm" style="flex:1;" onclick="event.stopPropagation();toggleClient(' + c._rowIndex + ',\'Y\')">복구</button>') +
+                 '</div></div>';
+             }).join('') : '') +
+             '<p id="client-empty-mobile" style="display:none;text-align:center;color:var(--muted);">조건에 맞는 거래처가 없습니다.</p>' +
+           '</div>' +
          '</div>' +
        '</div>';
+
+     applyClientFilter();
+   }
+
+   /**
+    * 거래처 검색어·유통구분·비활성 필터를 "행 표시 여부"만 바꿔 적용한다.
+    * 목록과 검색 입력칸을 다시 그리지 않으므로, 한글 조합(IME) 중에도 포커스·커서·입력값이 끊기지 않는다.
+    */
+   function applyClientFilter() {
+     const card = document.getElementById('client-card');
+     if (!card) return;
+     const qEl = document.getElementById('client-search');
+     const raw = qEl ? qEl.value : (STATE.clientSearch || '');
+     STATE.clientSearch = raw;   // 화면을 통째로 다시 그릴 때(자료 갱신 등) 입력값 복원용
+     const q = String(raw || '').trim().toLowerCase();
+     const dist = STATE.clientDistFilter || '';
+     const showInactive = !!STATE.clientShowInactive;
+
+     const items = card.querySelectorAll('[data-client-item]');
+     for (let i = 0; i < items.length; i++) {
+       const el = items[i];
+       const okDist = !dist || el.getAttribute('data-dist') === dist;
+       const okActive = showInactive || el.getAttribute('data-inactive') !== 'N';
+       const okQ = !q || (el.getAttribute('data-q') || '').indexOf(q) !== -1;
+       el.style.display = (okDist && okActive && okQ) ? '' : 'none';
+     }
+
+     // 건수는 데스크톱 표의 행만 세어 계산 (모바일 카드는 같은 목록의 복제본)
+     let shown = 0;
+     const rows = card.querySelectorAll('tr[data-client-item]');
+     for (let i = 0; i < rows.length; i++) if (rows[i].style.display !== 'none') shown++;
+
+     const emptyRow = document.getElementById('client-empty-row');
+     if (emptyRow) emptyRow.style.display = shown ? 'none' : '';
+     const emptyMobile = document.getElementById('client-empty-mobile');
+     if (emptyMobile) emptyMobile.style.display = shown ? 'none' : '';
+     const countEl = document.getElementById('client-count');
+     if (countEl) countEl.textContent = String(shown);
    }
 
    // ---------------- 거래처 상세정보 모달 ----------------
