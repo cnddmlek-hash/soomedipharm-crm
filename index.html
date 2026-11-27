@@ -1241,6 +1241,29 @@
      return Boolean(typeof google !== 'undefined' && google.script && google.script.run);
    }
 
+   // 제약사 표기 통일 — 자사는 페이서(써플라이)이고 휴온스는 별도 리스트입니다.
+   // 서버(Code.gs)가 아직 '자사(휴온스·페이서)'로 응답해도 화면에는 '자사(페이서)'로 보이게 맞춥니다.
+   // (Code.gs 를 새 버전으로 재배포하면 이 보정은 아무 일도 하지 않습니다.)
+   const OLD_MAKER_LABEL = '자사(휴온스·페이서)';
+   const NEW_MAKER_LABEL = '자사(페이서)';
+
+   function normalizeMakerLabels_(value) {
+     if (typeof value === 'string') {
+       return value.indexOf(OLD_MAKER_LABEL) === -1 ? value : value.split(OLD_MAKER_LABEL).join(NEW_MAKER_LABEL);
+     }
+     if (Array.isArray(value)) {
+       for (let i = 0; i < value.length; i++) value[i] = normalizeMakerLabels_(value[i]);
+       return value;
+     }
+     if (value && typeof value === 'object') {
+       for (const k in value) {
+         if (Object.prototype.hasOwnProperty.call(value, k)) value[k] = normalizeMakerLabels_(value[k]);
+       }
+       return value;
+     }
+     return value;
+   }
+
    function getServerUrl() {
      let url = '';
      try { url = localStorage.getItem(SERVER_URL_KEY) || ''; } catch (e) { url = ''; }
@@ -1379,7 +1402,7 @@
      return new Promise(function (resolve, reject) {
        function done(res) {
          if (!options.silent) showLoader(false);
-         resolve(res);
+         resolve(res === undefined ? res : normalizeMakerLabels_(res));
        }
        function fail(err) {
          if (!options.silent) showLoader(false);
