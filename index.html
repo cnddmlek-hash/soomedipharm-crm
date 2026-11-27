@@ -3475,13 +3475,12 @@
      '</div>';
    }
 
-   /** 메뉴 진입 — 폼은 바로 보여 주고, 최근 등록 매출만 나중에 채운다 */
+   /** 메뉴 진입 — 화면은 바로 그리고, 최근 등록 매출만 나중에 채운다 */
    async function loadOrderModule() {
      renderActiveMenu();
      if (STATE.orderTab === 'inject') {
        if (!STATE.injData) loadInjectGuide();
        if (!STATE.injProto) loadInjectProtocols();
-       return;
      }
      try {
        const rows = await runServer('getRecentTransactions', [200]);
