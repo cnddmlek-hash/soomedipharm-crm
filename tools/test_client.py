@@ -71,7 +71,7 @@ def main():
         print('(esprima 없음 — 문법 검사 생략: pip install esprima)')
 
     # 2) v1.6 요소
-    check("const APP_VERSION = 'v1.9'" in js, 'APP_VERSION 이 v1.9 가 아닙니다')
+    check("const APP_VERSION = 'v1.10'" in js, 'APP_VERSION 이 v1.10 이 아닙니다')
     check('id: \'drug\'' in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
     check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
     check('guideTabBar_' in js and 'switchGuideTab' in js, '경구제/주사제 탭이 없습니다')
@@ -108,9 +108,9 @@ def main():
 
     # 2-c) v1.7 — 비거래처 사전조회(심평원 HIRA)
     check('renderHiraPage' in js and '비거래처 심평원(HIRA) 사전조회' in js, '비거래처 사전조회 화면이 없습니다')
-    # 메뉴 순서: 거래처 등록/관리 → 거래처 상세정보 → 월별 실적 → 처방 셋팅 → 처방전 입력 → 약 검색 → 주문 → 원장 → 설정
+    # 메뉴 순서: 거래처 등록/관리 → 거래처 상세정보 → 월별 실적 → 처방 셋팅 → 처방전 입력 → 주사제 주문 → 수금 등록 → 약 검색 → 주문 → 원장 → 설정
     order_ids = re.findall(r"\n       id: '([a-z]+)',", js)
-    expect_order = ['clients', 'clientinfo', 'perf', 'guide', 'prescription', 'order', 'drug', 'turnover', 'ledger', 'docs']
+    expect_order = ['clients', 'clientinfo', 'perf', 'guide', 'prescription', 'order', 'collection', 'drug', 'turnover', 'ledger', 'docs']
     check(order_ids[:len(expect_order)] == expect_order, '사이드바 메뉴 순서가 다릅니다: %s' % order_ids)
     check(not re.search(r"label: '\s*\d+\.", js), '메뉴 이름 앞에 숫자가 붙었습니다')
     check('loadHiraModule' in js and 'hiraBase' in js, '사전조회 초기 로딩이 없습니다')
@@ -638,12 +638,97 @@ def main():
     except ImportError:
         pass
 
-    # 10) v1.9 — 화면 정리(접기·펼치기) + 매출/수금 등록 단독 메뉴
+    # 10) v1.10 — 매출(주사제 주문) / 수금 등록 화면 완전 분리
     check("id: 'order'" in js and 'renderOrderPage' in js and 'loadOrderModule' in js,
-          '매출 · 수금 등록 단독 메뉴가 없습니다')
-    check("label: '매출 · 수금 등록'" in js, '단독 메뉴 이름이 매출 · 수금 등록이 아닙니다')
-    check("shortLabel: '매출수금'" in js, '모바일 메뉴 짧은 이름(매출수금)이 없습니다')
+          '💉 주사제 주문 단독 메뉴가 없습니다')
+    check("label: '주사제 주문'" in js, '메뉴 이름이 주사제 주문이 아닙니다')
+    check("shortLabel: '주사주문'" in js, '모바일 메뉴 짧은 이름(주사주문)이 없습니다')
+    check("id: 'collection'" in js and 'renderCollectionPage' in js and 'loadCollectionModule' in js,
+          '💰 수금 등록 단독 메뉴가 없습니다')
+    check("label: '수금 등록'" in js, '메뉴 이름이 수금 등록이 아닙니다')
+    check("shortLabel: '수금'" in js, '모바일 메뉴 짧은 이름(수금)이 없습니다')
     check(order_ids[:len(expect_order)][-1] == 'docs', '사이드바 맨 마지막이 (마스터) 이메일 발송이력 · 설정이 아닙니다')
+    # 매출·수금을 한 폼에 섮는 구분 드롭다운이 남아 있지 않은지
+    check('tx-type' not in js and '매출 · 수금 등록' not in js and '매출·수금 등록' not in js,
+          '매출·수금을 섮는 구분 드롭다운(또는 합쳐진 메뉴)이 남아 있습니다')
+    check('toggleTxFields' not in js and 'sale-only' not in js and 'collect-only' not in js,
+          '한 화면 안의 매출/수금 칸 숨기기(sale-only·collect-only)가 남아 있습니다')
+
+    # 10-a) 💰 수금 등록 화면 — 품목·수량·부가세 칸 없이 날짜·거래처·입금액·비고만
+    ce = re.search(r'function renderCollectionEntry\(el\)\s*\{(.*?)\n   \}', js, re.S)
+    check(bool(ce), 'renderCollectionEntry 를 찾지 못했습니다')
+    if ce:
+        ce_body = ce.group(1)
+        for bad in ['품목', '수량', '부가세', '단가', '보험코드', 'tx-qty', 'tx-price', 'tx-vat', 'tx-supply', 'tx-prodname', 'tx-inscode', 'tx-type']:
+            check(bad not in ce_body, '수금 등록 화면에 %s 관련 칸이 남아 있습니다' % bad)
+        for need in ['col-date', 'col-client-ac', 'col-amount', 'col-paytype', 'col-memo',
+                     "recentTxTableHtml_('수금')", '최근 등록 수금 내역']:
+            check(need in ce_body, '수금 등록 화면에 %s 가 없습니다' % need)
+    check('function renderCollectionClientStrip' in js and '미수금' in js, '수금 화면 거래처 잔고(미수금) 표시가 없습니다')
+    check("runServer('getClientDetail'" in js and 'loadCollectionBalance_' in js, '거래처 잔고 조회가 없습니다')
+    check('fillCollectionBalance' in js and '미수금 전액 채우기' in js, '미수금 전액 채우기가 없습니다')
+
+    # 10-b) 💉 주사제 주문 화면 — 수량·단가·공급가/부가세·합계 + 최근 매출 내역
+    oe = re.search(r'function renderOrderEntry\(el\)\s*\{(.*?)\n   \}', js, re.S)
+    check(bool(oe), 'renderOrderEntry 를 찾지 못했습니다')
+    if oe:
+        oe_body = oe.group(1)
+        for need in ['tx-date', 'tx-client-ac', 'tx-product-ac', 'tx-prodname', 'tx-qty', 'tx-price',
+                     'tx-supply', 'tx-vat', 'tx-total', 'tx-memo', "recentTxTableHtml_('매출')", '최근 등록 매출 내역']:
+            check(need in oe_body, '주사제 주문 화면에 %s 가 없습니다' % need)
+        check('수금' not in oe_body, '주사제 주문 화면에 수금 입력이 남아 있습니다')
+
+    # 10-c) 주문·수금 → 서버 전송값이 Code.gs addTransaction 형식 그대로인지 (실행 검사)
+    try:
+        import quickjs
+        ctx = quickjs.Context()
+
+        def qz(v):
+            return v.decode() if isinstance(v, bytes) else v
+
+        blocks = [extract_fn(js, n) for n in ['orderTxPayload_', 'collectionTxPayload_']]
+        missing = [n for n, b in zip(['orderTxPayload_', 'collectionTxPayload_'], blocks) if b is None]
+        check(not missing, '전송값 함수를 추출하지 못했습니다: %s' % missing)
+        if not missing:
+            for b in blocks:
+                ctx.eval(b)
+            cl = "{ 거래처코드: 'S001', 거래처명: '수아의원' }"
+            sale = json.loads(qz(ctx.eval(
+                "JSON.stringify(orderTxPayload_(%s, { 날짜: '2026-11-28', 보험코드: '642100120', 품목명: ' 아다셀주 ', "
+                "수량: '3', 단가: '10000', 공급가액: '30000', 부가세: '3000', 합계금액: '33000', 수금유형: '어음', 비고: ' 납품 ' }))" % cl)))
+            check(sale['구분'] == '매출', '주문 전송값 구분이 매출이 아닙니다: %s' % sale['구분'])
+            check(sale['품목명'] == '아다셀주' and sale['수량'] == 3 and sale['단가'] == 10000,
+                  '주문 전송값 품목·수량·단가가 다릅니다: %s' % sale)
+            check(sale['공급가액'] == 30000 and sale['부가세'] == 3000 and sale['합계금액'] == 33000,
+                  '주문 전송값 금액이 다릅니다: %s' % sale)
+            check(sale['수금유형'] == '' and sale['비고'] == '납품', '주문 전송값의 수금유형·비고가 다릅니다: %s' % sale)
+            check(sale['거래처코드'] == 'S001' and sale['거래처명'] == '수아의원', '주문 전송값 거래처가 다릅니다')
+
+            coll = json.loads(qz(ctx.eval(
+                "JSON.stringify(collectionTxPayload_(%s, { 날짜: '2026-11-28', 입금액: '500000', 수금유형: '어음', 비고: '만기 12/31' }))" % cl)))
+            check(coll['구분'] == '수금', '수금 전송값 구분이 수금이 아닙니다: %s' % coll['구분'])
+            check(coll['합계금액'] == 500000 and coll['공급가액'] == 500000 and coll['부가세'] == 0,
+                  '수금 전송값 금액(합계=공급가, 부가세 0)이 Code.gs 형식과 다릅니다: %s' % coll)
+            check(coll['품목명'] == '' and coll['수량'] == 0 and coll['단가'] == 0 and coll['보험코드'] == '',
+                  '수금 전송값에 품목·수량이 섮여 있습니다: %s' % coll)
+            check(coll['수금유형'] == '어음' and coll['비고'] == '만기 12/31', '수금 전송값 수금유형·비고가 다릅니다: %s' % coll)
+            check(coll['거래처코드'] == 'S001', '수금 전송값 거래처가 다릅니다')
+            # 수금유형을 고르지 않으면 기존 서버 기본값(계좌)
+            coll2 = json.loads(qz(ctx.eval(
+                "JSON.stringify(collectionTxPayload_(%s, { 날짜: '2026-11-28', 입금액: 1000 }))" % cl)))
+            check(coll2['수금유형'] == '계좌', '수금유형 기본값이 계좌가 아닙니다: %s' % coll2['수금유형'])
+    except ImportError:
+        print('(quickjs 없음 — 주문/수금 전송값 실행 검사 생략: pip install quickjs)')
+
+    # 10-d) 두 등록 함수가 각각 addTransaction 으로 보내는지 · 버튼이 정의된 함수를 부르는지
+    for name, kind in [('submitOrderTx', '매출'), ('submitCollectionTx', '수금')]:
+        fn = re.search(r'async function %s\(\)\s*\{(.*?)\n   \}' % name, js, re.S)
+        check(bool(fn) and "runServer('addTransaction'" in fn.group(1),
+              '%s 가 addTransaction 으로 등록하지 않습니다' % name)
+    check('onclick="submitOrderTx()"' in js, '주문 화면 등록 버튼이 submitOrderTx 를 부르지 않습니다')
+    check('onclick="submitCollectionTx()"' in js, '수금 화면 등록 버튼이 submitCollectionTx 를 부르지 않습니다')
+    check('function collectionFromDetail' in js and "switchMenu('collection')" in js,
+          '거래처 상세 → 수금 등록 이동이 없습니다')
     tv = re.search(r'function renderTurnoverPage\(container\)\s*\{(.*?)\n   \}', js, re.S)
     check(bool(tv), 'renderTurnoverPage 를 찾지 못했습니다')
     if tv:
@@ -653,9 +738,79 @@ def main():
     for name in ['orderFromDetail', 'injectSendToOrder']:
         body_fn = re.search(r'function %s\([^)]*\)\s*\{(.*?)\n   \}' % name, js, re.S)
         check(bool(body_fn) and "switchMenu('order')" in body_fn.group(1),
-              '%s 가 매출 · 수금 등록 메뉴로 이동하지 않습니다' % name)
-    check('recentTxTableHtml_' in js and 'recent-tx-box' in js, '최근 등록 거래내역 박스가 없습니다')
-    check('function renderRecentTxBox_' in js and 'function recentTxTableHtml_' in js, '최근 거래내역 렌더 함수가 없습니다')
+              '%s 가 주사제 주문 메뉴로 이동하지 않습니다' % name)
+    check('recentTxTableHtml_' in js and 'recent-tx-box' in js, '최근 등록 내역 박스가 없습니다')
+    check('function renderRecentTxBox_' in js and 'function recentTxTableHtml_' in js, '최근 내역 렌더 함수가 없습니다')
+
+    # 10-e) 모바일 하단 바 — 항목 11개라 가로 스크롤 · 글씨 짜부라짐 방지
+    page = open(INDEX, encoding='utf-8').read()   # html 은 위쪽 실행 검사에서 덮어써졌을 수 있음
+    nav_i = page.find('.mobile-nav {')
+    mnav_block = page[nav_i:nav_i + 900] if nav_i >= 0 else ''
+    check(nav_i >= 0 and 'overflow-x: auto' in mnav_block, '모바일 하단 바(.mobile-nav)에 가로 스크롤이 없습니다')
+    btn_i = page.find('.mnav-btn {')
+    mb_block = page[btn_i:btn_i + 400] if btn_i >= 0 else ''
+    check(btn_i >= 0 and ('flex: 1 0 auto' in mb_block or 'flex-shrink: 0' in mb_block) and 'min-width' in mb_block,
+          '모바일 메뉴 항목이 찌그러지지 않게 flex-shrink/최소폭 설정이 없습니다')
+    check('scrollIntoView' in js and "querySelector('.mnav-btn.active')" in js,
+          '하단 바에서 지금 메뉴가 보이게 맞추는 처리가 없습니다')
+
+    # 10-f) 두 화면을 실제로 그려 보기 — 템플릿·필터·버튼 연결 확인
+    try:
+        import quickjs
+        names = ['renderOrderEntry', 'renderCollectionEntry', 'recentTxTableHtml_',
+                 'clientAcItems', 'collectionClientAcItems_', 'activeClients', 'productAcItems']
+        blocks = [extract_fn(js, n) for n in names]
+        missing = [n for n, b in zip(names, blocks) if b is None]
+        check(not missing, '화면 렌더 함수를 추출하지 못했습니다: %s' % missing)
+        if not missing:
+            ctx = quickjs.Context()
+            ctx.eval("""
+              var STATE = { today: '2026-11-28', orderClientCode: '', collectionClientCode: '',
+                            collectionBalances: {}, pendingOrderProduct: null, products: [],
+                            clients: [{ 거래처코드: 'S001', 거래처명: '수아의원', 사용여부: 'Y',
+                                        유통구분: '직납', 진료과: '내과', 담당자: '최충의' }],
+                            recentTxs: [
+                              { _rowIndex: 5, 날짜: '2026-11-28', 구분: '매출', 거래처명: '수아의원',
+                                품목명: '아다셀주', 수량: 3, 합계금액: 33000, 비고: '' },
+                              { _rowIndex: 6, 날짜: '2026-11-27', 구분: '수금', 거래처명: '수아의원',
+                                수금유형: '어음', 합계금액: 500000, 비고: '만기 12/31' }
+                            ] };
+              var __el = { innerHTML: '' };
+              var document = { getElementById: function () { return null; } };
+              function esc(s) { return String(s == null ? '' : s); }
+              function fmtNum(n) { return String(Math.round(Number(n || 0))); }
+              function createAutocomplete() { return null; }
+              function showToast() {}
+              function renderActiveMenu() {}
+            """)
+            for b in blocks:
+                ctx.eval(b)
+
+            def qh(v):
+                return v.decode() if isinstance(v, bytes) else v
+
+            ctx.eval('renderOrderEntry(__el);')
+            sale_html = qh(ctx.eval('__el.innerHTML'))
+            for need in ['tx-date', 'tx-client-ac', 'tx-product-ac', 'tx-prodname', 'tx-qty', 'tx-price',
+                         'tx-supply', 'tx-vat', 'tx-total', 'tx-memo', 'submitOrderTx()', '최근 등록 매출 내역']:
+                check(need in sale_html, '그린 주사제 주문 화면에 %s 가 없습니다' % need)
+            check('col-amount' not in sale_html and 'submitCollectionTx' not in sale_html,
+                  '주사제 주문 화면에 수금 칸이 섞여 있습니다')
+            check('아다셀주' in sale_html, '주사제 주문 화면 최근 매출 내역이 비어 있습니다')
+            check('만기 12/31' not in sale_html, '주사제 주문 화면에 수금 건이 섞여 나옵니다')
+
+            ctx.eval('renderCollectionEntry(__el);')
+            col_html = qh(ctx.eval('__el.innerHTML'))
+            for need in ['col-date', 'col-client-ac', 'col-paytype', 'col-amount', 'col-memo',
+                         'submitCollectionTx()', '최근 등록 수금 내역']:
+                check(need in col_html, '그린 수금 화면에 %s 가 없습니다' % need)
+            for bad in ['tx-qty', 'tx-vat', 'tx-product-ac', 'tx-prodname', 'tx-supply']:
+                check(bad not in col_html, '수금 화면에 %s 칸이 남아 있습니다' % bad)
+            check('만기 12/31' in col_html, '수금 화면 최근 수금 내역이 비어 있습니다')
+            check('아다셀주' not in col_html, '수금 화면에 매출 건이 섞여 나옵니다')
+    except ImportError:
+        print('(quickjs 없음 — 화면 렌더 실행 검사 생략: pip install quickjs)')
+
     # 10-a) 접기·펼치기
     check('function toggleInjCautions' in js and 'injCautionsOpen' in js, '배합금기 접기/펼치기가 없습니다')
     check('function toggleCoverageGuide' in js and 'coverageOpen' in js, '급여·삭감 가이드 접기/펼치기가 없습니다')
