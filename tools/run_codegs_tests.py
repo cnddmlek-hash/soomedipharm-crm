@@ -49,8 +49,10 @@ def find_codegs():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--fixtures', default=os.path.join(HERE, 'fixtures', 'sheets.json'))
-    ap.add_argument('--kpic', default=os.path.join(HERE, 'fixtures', 'kpic_search.json'))
-    ap.add_argument('--kpic-detail', default=os.path.join(HERE, 'fixtures', 'kpic_detail.json'))
+    ap.add_argument('--kpic', default=None,
+                    help='약학정보원 검색 fixture (여러 개면 쉼표로 구분). 기본: fixtures/kpic_search*.json')
+    ap.add_argument('--kpic-detail', default=None,
+                    help='약학정보원 상세 fixture (여러 개면 쉼표로 구분). 기본: fixtures/kpic_detail*.json')
     ap.add_argument('--codegs', default=None)
     ap.add_argument('--verbose', action='store_true')
     args = ap.parse_args()
@@ -60,9 +62,22 @@ def main():
 
     fixtures = read(args.fixtures)
     kpic = {
-        'search': json.loads(read(args.kpic)),
-        'detail': json.loads(read(args.kpic_detail)),
+        'search': {'items': [], 'total': 0},
+        'detail': [],
     }
+    search_files = ([p for p in args.kpic.split(',') if p.strip()] if args.kpic else
+                    sorted(os.path.join(HERE, 'fixtures', n) for n in os.listdir(os.path.join(HERE, 'fixtures'))
+                           if n.startswith('kpic_search') and n.endswith('.json')))
+    detail_files = ([p for p in args.kpic_detail.split(',') if p.strip()] if args.kpic_detail else
+                    sorted(os.path.join(HERE, 'fixtures', n) for n in os.listdir(os.path.join(HERE, 'fixtures'))
+                           if n.startswith('kpic_detail') and n.endswith('.json')))
+    for path in search_files:
+        data = json.loads(read(path))
+        kpic['search']['items'].extend(data.get('items') or [])
+    for path in detail_files:
+        data = json.loads(read(path))
+        kpic['detail'].extend(data if isinstance(data, list) else [data])
+    kpic['search']['total'] = len(kpic['search']['items'])
 
     ctx = quickjs.Context()
     ctx.eval('var __FIXTURES_JSON = ' + json.dumps(fixtures) + ';')

@@ -206,12 +206,38 @@ var ScriptApp = {
 var UrlFetchApp = {
   fetch: function (url) {
     var body = '';
-    if (String(url).indexOf('api/searchDrug') !== -1) body = JSON.stringify(__KPIC.search || {});
-    else if (String(url).indexOf('ajax_result_drug2') !== -1) body = JSON.stringify(__KPIC.detail || []);
+    var u = String(url);
+    if (u.indexOf('api/searchDrug') !== -1) body = JSON.stringify(__kpicSearchResponse_(u));
+    else if (u.indexOf('ajax_result_drug2') !== -1) body = JSON.stringify(__kpicDetailResponse_(u));
     else return { getResponseCode: function () { return 404; }, getContentText: function () { return ''; } };
     return { getResponseCode: function () { return 200; }, getContentText: function () { return body; } };
   }
 };
+
+/** 약학정보원 검색 모의 응답 — drugName 파라미터로 실제 검색처럼 걸러 줍니다 */
+function __kpicSearchResponse_(url) {
+  var all = (__KPIC.search && __KPIC.search.items) || [];
+  var m = /[?&]drugName=([^&]*)/.exec(String(url));
+  var q = m ? decodeURIComponent(m[1]).replace(/\s+/g, '') : '';
+  if (!q) return { items: all, total: all.length };
+  var hit = all.filter(function (it) {
+    var n = String(it.drug_name || '').replace(/\s+/g, '');
+    var ing = String(it.list_sunb_name || '').replace(/\s+/g, '').toLowerCase();
+    return n.indexOf(q) !== -1 || (q.length >= 3 && ing.indexOf(q.toLowerCase()) !== -1);
+  });
+  if (!hit.length) return { items: all, total: (__KPIC.search && __KPIC.search.total) || all.length };
+  return { items: hit, total: hit.length };
+}
+
+/** 약학정보원 상세 모의 응답 — drug_cd 로 골라 줍니다 */
+function __kpicDetailResponse_(url) {
+  var all = (__KPIC.detail && __KPIC.detail.length !== undefined) ? __KPIC.detail : (__KPIC.detail ? [__KPIC.detail] : []);
+  var m = /[?&]drug_cd=([^&]*)/.exec(String(url));
+  var code = m ? decodeURIComponent(m[1]) : '';
+  if (!code) return all;
+  var hit = all.filter(function (d) { return String(d.drug_code) === code; });
+  return hit.length ? hit : all;
+}
 
 var ContentService = {
   MimeType: { JSON: 'json', JAVASCRIPT: 'js' },

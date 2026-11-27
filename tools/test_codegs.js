@@ -403,6 +403,63 @@ t('약학정보원: 상세에서 우리 제품 매칭', function () {
   ok(Array.isArray(res.우리제품), '우리제품 배열 아님');
 });
 
+// ------------------------------------------------------------------ 6-b. 제형 접미사 제거 · 유사 이름 정밀도 (v1.5.1)
+t('어간: 제형·단위를 떼고 핵심 글자만', function () {
+  eq(nameStem_('안티옥시주사'), '안티옥시');
+  eq(nameStem_('코러스세프트리악손나트륨주/1g'), '코러스세프트리악손나트륨');
+  eq(nameStem_('아주/아이델라주/5ml/10V'), '아이델라');
+  eq(nameStem_('아모잘탄엑스큐정5/100/10/10mg'), '아모잘탄엑스큐');
+  eq(nameStem_('치옥트산(알파리포산)'), '치옥트산');
+});
+t('유사이름: 안티옥시주사 — "주"만 겹치는 항생제는 제외', function () {
+  var res = searchProductsV14('안티옥시주사', {}, TOKEN);
+  eq(res.total, 0);
+  eq(res.similar.length, 0, '엉뚱한 유사 제품: ' + res.similar.map(function (s) { return s.name; }).join(', '));
+});
+t('유사이름: 어간이 겹치지 않으면 후보 아님(직접 확인)', function () {
+  var prods = [
+    { 품목명: '코러스세프트리악손나트륨주/1g', 보험코드: '647202372', 표: '주사·수액' },
+    { 품목명: '삼성레보플록사신주/100ml', 보험코드: '645100110', 표: '주사·수액' },
+    { 품목명: '안티옥시주', 보험코드: '670607021', 표: '주사·수액' }
+  ];
+  var hits = similarNameHits_('안티옥시주사', prods, 8);
+  eq(hits.length, 1, '안티옥시주만 남아야 함: ' + hits.map(function (h) { return h.name; }).join(', '));
+  eq(hits[0].name, '안티옥시주');
+});
+t('유사이름: 정상 오타·초성 검색은 유지', function () {
+  ok(similarNameHits_('세프트락손', readProductRows_(), 8).length > 0, '오타 추천 사라짐');
+  ok(similarNameHits_('ㅅㅍㅌㄹㅇㅅ', readProductRows_(), 8).length > 0, '초성 추천 사라짐');
+});
+
+// ------------------------------------------------------------------ 6-c. 약 검색 자동 연동 (약학정보원 + 우리 제품·프로토콜)
+t('자동연동: 안티옥시주사 → 성분 티옥트산 · 치옥트산 프로토콜', function () {
+  var res = drugAutoLink('안티옥시주사', {}, TOKEN);
+  eq(res.query, '안티옥시주사');
+  ok(res.kpic.items.length >= 1, '약학정보원 결과 없음: ' + (res.kpic.error || ''));
+  eq(res.kpic.items[0].name, '안티옥시주사');
+  ok(res.성분.length >= 1, '성분 묶음 없음');
+  var g = res.성분[0];
+  eq(g.key, 'thioctic acid');
+  eq(g.성분한글, '티옥트산');
+  ok(g.표기.some(function (m) { return m.indexOf('치옥트산') !== -1; }), '치옥트산 동의어 없음: ' + g.표기.join('|'));
+  ok(g.프로토콜.length >= 1, '관련 수액 프로토콜 없음');
+  ok(g.프로토콜.some(function (r) { return r.성분.indexOf('치옥트산') !== -1; }), '치옥트산 프로토콜 없음');
+  ok(g.금기 && g.금기.임부 !== undefined, '금기 요약 없음');
+});
+t('자동연동: 시트 프로토콜만으로도 안티옥시주를 찾음', function () {
+  var res = drugAutoLink('안티옥시주', {}, TOKEN);
+  ok(res.프로토콜.length >= 1, '주사프로토콜 시트에서 못 찾음');
+  ok(res.프로토콜.some(function (r) { return r.참고제품.indexOf('안티옥시') !== -1; }), '참고제품 매칭 없음');
+});
+t('자동연동: 권한 없는 토큰 거부', function () {
+  throwsMatch(function () { drugAutoLink('안티옥시주사', {}, 'bad-token'); }, '로그인');
+});
+t('연동 점검: 약학정보원 연결 상태', function () {
+  var res = kpicHealth(TOKEN);
+  ok(res.ok, '연결 실패: ' + (res.error || ''));
+  ok(res.items >= 0, '응답 형식 오류');
+});
+
 // ------------------------------------------------------------------ 7. 거래처 상세 · 생일
 t('생일: MM-DD 파싱', function () {
   var b = parseBirthday_('04-08');
