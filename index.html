@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
- <title>수메디팜 미니 CRM v1.5</title>
+ <title>수메디팜 미니 CRM v1.7</title>
 
  <!-- ---------------- PWA (홈 화면 앱) 설정 ---------------- -->
  <meta name="description" content="수메디팜 미니 CRM — 거래처·주문·수금·회전일을 구글 시트로 실시간 관리하는 영업 앱" />
@@ -679,7 +679,7 @@
    .v14-chips { display: flex; flex-wrap: wrap; gap: 6px; }
    .v14-chip {
      border: 1px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 6px 12px;
-     font-size: 13px; cursor: pointer; color: var(--text);
+     font-size: 13px; cursor: pointer; color: var(--text); white-space: nowrap;
    }
    .v14-chip small { color: var(--muted); font-size: 11px; }
    .v14-chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
@@ -719,7 +719,7 @@
  <div id="login-overlay" class="login-overlay">
    <div class="login-card">
      <div class="login-brand">
-       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.5</span></div>
+       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.7</span></div>
        <div class="s">담당자 아이디로 로그인해 주세요</div>
      </div>
      <div class="form-group" style="margin-bottom:10px;">
@@ -3017,10 +3017,12 @@
      }).join('');
 
      const picks = (b.highRatePicks || []).map(function (p) {
-       return '<div class="v14-dash-item" style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--border);">' +
-         '<span style="min-width:0;"><span class="n" style="font-weight:700;font-size:12.5px;">' + esc(p.품목명) + '</span>' +
-           '<span class="m" style="display:block;font-size:11.5px;color:var(--muted);">' + esc(p.성분명 || p.성분 || '') + ' · ' + esc(p.급여구분 || '-') + ' · ' + fmtNum(p.약가) + '원</span></span>' +
-         '<span class="badge badge-success">' + (Number(p.수수료율) || 0) + '%</span>' +
+       return '<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 2px;border-bottom:1px dashed var(--border);">' +
+         '<span style="min-width:0;">' +
+           '<span style="font-weight:700;font-size:12.5px;">' + esc(p.품목명) + '</span>' +
+           '<span style="display:block;font-size:11.5px;color:var(--muted);">' + esc(p.성분명 || p.성분 || '') + ' · ' + esc(p.급여구분 || '-') + ' · ' + fmtNum(p.약가) + '원</span>' +
+         '</span>' +
+         '<span class="badge badge-success" style="flex:0 0 auto;">' + (Number(p.수수료율) || 0) + '%</span>' +
        '</div>';
      }).join('');
 
