@@ -72,6 +72,8 @@ def main():
 
     # 2) v1.11 요소
     check("const APP_VERSION = 'v1.11'" in js, 'APP_VERSION 이 v1.11 이 아닙니다')
+    check('<title>수메디팜 미니 CRM v1.11</title>' in html, '브라우저 탭 제목의 버전이 v1.11 이 아닙니다')
+    check('ver-chip">v1.11' in html and 'ver-chip dark">v1.11' in html, '로그인 화면·상단 바의 버전 칩이 v1.11 이 아닙니다')
     check('id: \'drug\'' in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
     check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
     # v1.11 — 🧭 처방 셋팅은 경구제 전용 · 💉 주사제 셋팅은 💉 주사제 주문 메뉴 안 탭
