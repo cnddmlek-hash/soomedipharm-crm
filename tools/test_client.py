@@ -202,6 +202,14 @@ def main():
     check('guideRxTargetBadge_' in js and '담을 병원' in js, '처방 셋팅의 담을 병원 배지가 없습니다')
     check('rxOpenFromGuide' in js, '처방 셋팅 → 처방전 이동 버튼이 없습니다')
 
+    # 4-d) 사이드바 '거래처 상세정보' 메뉴 (v1.7)
+    check("id: 'clientinfo'" in js and 'renderClientInfoPage' in js, '거래처 상세정보 메뉴가 없습니다')
+    check("label: '거래처 상세정보'" in js, '메뉴 이름이 거래처 상세정보가 아닙니다')
+    check('setClientInfoTab' in js and 'clientInfoTab' in js, '내 거래처/심평원 탭 전환이 없습니다')
+    check('renderClientInfoList' in js and 'clientInfoHira' in js, '내 거래처 목록·심평원 바로가기가 없습니다')
+    check('loadHiraBase_' in js, '심평원 진료과 목록 로딩이 없습니다')
+    check('원장님 성함·생일·취향' in js, '원장님 정보 안내가 없습니다')
+
     # 5) 순수 함수 실행 (QuickJS)
     try:
         import quickjs

@@ -163,6 +163,12 @@
      cursor: pointer;
    }
    .mnav-btn .ico { font-size: 18px; line-height: 1; }
+   .mnav-btn { min-width: 0; }
+   .mnav-btn > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+   @media (max-width: 768px) {
+     .mnav-btn { font-size: 10px; gap: 2px; }
+     .mnav-btn .ico { font-size: 17px; }
+   }
    .mnav-btn.active { color: var(--primary); font-weight: 700; }
 
    .app-main {
@@ -1239,6 +1245,9 @@
      hiraName: '',                // 마지막 검색 병원명
      hiraRegion: '',              // 마지막 검색 지역
      hiraMore: false,             // TOP 30 펼침
+     // v1.7 — 거래처 상세정보 메뉴 (내 거래처 / 심평원 사전조회)
+     clientInfoTab: 'detail',     // 'detail' | 'hira'
+     clientInfoQuery: '',
      // 자동완성 인스턴스
      acInstances: []
    };
@@ -1788,6 +1797,14 @@
        icon: '🏥',
        render: renderHiraPage,
        onEnter: loadHiraModule
+     },
+     {
+       id: 'clientinfo',
+       label: '거래처 상세정보',
+       shortLabel: '상세',
+       icon: '🏥',
+       render: renderClientInfoPage,
+       onEnter: function () { renderActiveMenu(); }
      },
      {
        id: 'ledger',
@@ -3181,6 +3198,116 @@
      lines.push('');
      lines.push('※ ' + (b.basis || '심평원 공개자료 기반 예상 추천'));
      copyText(lines.join('\n'), '브리핑이 복사되었습니다. 메모·문자에 붙여넣으세요.');
+   }
+
+   // =========================================================================
+   // 7-c. v1.7 — 🏥 거래처 상세정보 (내 거래처 원장님 정보 + 비거래처 심평원 사전조회)
+   //   · 왼쪽 사이드바/모바일 메뉴에서 바로 들어오는 화면
+   //   · ① 내 거래처 상세: 원장성함·생일·취향 검색 → 기존 상세 모달(원장님 정보 수정·HIRA 확인 포함)
+   //   · ② 비거래처 심평원 사전조회: 7-b 의 HIRA 화면을 그대로 이 탭에 렌더링
+   // =========================================================================
+
+   function setClientInfoTab(tab) {
+     STATE.clientInfoTab = (tab === 'hira') ? 'hira' : 'detail';
+     renderActiveMenu();
+   }
+
+   function onClientInfoSearch(v) {
+     STATE.clientInfoQuery = String(v || '');
+     renderClientInfoList();
+   }
+
+   function renderClientInfoPage(container) {
+     const tab = STATE.clientInfoTab || 'detail';
+     container.innerHTML =
+       '<div class="page-header">' +
+         '<h2 class="page-title">🏥 거래처 상세정보 <small style="font-size:12px;color:var(--muted);font-weight:500;">원장님 성함·생일·취향 · 심평원 사전조회</small></h2>' +
+       '</div>' +
+       '<div class="subtabs">' +
+         '<button class="subtab ' + (tab === 'detail' ? 'active' : '') + '" onclick="setClientInfoTab(\'detail\')">👤 내 거래처 상세 (원장님 정보)</button>' +
+         '<button class="subtab ' + (tab === 'hira' ? 'active' : '') + '" onclick="setClientInfoTab(\'hira\')">🔍 비거래처 심평원(HIRA) 사전조회</button>' +
+       '</div>' +
+       '<div id="ci-body"></div>';
+
+     const box = document.getElementById('ci-body');
+     if (!box) return;
+     if (tab === 'hira') {
+       renderHiraPage(box);
+       if (!STATE.hiraBase) loadHiraBase_();
+       return;
+     }
+     const total = (STATE.clients || []).filter(function (c) { return c.사용여부 !== 'N'; }).length;
+     box.innerHTML =
+       '<div class="card">' +
+         '<div class="card-title"><span>👤 내 거래처 ' + total + '곳</span>' +
+           '<small style="font-weight:500;font-size:12px;color:var(--muted);">원장님 성함·생일·취향은 상세에서 바로 고칠 수 있습니다</small></div>' +
+         '<div class="toolbar">' +
+           '<input type="text" id="ci-q" style="max-width:320px;" placeholder="거래처명 · 코드 · 원장님 성함 · 취향" autocomplete="off" value="' + esc(STATE.clientInfoQuery || '') + '" oninput="onClientInfoSearch(this.value)" />' +
+           '<button class="btn btn-outline btn-sm" onclick="clientInfoHira(\'\')">🔍 병원명으로 심평원 조회</button>' +
+         '</div>' +
+         '<div id="ci-count" style="font-size:11.5px;color:var(--muted);margin:2px 0 6px;"></div>' +
+         '<div id="ci-list"></div>' +
+       '</div>';
+     renderClientInfoList();
+   }
+
+   /** 비거래처 탭이 열려 있을 때 진료과 목록·키 안내를 한 번만 받아 옵니다 */
+   async function loadHiraBase_() {
+     try {
+       const res = await runServer('getHiraPrevisitBriefing', [{}], { silent: true });
+       STATE.hiraBase = res || null;
+     } catch (e) {
+       STATE.hiraBase = { configured: STATE.hiraConfigured, deptOptions: [], apiGuide: null, warnings: [v14ErrorText_(e)] };
+     }
+     renderActiveMenu();
+   }
+
+   /** 내 거래처 상세 — 이름·코드·원장성함·취향으로 찾고 바로 상세 모달 열기 */
+   function renderClientInfoList() {
+     const el = document.getElementById('ci-list');
+     if (!el) return;
+     const q = String(STATE.clientInfoQuery || '').trim().toLowerCase();
+     const list = (STATE.clients || []).filter(function (c) {
+       if (!q) return true;
+       const hay = [c.거래처명, c.거래처코드, c.원장성함, c.취향, c.진료과, c.담당자].join(' ').toLowerCase();
+       return hay.indexOf(q) !== -1;
+     });
+     const rows = list.slice(0, 60).map(function (c) {
+       const dday = c.원장생일 ? birthDday_(c.원장생일) : null;
+       return '<tr class="clickable-row" onclick="openClientDetail(\'' + esc(c.거래처코드) + '\')">' +
+         '<td>' + esc(c.거래처코드) + '</td>' +
+         '<td><strong>' + esc(c.거래처명) + '</strong></td>' +
+         '<td>' + esc(c.진료과 || '-') + '</td>' +
+         '<td>' + esc(c.원장성함 || '-') + '</td>' +
+         '<td>' + (c.원장생일 ? esc(c.원장생일) + (dday !== null ? ' <span class="badge badge-amber">D-' + dday + '</span>' : '') : '-') + '</td>' +
+         '<td style="font-size:12px;">' + esc(c.취향 || '-') + '</td>' +
+         '<td class="center" style="white-space:nowrap;">' +
+           '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openClientDetail(\'' + esc(c.거래처코드) + '\')">상세</button> ' +
+           '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();clientInfoHira(\'' + esc(c.거래처명) + '\')">심평원</button>' +
+         '</td></tr>';
+     }).join('');
+
+     const cnt = document.getElementById('ci-count');
+     if (cnt) cnt.textContent = list.length + '곳' + (list.length > 60 ? ' (60곳까지 표시 — 검색어로 좁혀 주세요)' : '');
+     el.innerHTML = '<div class="table-wrap"><table><thead><tr>' +
+         '<th>코드</th><th>거래처명</th><th>진료과</th><th>원장님</th><th>생일</th><th>취향·특이사항</th><th class="center">바로가기</th>' +
+       '</tr></thead><tbody>' + (rows || '<tr><td colspan="7" class="center" style="padding:22px;color:var(--muted);">조건에 맞는 거래처가 없습니다.</td></tr>') + '</tbody></table></div>';
+   }
+
+   /** 거래처명으로 심평원 비거래처 조회 탭을 바로 열기 */
+   function clientInfoHira(name) {
+     STATE.clientInfoTab = 'hira';
+     const nm = String(name || '').trim();
+     if (!nm) {
+       renderActiveMenu();
+       showToast('병원명을 입력하고 [🔍 조회]를 눌러 주세요. 아래 진료과 칩으로도 볼 수 있습니다.');
+       return;
+     }
+     STATE.hiraName = nm;
+     STATE.hira = null;
+     STATE.hiraDept = '';
+     renderActiveMenu();
+     hiraRun_({ name: nm, region: STATE.hiraRegion || '' });
    }
 
    // =========================================================================
