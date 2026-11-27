@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
- <title>수메디팜 미니 CRM v1.4</title>
+ <title>수메디팜 미니 CRM v1.5</title>
 
  <!-- ---------------- PWA (홈 화면 앱) 설정 ---------------- -->
  <meta name="description" content="수메디팜 미니 CRM — 거래처·주문·수금·회전일을 구글 시트로 실시간 관리하는 영업 앱" />
@@ -1125,7 +1125,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.4';
+   const APP_VERSION = 'v1.5';
 
    const STATE = {
      // 로그인/권한
@@ -1200,6 +1200,15 @@
      guideSelected: {},
      guideRec: null,
      guidePending: [],
+     guideTab: 'oral',            // 'oral' 경구제 셋팅 | 'inj' 주사제 셋팅 (v1.5)
+     guideProductCache: {},       // 가이드에서 받은 품목(경구·주사) — 처방전/주문으로 넘길 때 사용
+     injData: null,               // 주사제 셋팅 응답 (목록·카테고리·추천)
+     injMode: 'maxrate',          // 'maxrate' | 'margin' | 'category'
+     injPay: '',                  // '' | '급여' | '비급여'
+     injCat: '',                  // '' | 카테고리명
+     injQuery: '',
+     injLimit: 20,
+     pendingOrderProduct: null,   // 주문(매출) 화면에 자동으로 채울 품목
      clientProfileResult: null,
      profileEditCode: '',
      birthdayStatus: null,
@@ -1708,8 +1717,8 @@
      },
      {
        id: 'guide',
-       label: '처방 가이드',
-       shortLabel: '가이드',
+       label: '처방 셋팅',
+       shortLabel: '셋팅',
        icon: '🧭',
        render: renderGuidePage,
        onEnter: loadGuideModule
@@ -2912,6 +2921,17 @@
 
      // 직전에 선택했던 거래처 복원 + 지난 주문 표시
      if (STATE.orderClientCode) restoreOrderClient();
+
+     // 처방 셋팅(주사제)에서 보낸 품목이 있으면 매출 등록란에 채워 둡니다 (v1.5)
+     if (STATE.pendingOrderProduct) {
+       const pend = STATE.pendingOrderProduct;
+       STATE.pendingOrderProduct = null;
+       const typeSel = document.getElementById('tx-type');
+       if (typeSel) { typeSel.value = '매출'; toggleTxFields(); }
+       applyProductToForm(pend);
+       const pac = document.getElementById('tx-product-ac');
+       if (pac) pac.value = pend.제품명 || '';
+     }
    }
 
    function renderOrderClientStrip(c) {
@@ -4160,14 +4180,23 @@
      return friendlyError_(e);
    }
 
-   /** v1.4 화면 상단 안내 (Code.gs 재배포 전) */
+   /** 서버(Code.gs) 재배포 전 안내 — v1.5 미만이면 표시 */
    function v14NoticeHtml_() {
-     if (!STATE.serverVersion || STATE.serverVersion === 'v1.4') return '';
+     if (!STATE.serverVersion || serverAtLeast_('v1.5')) return '';
      return '<div class="card" style="border-color:#fde68a;background:#fffbeb;">' +
        '<div style="font-size:12.5px;line-height:1.6;color:#92400e;">' +
-         '⚠️ 시트 서버(Code.gs)가 <b>' + esc(STATE.serverVersion) + '</b> 로 연결되어 있어 새 기능(약 검색·가이드·생일 알림)이 아직 동작하지 않습니다.<br />' +
+         '⚠️ 시트 서버(Code.gs)가 <b>' + esc(STATE.serverVersion) + '</b> 로 연결되어 있어 새 기능(경구제·주사제 셋팅 분리, 약 검색·생일 알림)이 아직 동작하지 않습니다.<br />' +
          '구글 시트 → 확장 프로그램 → Apps Script 에 최신 <b>Code.gs</b>를 넣고 [배포 관리 → 수정 → 새 버전]으로 한 번만 재배포하면 바로 켜집니다.' +
        '</div></div>';
+   }
+
+   /** 'v1.5' 같은 버전 문자열 비교 (숫자 크기 기준) */
+   function versionNum_(v) {
+     const m = String(v || '').match(/(\d+)\.(\d+)/);
+     return m ? Number(m[1]) * 100 + Number(m[2]) : 0;
+   }
+   function serverAtLeast_(v) {
+     return versionNum_(STATE.serverVersion) >= versionNum_(v);
    }
 
    /** 'MM-DD' 또는 'YYYY-MM-DD' → 오늘 기준 D-day (오늘 0, 지났으면 다음해 기준) */
@@ -4584,7 +4613,7 @@
        '</div>';
    }
 
-   // ---------------------------------------------------------------- 처방 가이드
+   // ---------------------------------------------------------------- 처방 셋팅 (v1.5: 경구제 / 주사제 탭 분리)
    async function loadGuideModule() {
      renderActiveMenu();
      if (!STATE.guideDepts) {
@@ -4594,23 +4623,302 @@
          renderGuideDeptChips();
        } catch (e) {}
      }
+     if (STATE.guideTab === 'inj' && !STATE.injData) loadInjectGuide();
      if (STATE.guideDept && !STATE.guideData) loadGuideDept(STATE.guideDept);
    }
 
+   /** 경구제(원외처방) / 주사제(원내 주사·수액) 두 탭 */
+   function guideTabBar_() {
+     const t = STATE.guideTab === 'inj' ? 'inj' : 'oral';
+     return '<div class="subtabs">' +
+       '<button class="subtab ' + (t === 'oral' ? 'active' : '') + '" onclick="switchGuideTab(\'oral\')">💊 경구제 셋팅 (원외처방)</button>' +
+       '<button class="subtab ' + (t === 'inj' ? 'active' : '') + '" onclick="switchGuideTab(\'inj\')">💉 주사제 셋팅 (원내 주사·수액)</button>' +
+     '</div>';
+   }
+
+   function switchGuideTab(tab) {
+     STATE.guideTab = tab === 'inj' ? 'inj' : 'oral';
+     renderActiveMenu();
+     if (STATE.guideTab === 'inj' && !STATE.injData) loadInjectGuide();
+   }
+
    function renderGuidePage(container) {
+     const inj = STATE.guideTab === 'inj';
      container.innerHTML =
        '<div class="page-header">' +
-         '<h2 class="page-title">🧭 진료과별 처방 가이드</h2>' +
+         '<h2 class="page-title">🧭 처방 셋팅 추천</h2>' +
+         '<span class="badge badge-blue">' + (inj ? '💉 주사제 전용' : '💊 경구제 전용') + '</span>' +
          '<span class="badge badge-amber">참고용</span>' +
        '</div>' +
-       '<div class="card">' +
-         '<div class="card-title"><span>진료과 선택</span><small style="font-weight:500;font-size:12px;color:var(--muted);">과별 주요 성분 → 우리 제품(수수료율) 매칭</small></div>' +
-         '<div id="guide-depts" class="v14-chips"></div>' +
-       '</div>' +
+       guideTabBar_() +
        v14NoticeHtml_() +
-       '<div id="guide-body"></div>';
+       (inj ? renderInjectPanelHtml_() : renderGuideOralHtml_());
+     if (inj) {
+       renderInjectBody();
+       renderInjectRecommend();
+       return;
+     }
      renderGuideDeptChips();
      renderGuideBody();
+   }
+
+   /** 💊 경구제 셋팅(원외처방) 화면 틀 */
+   function renderGuideOralHtml_() {
+     return '<div class="card">' +
+         '<div class="card-title"><span>진료과 선택</span><small style="font-weight:500;font-size:12px;color:var(--muted);">과별 주요 성분 → 우리 <b>경구제</b>만(수수료율 순) 매칭</small></div>' +
+         '<div id="guide-depts" class="v14-chips"></div>' +
+         '<div style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6;">' +
+           '💊 이 탭은 <b>경구제(원외처방)</b> 전용입니다. 주사·수액 품목은 추천하지 않습니다 — 원내 주사는 <b>💉 주사제 셋팅</b> 탭에서 보세요.' +
+         '</div>' +
+       '</div>' +
+       '<div id="guide-body"></div>';
+   }
+
+   /** 💉 주사제 셋팅(원내 주사·수액) 화면 틀 */
+   function renderInjectPanelHtml_() {
+     const pay = STATE.injPay || '';
+     const payChip = function (v, label) {
+       return '<button class="v14-chip ' + (pay === v ? 'on' : '') + '" onclick="setInjectPay(\'' + v + '\')">' + label + '</button>';
+     };
+     return '<div class="card">' +
+         '<div class="card-title"><span>세팅 기준</span><small style="font-weight:500;font-size:12px;color:var(--muted);">제품마스터(주사·수액) 전용 · 경구제 제외</small></div>' +
+         '<div class="v14-chips" style="margin-bottom:10px;">' +
+           payChip('', '전체') + payChip('급여', '급여') + payChip('비급여', '비급여') +
+         '</div>' +
+         '<div class="toolbar" style="gap:6px;flex-wrap:wrap;">' +
+           '<select id="inj-cat" style="max-width:200px;" onchange="setInjectCat(this.value)"><option value="">전체 카테고리</option></select>' +
+           '<select id="inj-mode" style="max-width:245px;" onchange="setInjectMode(this.value)">' +
+             '<option value="maxrate">① 요율 최우선 (성분별 최고 이익율)</option>' +
+             '<option value="margin">② 수수료 금액 우선 (약가×요율)</option>' +
+             '<option value="category">③ 카테고리별 균형 세팅</option>' +
+           '</select>' +
+           '<select id="inj-limit" style="max-width:120px;" onchange="setInjectLimit(this.value)">' +
+             '<option value="10">10품목</option><option value="20">20품목</option>' +
+             '<option value="30">30품목</option><option value="50">50품목</option>' +
+           '</select>' +
+           '<input type="text" id="inj-q" style="max-width:190px;" placeholder="품목·성분 검색" autocomplete="off" value="' + esc(STATE.injQuery || '') + '" oninput="onInjectQuery(this.value)" />' +
+           '<button class="btn btn-primary btn-sm" onclick="runInjectRecommend(true)">🎯 추천 세팅 보기</button>' +
+         '</div>' +
+         '<div style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6;">' +
+           '💉 <b>원내 주사·수액</b>은 처방전(원외)이 아니라 병원에서 바로 쓰는 품목입니다. 그래서 추천 품목은 <b>[🛒 매출 등록]</b>으로 바로 주문(매출)/수금 화면에 보낼 수 있습니다.' +
+         '</div>' +
+       '</div>' +
+       '<div id="inj-recommend"></div>' +
+       '<div id="inj-body"></div>';
+   }
+
+   function setInjectPay(v) {
+     STATE.injPay = v || '';
+     renderActiveMenu();
+     runInjectRecommend(true);
+   }
+   function setInjectCat(v) {
+     STATE.injCat = v || '';
+     runInjectRecommend(true);
+   }
+   function setInjectMode(v) {
+     STATE.injMode = v || 'maxrate';
+     runInjectRecommend(true);
+   }
+   function setInjectLimit(v) {
+     STATE.injLimit = Number(v) || 20;
+     runInjectRecommend(true);
+   }
+   let _injQueryTimer = null;
+   function onInjectQuery(v) {
+     STATE.injQuery = v || '';
+     clearTimeout(_injQueryTimer);
+     _injQueryTimer = setTimeout(function () { runInjectRecommend(true); }, 350);
+   }
+
+   /** 주사제 셋팅 자료 조회(필터·모드 반영) */
+   async function loadInjectGuide() {
+     try {
+       const res = await runServer('getInjectGuide', [{
+         mode: STATE.injMode, 급여구분: STATE.injPay, 카테고리: STATE.injCat,
+         q: STATE.injQuery, limit: STATE.injLimit
+       }], { silent: true });
+       STATE.injData = res || null;
+       renderInjectBody();
+       renderInjectRecommend();
+     } catch (e) {
+       const box = document.getElementById('inj-body');
+       if (box) box.innerHTML = '<div class="card" style="color:var(--danger);">' + esc(v14ErrorText_(e)) + '</div>';
+     }
+   }
+
+   async function runInjectRecommend(scroll) {
+     await loadInjectGuide();
+     if (scroll) {
+       const box = document.getElementById('inj-recommend');
+       if (box && box.innerHTML) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+     }
+   }
+
+   /** 주사제 셋팅 추천 결과 카드 */
+   function renderInjectRecommend() {
+     const el = document.getElementById('inj-recommend');
+     if (!el) return;
+     const d = STATE.injData;
+     if (!d) { el.innerHTML = ''; return; }
+     const modeLabel = { maxrate: '요율 최우선', margin: '수수료 금액 우선', category: '카테고리별 균형' }[d.mode] || d.mode;
+     const s = d.summary || {};
+     if (!d.picks || !d.picks.length) {
+       el.innerHTML = '<div class="card"><div class="card-title"><span>💉 추천 세팅 — ' + esc(modeLabel) + '</span></div>' +
+         '<p style="color:var(--muted);font-size:12.5px;margin:4px 0;">조건에 맞는 주사·수액 품목이 없습니다. 급여/비급여·카테고리·검색어를 바꿔 보세요.</p></div>';
+       return;
+     }
+     el.innerHTML =
+       '<div class="card">' +
+         '<div class="card-title"><span>💉 추천 세팅 — ' + esc(modeLabel) + '</span>' +
+           '<span style="display:flex;gap:6px;flex-wrap:wrap;">' +
+             '<button class="btn btn-outline btn-sm" onclick="copyInjectSet()">📋 세팅 복사</button>' +
+           '</span></div>' +
+         '<div class="kpi-grid" style="margin-bottom:10px;">' +
+           '<div class="kpi-card"><div class="kpi-label">추천 품목</div><div class="kpi-val">' + (s.추천품목수 || 0) + '개</div></div>' +
+           '<div class="kpi-card"><div class="kpi-label">카테고리</div><div class="kpi-val primary">' + (s.카테고리수 || 0) + '개</div></div>' +
+           '<div class="kpi-card"><div class="kpi-label">평균 수수료율</div><div class="kpi-val success">' + (s.평균수수료율 || 0) + '%</div></div>' +
+           '<div class="kpi-card"><div class="kpi-label">수수료 금액 합(1개씩)</div><div class="kpi-val">' + fmtNum(Math.round(s.수수료액합계 || 0)) + '원</div></div>' +
+         '</div>' +
+         '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">후보 ' + (s.후보수 || 0) + '품목 · 급여 ' + (s.급여수 || 0) + ' / 비급여 ' + (s.비급여수 || 0) + ' · 평균 약가 ' + fmtNum(s.평균약가 || 0) + '원 · 수수료액 = 약가 × 수수료율</div>' +
+         injectPickTable_(d.picks, true) +
+       '</div>';
+   }
+
+   /** 주사·수액 품목 표 (추천/목록 공용) */
+   function injectPickTable_(picks, withSend) {
+     return '<div class="table-wrap"><table><thead><tr>' +
+       '<th>카테고리</th><th>성분</th><th>품목</th><th class="center">급여</th><th class="num">약가</th><th class="num">수수료율</th><th class="num">수수료액</th>' +
+       (withSend ? '<th class="center">담기</th>' : '') +
+     '</tr></thead><tbody>' +
+       picks.map(function (p) {
+         return '<tr>' +
+           '<td><span class="badge badge-muted">' + esc(p.카테고리 || '기타') + '</span></td>' +
+           '<td>' + esc(p.성분 || '-') + '</td>' +
+           '<td><strong>' + esc(p.품목명) + '</strong> <small style="color:var(--muted);">' + esc(p.규격 || '') + (p.보험코드 ? ' · ' + esc(p.보험코드) : '') + '</small></td>' +
+           '<td class="center">' + payTypeBadge(p.급여구분) + '</td>' +
+           '<td class="num">' + fmtNum(p.약가) + '원</td>' +
+           '<td class="num"><strong style="color:var(--primary);">' + (p.수수료율 || 0) + '%</strong></td>' +
+           '<td class="num">' + fmtNum(Math.round(p.수수료액 || 0)) + '원</td>' +
+           (withSend ? '<td class="center"><button class="btn btn-outline btn-sm" onclick="injectSendToOrder(\'' + esc(p.보험코드) + '\')">🛒 매출 등록</button></td>' : '') +
+         '</tr>';
+       }).join('') +
+     '</tbody></table></div>';
+   }
+
+   /** 주사제 셋팅 — 카테고리·성분별 목록 */
+   function renderInjectBody() {
+     const el = document.getElementById('inj-body');
+     if (!el) return;
+     const d = STATE.injData;
+     if (!d) { el.innerHTML = ''; return; }
+     const st = d.stats || {};
+     const cats = d.categories || [];
+     const catSel = document.getElementById('inj-cat');
+     if (catSel) {
+       catSel.innerHTML = '<option value="">전체 카테고리</option>' + cats.map(function (c) {
+         return '<option value="' + esc(c.카테고리) + '"' + (STATE.injCat === c.카테고리 ? ' selected' : '') + '>' +
+           esc(c.카테고리) + ' (' + c.개수 + ')</option>';
+       }).join('');
+     }
+     const modeSel = document.getElementById('inj-mode');
+     if (modeSel) modeSel.value = STATE.injMode || 'maxrate';
+     const limitSel = document.getElementById('inj-limit');
+     if (limitSel) limitSel.value = String(STATE.injLimit || 20);
+
+     el.innerHTML =
+       '<div class="card">' +
+         '<div class="card-title"><span>📊 주사·수액 현황</span><small style="font-weight:500;font-size:12px;color:var(--muted);">경구제 제외</small></div>' +
+         '<div class="kpi-grid" style="margin-bottom:10px;">' +
+           '<div class="kpi-card"><div class="kpi-label">전체 품목</div><div class="kpi-val">' + (st.전체 || 0) + '개</div></div>' +
+           '<div class="kpi-card"><div class="kpi-label">급여</div><div class="kpi-val success">' + (st.급여 || 0) + '개</div></div>' +
+           '<div class="kpi-card"><div class="kpi-label">비급여</div><div class="kpi-val primary">' + (st.비급여 || 0) + '개</div></div>' +
+           '<div class="kpi-card"><div class="kpi-label">성분 / 카테고리</div><div class="kpi-val">' + (st.성분수 || 0) + ' / ' + (st.카테고리수 || 0) + '</div></div>' +
+         '</div>' +
+         '<div class="v14-chips" style="margin-bottom:10px;">' +
+           '<button class="v14-chip ' + (!STATE.injCat ? 'on' : '') + '" onclick="setInjectCat(\'\')">전체 카테고리 <small>' + (st.전체 || 0) + '</small></button>' +
+           cats.map(function (c) {
+             return '<button class="v14-chip ' + (STATE.injCat === c.카테고리 ? 'on' : '') + '" onclick="setInjectCat(\'' + esc(c.카테고리) + '\')">' +
+               esc(c.카테고리) + ' <small>' + c.개수 + '</small></button>';
+           }).join('') +
+         '</div>' +
+         '<div style="font-size:12px;color:var(--muted);">카테고리는 성분분류·성분명으로 묶은 참고 구분입니다. 평균 요율이 높은 순서로 정렬했습니다.</div>' +
+       '</div>' +
+       '<div class="card">' +
+         '<div class="card-title"><span>💉 성분별 주사·수액 품목</span><small style="font-weight:500;font-size:12px;color:var(--muted);">' +
+           (d.itemsTotal || 0) + '성분 중 ' + ((d.items || []).length) + '성분 표시 · 수수료율 높은 순</small></div>' +
+         ((d.items || []).length ? (d.items || []).map(function (g) {
+           return '<div class="v14-group">' +
+             '<div class="g-head"><div><strong>' + esc(g.성분명) + '</strong> <small style="color:var(--muted);">' +
+               esc(g.카테고리 || '') + ' · ' + g.제품.length + '품목</small></div>' +
+               '<small style="color:var(--primary);font-weight:700;">최고 ' + (g.최고수수료율 || 0) + '%</small></div>' +
+             g.제품.slice(0, 4).map(function (p) {
+               return '<div class="v14-ing-row">' +
+                 '<span style="font-size:12.5px;">' + esc(p.품목명) + ' <small style="color:var(--muted);">' + esc(p.규격 || '') + '</small></span>' +
+                 '<span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">' +
+                   payTypeBadge(p.급여구분) +
+                   '<small>' + fmtNum(p.약가) + '원</small>' +
+                   '<button class="v14-prod" onclick="injectSendToOrder(\'' + esc(p.보험코드) + '\')">' + (p.수수료율 || 0) + '% <span>🛒</span></button>' +
+                 '</span>' +
+               '</div>';
+             }).join('') +
+             (g.제품.length > 4 ? '<div style="font-size:11.5px;color:var(--muted);margin-top:4px;">외 ' + (g.제품.length - 4) + '품목</div>' : '') +
+           '</div>';
+         }).join('') : '<p style="color:var(--muted);font-size:12.5px;margin:4px 0;">조건에 맞는 품목이 없습니다.</p>') +
+       '</div>';
+   }
+
+   /** 주사·수액 품목을 주문(매출) 등록 화면으로 보내기 */
+   function injectSendToOrder(code) {
+     const c = String(code || '').trim();
+     const d = STATE.injData || {};
+     let p = null;
+     (d.picks || []).concat((d.items || []).reduce(function (acc, g) { return acc.concat(g.제품 || []); }, []))
+       .forEach(function (x) { if (!p && String(x.보험코드) === c) p = x; });
+     if (!p) { showToast('품목을 찾지 못했습니다.'); return; }
+     const row = {
+       보험코드: p.보험코드, 제품명: p.품목명, 규격: p.규격 || '',
+       기준단가: Number(p.약가 || 0), 수수료율: Number(p.수수료율 || 0),
+       급여구분: p.급여구분 || '', 시장가: Number(p.약가 || 0)
+     };
+     STATE.pendingOrderProduct = row;
+     STATE.turnoverSubtab = 'order';
+     switchMenu('turnover');
+     showToast(p.품목명 + ' — 매출 등록란에 채웠습니다. 거래처·수량을 확인하세요.');
+   }
+
+   /** 추천 세팅을 글자로 복사 (메모·영업자료용) */
+   function copyInjectSet() {
+     const d = STATE.injData;
+     if (!d || !d.picks || !d.picks.length) { showToast('먼저 추천 세팅을 만들어 주세요.'); return; }
+     const lines = ['💉 주사·수액 셋팅 추천 (' + ({ maxrate: '요율 최우선', margin: '수수료 금액 우선', category: '카테고리별 균형' }[d.mode] || d.mode) + ')'];
+     if (d.filters && (d.filters.급여구분 || d.filters.카테고리)) {
+       lines.push('조건: ' + [d.filters.급여구분 || '전체', d.filters.카테고리 || '전체 카테고리'].join(' / '));
+     }
+     d.picks.forEach(function (p, i) {
+       lines.push((i + 1) + '. ' + p.품목명 + (p.규격 ? ' (' + p.규격 + ')' : '') +
+         ' — ' + (p.급여구분 || '-') + ' · ' + fmtNum(p.약가) + '원 · ' + (p.수수료율 || 0) + '%');
+     });
+     const text = lines.join('\n');
+     const done = function () { showToast('세팅 ' + d.picks.length + '품목을 복사했습니다.'); };
+     if (navigator.clipboard && navigator.clipboard.writeText) {
+       navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy_(text, done); });
+     } else {
+       fallbackCopy_(text, done);
+     }
+   }
+
+   function fallbackCopy_(text, done) {
+     const ta = document.createElement('textarea');
+     ta.value = text;
+     ta.style.position = 'fixed';
+     ta.style.opacity = '0';
+     document.body.appendChild(ta);
+     ta.select();
+     let okCopy = false;
+     try { okCopy = document.execCommand('copy'); } catch (e) { okCopy = false; }
+     document.body.removeChild(ta);
+     if (okCopy && done) done(); else showToast('복사가 막혔습니다. 화면의 내용을 직접 선택해 주세요.');
    }
 
    function renderGuideDeptChips() {
@@ -4633,7 +4941,13 @@
        const res = await runServer('getDeptGuide', [dept], { silent: true });
        STATE.guideData = res;
        STATE.guideSelected = {};
-       (res.items || []).forEach(function (it) { if (it.우리제품 && it.우리제품.length) STATE.guideSelected[it.영문키] = true; });
+       (res.items || []).forEach(function (it) {
+         /* 안전장치: 예전 서버(v1.4)는 주사·수액도 섮어 보냅니다 → 경구제만 남깁니다 */
+         it.우리제품 = (it.우리제품 || []).filter(function (p) { return p.표 !== '주사·수액'; });
+         if (typeof it.경구제수 !== 'number') it.경구제수 = it.우리제품.length;
+         it.우리제품.forEach(guideCacheProduct_);
+         if (it.우리제품.length) STATE.guideSelected[it.영문키] = true;
+       });
        renderGuideBody();
      } catch (e) {
        if (body) body.innerHTML = '<div class="card" style="color:var(--danger);">가이드를 불러오지 못했습니다.</div>';
@@ -4654,7 +4968,9 @@
      el.innerHTML =
        '<div class="card">' +
          '<div class="card-title"><span>' + esc(d.dept) + ' — 질환군별 주요 성분</span>' +
-           '<small style="font-weight:500;font-size:12px;color:var(--muted);">성분별 우리 제품은 수수료율 높은 순</small></div>' +
+           '<small style="font-weight:500;font-size:12px;color:var(--muted);">💊 경구제만 · 수수료율 높은 순</small></div>' +
+         (d.stats ? '<div style="font-size:12px;color:var(--muted);margin:-2px 0 8px;">경구제 매칭 ' + (d.stats.매칭성분 || 0) + ' / ' + (d.stats.성분수 || 0) + '성분 ' +
+           '(이엘파마 경구 ' + (d.stats.경구품목 || 0) + '품목 기준 · 주사·수액 ' + (d.stats.주사품목 || 0) + '품목은 제외)</div>' : '') +
          '<div class="toolbar" style="gap:6px;flex-wrap:wrap;">' +
            '<select id="guide-mode" style="max-width:230px;" onchange="STATE.guideMode=this.value">' +
              '<option value="maxrate">① 요율 최우선 (제약사 무관 최고 요율)</option>' +
@@ -4678,7 +4994,9 @@
                    (has ? it.우리제품.slice(0, 3).map(function (p) {
                      return '<button class="v14-prod" onclick="guideAddItem(\'' + esc(p.보험코드) + '\')" title="처방전 입력에 담기">' +
                        esc(p.품목명) + ' <span>' + (p.수수료율 || 0) + '%</span></button>';
-                   }).join('') : '<span style="color:var(--muted);font-size:12px;">' + esc(it.비고 || '우리 제품 없음') + '</span>') +
+                   }).join('') + (it.경구제수 > 3 ? '<span style="font-size:11.5px;color:var(--muted);align-self:center;">외 ' + (it.경구제수 - 3) + '</span>' : '')
+                     : '<span style="color:var(--muted);font-size:12px;">경구제 없음' +
+                       (it.주사제수 ? ' <button class="btn-link" style="font-size:12px;" onclick="switchGuideTab(\'inj\')">💉 주사·수액 ' + it.주사제수 + '개 보기</button>' : '') + '</span>') +
                  '</div>' +
                '</div>';
              }).join('') +
@@ -4706,12 +5024,32 @@
      if (!keys.length) { showToast('성분을 1개 이상 선택해 주세요.'); return; }
      const mode = STATE.guideMode || document.getElementById('guide-mode').value || 'maxrate';
      try {
-       const res = await runServer('recommendRegimen', [{ mode: mode, ingredients: keys, dept: d.dept }], { silent: true });
-       STATE.guideRec = res;
+       const res = await runServer('recommendRegimen', [{ mode: mode, ingredients: keys, dept: d.dept, form: '경구' }], { silent: true });
+       STATE.guideRec = guideOralOnlyRec_(res);
+       ((STATE.guideRec.picks) || []).forEach(guideCacheProduct_);
        renderGuideRecommend();
        const box = document.getElementById('guide-recommend');
        if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
      } catch (e) { showToast('추천 계산에 실패했습니다: ' + friendlyError_(e)); }
+   }
+
+   /** 경구 탭 안전장치 — 서버가 예전 버전이면 주사·수액을 빼고 요약을 다시 계산 */
+   function guideOralOnlyRec_(r) {
+     if (!r) return r;
+     const picks = (r.picks || []).filter(function (p) { return p.표 !== '주사·수액'; });
+     if (picks.length === (r.picks || []).length) return r;
+     const makers = {};
+     let rateSum = 0;
+     picks.forEach(function (x) { makers[x.제약사] = 1; rateSum += Number(x.수수료율) || 0; });
+     return Object.assign({}, r, {
+       picks: picks,
+       summary: Object.assign({}, r.summary, {
+         추천품목수: picks.length,
+         제약사수: Object.keys(makers).length,
+         제약사: Object.keys(makers),
+         평균수수료율: picks.length ? Math.round(rateSum / picks.length * 10) / 10 : 0
+       })
+     });
    }
 
    function renderGuideRecommend() {
@@ -4722,7 +5060,7 @@
      const modeLabel = { maxrate: '요율 최우선', minmaker: '최소 제약사', perIngredient: '성분별 요율 집중' }[r.mode] || r.mode;
      el.innerHTML =
        '<div class="card">' +
-         '<div class="card-title"><span>🎯 추천 세팅 — ' + esc(modeLabel) + '</span>' +
+         '<div class="card-title"><span>🎯 추천 세팅 — 💊 경구제 · ' + esc(modeLabel) + '</span>' +
            '<button class="btn btn-accent btn-sm" onclick="guideSendToRx()">💊 처방전 입력으로 보내기</button></div>' +
          '<div class="kpi-grid" style="margin-bottom:10px;">' +
            '<div class="kpi-card"><div class="kpi-label">추천 품목</div><div class="kpi-val">' + r.summary.추천품목수 + '개</div></div>' +
@@ -4749,29 +5087,53 @@
      showToast('처방전 입력 목록에 담았습니다 (' + STATE.guidePending.length + '개). [처방전] 화면에서 병원을 고르면 함께 표시됩니다.');
    }
 
+   /** 가이드에서 받은 품목을 보험코드로 기억 (경구/주사 모두) */
+   function guideCacheProduct_(p) {
+     if (!p) return;
+     const code = String(p.보험코드 || '').trim();
+     if (!code) return;
+     STATE.guideProductCache = STATE.guideProductCache || {};
+     STATE.guideProductCache[code] = p;
+   }
+
+   /** 보험코드 → 품목 (가이드 캐시 → 제품마스터 순) */
+   function guideFindProduct_(code) {
+     const c = String(code || '').trim();
+     if (!c) return null;
+     const cached = (STATE.guideProductCache || {})[c];
+     if (cached) return cached;
+     const p = (STATE.products || []).filter(function (x) { return String(x.보험코드) === c; })[0];
+     return p || null;
+   }
+
    function guideSendToRx() {
      const r = STATE.guideRec;
      if (!r || !r.picks.length) { showToast('먼저 추천 세팅을 만들어 주세요.'); return; }
      STATE.guidePending = r.picks.map(function (p) { return p.보험코드; });
      switchMenu('prescription');
-     showToast(r.picks.length + '개 품목을 처방전 입력으로 보냈습니다.');
+     showToast(r.picks.length + '개 품목(경구제)을 처방전 입력으로 보냈습니다.');
    }
 
-   /** 처방전 화면이 열릴 때 가이드에서 담은 품목을 목록에 추가 */
+   /** 처방전 화면이 열릴 때 가이드에서 담은 품목을 목록에 추가 (경구·주사 모두) */
    function applyGuidePending() {
      const list = STATE.guidePending || [];
      if (!list.length) return;
-     const products = STATE.products || [];
      let added = 0;
      list.forEach(function (code) {
        if (STATE.rxRows.some(function (r) { return r.보험코드 === code; })) return;
-       const p = products.filter(function (x) { return String(x.보험코드) === String(code); })[0];
+       const p = guideFindProduct_(code);
        if (!p) return;
-       const ing = (p.성분명 || '');
+       const name = p.품목명 || p.제품명 || '';
+       if (!name) return;
        STATE.rxRows.push({
-         보험코드: p.보험코드, 품목명: p.제품명, 규격: p.규격 || '', 제약사: '자사',
-         약가: Number(p.기준단가 || 0), 수수료율: Number(p.수수료율 || 0),
-         수량: '', 지난수량: 0, 지난월: '', saved: false, 성분: ing
+         보험코드: p.보험코드,
+         품목명: name,
+         규격: p.규격 || '',
+         제약사: p.제약사 || (p.표 === '경구' ? '' : '자사'),
+         약가: Number(p.약가 || p.기준단가 || 0),
+         수수료율: Number(p.수수료율 || 0),
+         수량: '', 지난수량: 0, 지난월: '', saved: false,
+         성분: p.성분명 || p.성분한글 || ''
        });
        added++;
      });
@@ -4945,7 +5307,7 @@
        '</div>' +
        '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">' +
          '<button class="btn btn-outline btn-sm" onclick="switchMenu(\'drug\')">🔎 약 검색 · 금기 화면 열기</button>' +
-         '<button class="btn btn-outline btn-sm" onclick="switchMenu(\'guide\')">🧭 진료과 처방 가이드</button>' +
+         '<button class="btn btn-outline btn-sm" onclick="switchMenu(\'guide\')">🧭 처방 셋팅 추천</button>' +
        '</div>' +
      '</div>';
    }

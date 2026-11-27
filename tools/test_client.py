@@ -48,15 +48,27 @@ def main():
     except ImportError:
         print('(esprima 없음 — 문법 검사 생략: pip install esprima)')
 
-    # 2) v1.4 요소
-    check("const APP_VERSION = 'v1.4'" in js, 'APP_VERSION 이 v1.4 가 아닙니다')
+    # 2) v1.5 요소
+    check("const APP_VERSION = 'v1.5'" in js, 'APP_VERSION 이 v1.5 가 아닙니다')
     check("id: 'drug'" in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
-    check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 가이드 메뉴가 없습니다')
+    check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
+    check('guideTabBar_' in js and 'switchGuideTab' in js, '경구제/주사제 탭이 없습니다')
+    check("'💊 경구제 셋팅 (원외처방)'" in js or '경구제 셋팅 (원외처방)' in js, '경구제 셋팅 탭이 없습니다')
+    check('주사제 셋팅 (원내 주사·수액)' in js, '주사제 셋팅 탭이 없습니다')
+    check('renderInjectPanelHtml_' in js and 'renderInjectBody' in js, '주사제 셋팅 화면이 없습니다')
+    check('runInjectRecommend' in js and 'loadInjectGuide' in js, '주사제 셋팅 조회가 없습니다')
+    check('injectSendToOrder' in js and 'copyInjectSet' in js, '주사제 → 매출/세팅 연결이 없습니다')
+    check('경구제 전용' in js and '주사제 전용' in js, '제형 전용 배지가 없습니다')
+    check("form: '경구'" in js, '경구 추천에 form:경구 가 없습니다')
+    check('guideOralOnlyRec_' in js, '경구 전용 안전장치가 없습니다')
+    check('guideFindProduct_' in js and 'guideCacheProduct_' in js, '가이드 품목 캐시가 없습니다')
+    check('pendingOrderProduct' in js, '주문 등록 자동 채우기가 없습니다')
+    check('serverAtLeast_' in js and 'versionNum_' in js, '서버 버전 비교가 없습니다')
     check('id="rg-name" autocomplete="name" placeholder="홍길동"' in html, '회원가입 이름 예시가 홍길동이 아닙니다')
     check('renderDashSearchCard' in js and 'onDashSearch' in js, '대시보드 바로 검색이 없습니다')
     check('birthday-banner' in js and 'renderBirthdayBanner' in js, '생일 알림 배너가 없습니다')
     check('kpicSearch' in js and 'kpicDrugDetail' in js, '약학정보원 연계 호출이 없습니다')
-    check('getDeptGuide' in js and 'recommendRegimen' in js, '처방 가이드/추천 호출이 없습니다')
+    check('getDeptGuide' in js and 'recommendRegimen' in js, '처방 셋팅/추천 호출이 없습니다')
     check('saveClientProfile' in js and 'submitClientProfile' in js, '원장 정보 저장이 없습니다')
     check('loadBirthdaySettings' in js and 'installBirthdayTrigger' in js, '생일 알림 설정이 없습니다')
     check('applyGuidePending' in js, '처방전으로 보내기 연결이 없습니다')
@@ -81,7 +93,9 @@ def main():
         used = set(re.findall(r"runServer\('([A-Za-z_$][\w$]*)'", js))
         missing = sorted(u for u in used if u not in api)
         check(not missing, 'Code.gs 에 없는 서버 함수 호출: %s' % ', '.join(missing))
-        check('v1.4' in code, 'Code.gs 버전이 v1.4 가 아닙니다')
+        check('v1.5' in code, 'Code.gs 버전이 v1.5 가 아닙니다')
+        for name in ['getInjectGuide', 'getDeptGuide', 'recommendRegimen', 'looksParenteral_', 'dosageFormOf_']:
+            check(name in code, 'Code.gs 에 %s 가 없습니다' % name)
     else:
         print('(Code.gs 없음 — 서버 함수 대조 생략)')
 

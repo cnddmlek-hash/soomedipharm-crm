@@ -73,7 +73,49 @@ def main():
         for tab in V14_TABS:
             check(tab in heads and len(heads[tab]) >= 6, '%s 탭 머리글이 없습니다' % tab)
 
-    # ---------------- 2. 자료 파일
+    # ---------------- 2-b. v1.5 제형 구분 (경구제 / 주사·수액)
+    if code:
+        for name in ['looksParenteral_', 'dosageFormOf_', 'productsOfForm_', 'productIndexByIngredient_',
+                     'injectCategoryOf_', 'injectPicks_', 'getInjectGuide']:
+            check(name in code, 'Code.gs 에 %s 가 없습니다' % name)
+        check("const APP_VERSION = 'v1.5'" in code, 'Code.gs 버전이 v1.5 가 아닙니다')
+        check(re.search(r'getInjectGuide\s*:\s*getInjectGuide', code) is not None, 'getInjectGuide 가 apiFunctions_ 에 없습니다')
+
+    # ---------------- 2-c. v1.5 제형 구분 (경구제 / 주사·수액) — fixtures 기준
+    # ---------------- 3. 자료 파일
+    def load(name):
+        p = os.path.join(d, name)
+        if not os.path.exists(p):
+            return None
+        return json.load(open(p, encoding='utf-8'))
+
+    # ---------------- 3-b. v1.5 제형 구분 (경상제/주사) — fixtures 기준
+    fx = load('sheets.json')
+    if isinstance(fx, dict) and '제품마스터' in fx and '이엘파마품목' in fx:
+        def tab_rows(tab):
+            t = fx[tab]
+            return [dict(zip(t[0], r)) for r in t[1:]]
+        PAREN_WORD = re.compile(r'(주사|수액|앰플|바이알|프리필드|PFS|펜주|점적|관류액)', re.I)
+        PAREN_TAIL = re.compile(r'주(?:$|[\s/\d(),])')
+
+        def looks_paren(name):
+            s = str(name or '').strip()
+            if not s:
+                return False
+            return bool(PAREN_WORD.search(s) or PAREN_TAIL.search(s))
+
+        pm = tab_rows('제품마스터')
+        el = tab_rows('이엘파마품목')
+        pm_paren = [r for r in pm if looks_paren(r.get('제품명'))]
+        el_paren = [r for r in el if looks_paren(r.get('품목명'))]
+        check(len(pm) >= 200, '제품마스터가 부족합니다: %d' % len(pm))
+        check(len(pm_paren) >= len(pm) * 0.7,
+              '제품마스터 중 주사·수액으로 안 보이는 품목이 너무 많습니다: %d/%d' % (len(pm) - len(pm_paren), len(pm)))
+        check(len(el_paren) <= max(1, int(len(el) * 0.05)),
+              '이엘파마(경구) 목록의 주사제 이름이 너무 많습니다: %d/%d %s' %
+              (len(el_paren), len(el), [r.get('품목명') for r in el_paren[:3]]))
+        check(len(el) >= 50, '이엘파마 품목이 부족합니다: %d' % len(el))
+
     def load(name):
         p = os.path.join(d, name)
         if not os.path.exists(p):

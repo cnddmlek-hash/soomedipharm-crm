@@ -122,23 +122,52 @@ t('단가표: 빈 검색어는 전체 개수만', function () {
   ok(res.products.length <= 10, 'limit 미적용');
 });
 
-// ------------------------------------------------------------------ 5. 진료과 가이드 · 추천
+// ------------------------------------------------------------------ 5. 진료과 가이드 · 추천 (v1.5 경구제 전용)
+function oralProductsFor_(key) {
+  return readProductRows_().filter(function (p) {
+    if (p.표 !== '경구') return false;
+    return p.성분키 === key || String(p.성분키 || '').split('+').indexOf(key) !== -1;
+  });
+}
 t('가이드: 진료과 목록', function () {
   var res = getDeptGuide('', TOKEN);
   ok(res.depts.length >= 8, '진료과가 너무 적음');
   ok(typeof res.depts[0].진료과 === 'string' && res.depts[0].진료과.length > 0, '형식 오류');
+  eq(res.form, '경구', '가이드 제형 표시 오류');
 });
 t('가이드: 내과 성분 + 우리 제품 매칭', function () {
   var res = getDeptGuide('내과', TOKEN);
   ok(res.items.length >= 10, '성분 수 부족');
   ok(res.items.some(function (i) { return i.우리제품 && i.우리제품.length > 0; }), '우리 제품 매칭 없음');
+  ok(res.stats && res.stats.경구품목 > 0 && res.stats.주사품목 > 0, '제형 통계 없음');
 });
-t('추천: 최고요율 모드는 성분별 최고 수수료율', function () {
-  var keys = ['amlodipine', 'rosuvastatin'];
+t('가이드: 경구제 전용 — 주사·수액이 섞이지 않음', function () {
+  var res = getDeptGuide('내과', TOKEN);
+  var mixed = [];
+  res.items.forEach(function (i) {
+    (i.우리제품 || []).forEach(function (p) { if (p.표 !== '경구') mixed.push(p.품목명); });
+  });
+  ok(!mixed.length, '가이드에 주사·수액이 섞임: ' + mixed.slice(0, 3).join(', '));
+  res.items.forEach(function (i) {
+    ok(i.우리제품.length === Math.min(i.경구제수, 5), '경구제수 불일치');
+    ok(typeof i.주사제수 === 'number', '주사제수 없음');
+  });
+});
+t('가이드: 경구제가 없는 성분은 주사제수만 남음', function () {
+  var res = getDeptGuide('이비인후과', TOKEN);
+  var onlyInj = res.items.filter(function (i) { return i.경구제수 === 0 && i.주사제수 > 0; });
+  ok(onlyInj.length > 0, '주사제만 있는 성분이 없음');
+  ok(onlyInj.every(function (i) { return (i.우리제품 || []).length === 0; }), '경구제 없는데 제품이 있음');
+});
+t('추천: 최고요율 모드는 경구제 성분별 최고 수수료율', function () {
+  var keys = ['amlodipine', 'rosuvastatin'].concat(
+    readProductRows_().filter(function (p) { return p.표 === '경구' && p.성분키; })
+      .map(function (p) { return p.성분키; }).filter(function (k, i, a) { return a.indexOf(k) === i; }).slice(0, 4));
   var res = recommendRegimen({ mode: 'maxrate', ingredients: keys }, TOKEN);
+  eq(res.form, '경구', '추천 제형 표시 오류');
   ok(res.picks.length > 0, '추천 없음');
   keys.forEach(function (k) {
-    var all = readProductRows_().filter(function (p) { return p.성분키 === k; });
+    var all = oralProductsFor_(k);
     if (!all.length) return;
     var best = Math.max.apply(null, all.map(function (p) { return Number(p.수수료율) || 0; }));
     var pick = res.picks.filter(function (x) { return x.성분키 === k; })[0];
@@ -146,8 +175,17 @@ t('추천: 최고요율 모드는 성분별 최고 수수료율', function () {
     eq(pick.수수료율, best, k + ' 최고요율 아님');
   });
 });
+t('추천: 경구제 전용 — 주사·수액이 섞이지 않음', function () {
+  var keys = readProductRows_().filter(function (p) { return p.성분키; })
+    .map(function (p) { return p.성분키; })
+    .filter(function (k, i, a) { return a.indexOf(k) === i; }).slice(0, 10);
+  ['maxrate', 'minmaker', 'perIngredient'].forEach(function (mode) {
+    var res = recommendRegimen({ mode: mode, ingredients: keys }, TOKEN);
+    res.picks.forEach(function (x) { eq(x.표, '경구', mode + ' 추천에 주사·수액 섞임: ' + x.품목명); });
+  });
+});
 t('추천: 최소 제약사 모드는 제약사 수를 줄임', function () {
-  var keys = readProductRows_().filter(function (p) { return p.성분키; }).slice(0, 40)
+  var keys = readProductRows_().filter(function (p) { return p.표 === '경구' && p.성분키; }).slice(0, 40)
     .map(function (p) { return p.성분키; })
     .filter(function (k, i, a) { return a.indexOf(k) === i; }).slice(0, 6);
   var max = recommendRegimen({ mode: 'maxrate', ingredients: keys }, TOKEN);
@@ -160,6 +198,112 @@ t('추천: 성분 없이 호출하면 오류', function () {
 });
 t('추천: 권한 없는 토큰 거부', function () {
   throwsMatch(function () { recommendRegimen({ ingredients: ['aspirin'] }, 'bad-token'); }, '로그인');
+});
+
+// ------------------------------------------------------------------ 5-b. 제형 구분 · 주사제 셋팅
+t('제형: …주/수액은 주사·수액, …정/캡슐은 경구', function () {
+  ok(looksParenteral_('프리브로펜주208ml(백)'), '주 이름 미탐지');
+  ok(looksParenteral_('리쥬비엘주'), '주 이름 미탐지 2');
+  ok(looksParenteral_('포도당수액 500ml'), '수액 미탐지');
+  ok(!looksParenteral_('베아셋정'), '정 이름 오탐');
+  ok(!looksParenteral_('에바원정30mg'), '정 이름 오탐 2');
+  eq(dosageFormOf_({ 표: '경구', 품목명: '베아셋정' }), '경구');
+  eq(dosageFormOf_({ 표: '경구', 품목명: '메가주100ml' }), '주사·수액');
+  eq(dosageFormOf_({ 표: '주사·수액', 품목명: '코러스세프트리악손나트륨주/1g' }), '주사·수액');
+});
+t('제형: 경구 목록에는 주사·수액 품목이 없음', function () {
+  var all = readProductRows_();
+  var oral = productsOfForm_(all, '경구');
+  var inj = productsOfForm_(all, '주사·수액');
+  ok(oral.length > 0 && inj.length > 0, '제형별 목록 없음');
+  ok(oral.every(function (p) { return p.표 === '경구' && !looksParenteral_(p.품목명); }), '경구 목록에 주사 이름');
+  ok(oral.length + inj.length === all.length, '제형 분류 누락');
+});
+t('주사 셋팅: 목록·카테고리·통계', function () {
+  var res = getInjectGuide({}, TOKEN);
+  eq(res.form, '주사·수액', '제형 표시 오류');
+  ok(res.stats.전체 > 100, '주사 품목이 너무 적음: ' + res.stats.전체);
+  ok(res.stats.급여 > 0 && res.stats.비급여 > 0, '급여/비급여 통계 없음');
+  ok(res.categories.length >= 5, '카테고리가 너무 적음');
+  ok(res.items.length > 0, '성분별 목록 없음');
+  ok(res.picks.length > 0, '추천 없음');
+  var sum = res.categories.reduce(function (a, c) { return a + c.개수; }, 0);
+  eq(sum, res.stats.전체, '카테고리 합계 불일치');
+});
+t('주사 셋팅: 경구제는 들지 않음', function () {
+  var res = getInjectGuide({}, TOKEN);
+  res.picks.forEach(function (x) { ok(x.표 !== '경구', '경구제가 섞임: ' + x.품목명); });
+  res.items.forEach(function (g) { g.제품.forEach(function (p) { ok(p.표 !== '경구', '경구제가 섞임'); }); });
+});
+t('주사 셋팅: 급여 필터', function () {
+  var res = getInjectGuide({ 급여구분: '급여', limit: 30 }, TOKEN);
+  ok(res.picks.length > 0, '추천 없음');
+  ok(res.picks.every(function (x) { return x.급여구분 === '급여'; }), '급여 필터 안 됨');
+  ok(res.summary.비급여수 === 0, '비급여 섞임');
+});
+t('주사 셋팅: 비급여 필터', function () {
+  var res = getInjectGuide({ 급여구분: '비급여', limit: 30 }, TOKEN);
+  ok(res.picks.length > 0, '추천 없음');
+  ok(res.picks.every(function (x) { return x.급여구분 === '비급여'; }), '비급여 필터 안 됨');
+});
+t('주사 셋팅: 요율 최우선(maxrate) — 성분별 1품목·성분 중복 없음', function () {
+  var res = getInjectGuide({ mode: 'maxrate', limit: 50 }, TOKEN);
+  var seen = {};
+  res.picks.forEach(function (x) {
+    var k = x.성분키 || x.품목명;
+    ok(!seen[k], '같은 성분 중복: ' + k);
+    seen[k] = 1;
+  });
+  var inj = productsOfForm_(readProductRows_(), '주사·수액');
+  res.picks.slice(0, 10).forEach(function (x) {
+    var same = inj.filter(function (p) { return (p.성분키 || p.품목명) === (x.성분키 || x.품목명); });
+    if (!same.length) return;
+    var best = Math.max.apply(null, same.map(function (p) { return Number(p.수수료율) || 0; }));
+    eq(x.수수료율, best, x.품목명 + ' 최고요율 아님');
+  });
+});
+t('주사 셋팅: 수수료액 우선(margin) — 수수료액 내림차순', function () {
+  var res = getInjectGuide({ mode: 'margin', limit: 20 }, TOKEN);
+  ok(res.picks.length > 0, '추천 없음');
+  for (var i = 1; i < res.picks.length; i++) {
+    if (res.picks[i].수수료액 > res.picks[i - 1].수수료액) {
+      throw new Error('수수료액 정렬 오류: ' + res.picks[i - 1].수수료액 + ' → ' + res.picks[i].수수료액);
+    }
+  }
+  var top = res.picks[0];
+  near(top.수수료액, top.약가 * top.수수료율 / 100, 0.05, '수수료액 계산 오류');
+});
+t('주사 셋팅: 카테고리 균형(category) — 카테고리 중복 없음', function () {
+  var res = getInjectGuide({ mode: 'category', limit: 100 }, TOKEN);
+  ok(res.picks.length > 0, '추천 없음');
+  var seen = {};
+  res.picks.forEach(function (x) {
+    ok(!seen[x.카테고리], '카테고리 중복: ' + x.카테고리);
+    seen[x.카테고리] = 1;
+  });
+  eq(res.picks.length, Math.min(res.summary.후보수, res.categories.length) === res.categories.length ? res.categories.length : res.picks.length);
+});
+t('주사 셋팅: 카테고리 필터 · 검색어', function () {
+  var all = getInjectGuide({}, TOKEN);
+  var cat = all.categories[0].카테고리;
+  var res = getInjectGuide({ 카테고리: cat, limit: 30 }, TOKEN);
+  ok(res.picks.length > 0, '카테고리 추천 없음: ' + cat);
+  ok(res.picks.every(function (x) { return x.카테고리 === cat; }), '카테고리 필터 안 됨');
+  res.categories.forEach(function (c) { ok(c.카테고리 === cat || c.개수 > 0, '카테고리 합계 이상'); });
+
+  var q = getInjectGuide({ q: '세프트리악손' }, TOKEN);
+  ok(q.summary.후보수 > 0, '검색 결과 없음');
+  ok(q.items.some(function (g) { return g.제품.some(function (p) { return p.품목명.indexOf('세프트리악손') !== -1; }); }), '세프트리악손 미검색');
+});
+t('주사 셋팅: limit 적용 · 빈 결과', function () {
+  var res = getInjectGuide({ limit: 5 }, TOKEN);
+  ok(res.picks.length <= 5, 'limit 미적용');
+  var none = getInjectGuide({ q: '없는제품명zzz' }, TOKEN);
+  eq(none.summary.후보수, 0);
+  eq(none.picks.length, 0);
+});
+t('주사 셋팅: 권한 없는 토큰 거부', function () {
+  throwsMatch(function () { getInjectGuide({}, 'bad-token'); }, '로그인');
 });
 
 // ------------------------------------------------------------------ 6. 약학정보원 연계
