@@ -117,6 +117,27 @@ def main():
             check(name in code, 'Code.gs 에 %s 가 없습니다' % name)
         check('상한1평균수수료율' in code and '요율향상' in code, 'Code.gs 에 상한 1곳 비교 요약이 없습니다')
 
+    # ---------------- 2-g. v1.7 보수 — 보험코드 앞자리 0 보존 · 중복 방지
+    if code:
+        for name in ['normalizeInsuranceCode_', 'insuranceCodeKey_', 'normalizeMonth_']:
+            check(name in code, 'Code.gs 에 %s 가 없습니다' % name)
+        sp = re.search(r'function savePrescriptions\(payload, token\)\s*\{(.*?)\n\}', code, re.S)
+        check(bool(sp), 'savePrescriptions 를 찾지 못했습니다')
+        if sp:
+            body = sp.group(1)
+            check("textCols: ['기준월', '보험코드']" in body,
+                  '처방 저장이 기준월·보험코드를 텍스트 서식으로 쓰지 않습니다')
+            check('insuranceCodeKey_' in body and 'normalizeMonth_' in body,
+                  '처방 저장이 정규화 키로 기존 줄을 찾지 않습니다')
+            check("String(it['보험코드'] || '').trim()" not in body,
+                  '처방 저장이 보험코드를 정규화하지 않고 그대로 쿳니다')
+        wr = re.search(r'function writeRowByHeaders_\(sheet, dataObj, rowIndex, opts\)\s*\{(.*?)\n\}', code, re.S)
+        check(bool(wr) and 'setNumberFormat' in wr.group(1), 'writeRowByHeaders_ 에 텍스트 서식 처리가 없습니다')
+        qk = re.search(r'function getPrescriptionQuickItems\(clientCode, token\)\s*\{(.*?)\n\}', code, re.S)
+        check(bool(qk) and 'insuranceCodeKey_' in qk.group(1), '빠른 입력 목록이 보험코드를 정규화하지 않습니다')
+        gp = re.search(r'function getPrescriptions\(month, clientCode, token\)\s*\{(.*?)\n\}', code, re.S)
+        check(bool(gp) and 'insuranceCodeKey_' in gp.group(1), '처방 조회가 보험코드 중복을 합치지 않습니다')
+
     # ---------------- 2-c. v1.5 제형 구분 (경구제 / 주사·수액) — fixtures 기준
     # ---------------- 3. 자료 파일
     def load(name):
@@ -153,6 +174,28 @@ def main():
             check(not bad, 'Sxxx 형식이 아닌 거래처코드: %s' % bad[:5])
             check(len(set(codes)) == len(codes), '거래처코드 중복')
             check(codes == sorted(codes, key=lambda x: int(x[1:])), '거래처코드가 행 순서대로가 아닙니다')
+    # ---------------- 3-c. 보험코드 앞자리 0 — fixtures 가 텍스트로 들어 있는지
+    if isinstance(fx, dict) and '이엘파마품목' in fx:
+        el2 = fx['이엘파마품목']
+        ci = el2[0].index('보험코드')
+        codes = [r[ci] for r in el2[1:] if len(r) > ci and str(r[ci]).strip()]
+        str_codes = [c for c in codes if isinstance(c, str)]
+        check(len(str_codes) == len(codes), '이엘파마품목 보험코드에 숫자로 굳은 값이 있습니다')
+        zeros = [c for c in str_codes if c.startswith('0')]
+        check(len(zeros) >= 5, '앞자리 0 보험코드가 fixtures 에 부족합니다: %d' % len(zeros))
+        bad_len = [c for c in str_codes if c.isdigit() and len(c) != 9]
+        check(not bad_len, '9자리가 아닌 이엘파마 보험코드: %s' % bad_len[:5])
+    if isinstance(fx, dict) and '처방내역' in fx and len(fx['처방내역']) > 1:
+        hr = fx['처방내역'][0]
+        ci = hr.index('보험코드')
+        mi = hr.index('기준월')
+        for r in fx['처방내역'][1:]:
+            code_v = r[ci]
+            check(isinstance(code_v, str) and code_v.isdigit() and len(code_v) == 9,
+                  '처방내역 보험코드가 9자리 텍스트가 아닙니다: %s' % code_v)
+            check(re.fullmatch(r'\d{4}-\d{2}', str(r[mi])) is not None,
+                  '처방내역 기준월이 YYYY-MM 이 아닙니다: %s' % r[mi])
+
     hira_path = os.path.join(d, 'hira.json')
     if os.path.exists(hira_path):
         hf = json.load(open(hira_path, encoding='utf-8'))

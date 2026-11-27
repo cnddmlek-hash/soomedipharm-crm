@@ -215,6 +215,14 @@ def main():
     check('loadHiraBase_' in js, '심평원 진료과 목록 로딩이 없습니다')
     check('원장님 성함·생일·취향' in js, '원장님 정보 안내가 없습니다')
 
+    # 4-e) 보험코드 앞자리 0 보존 · 중복 방지 (v1.7 보수)
+    check('function rxCodeNorm_' in js and 'function rxCodeKey_' in js, '보험코드 정규화 헬퍼가 없습니다')
+    check('function rxDedupeRows_' in js and 'rxDedupeRows_(rows)' in js, '처방 목록 중복 정리가 없습니다')
+    check('function rxCacheNormalize_' in js, '사이트 캐시 보험코드 정규화가 없습니다')
+    check("'지난 ' + fmtNum(r.지난수량)" in js, '수량 입력칸 안내문(지난 N개)이 없습니다')
+    check("placeholder=\"' + (r.지난수량 ? String(r.지난수량) : '0') + '\"" not in js,
+          '수량 입력칸이 지난 수량을 실제 값처럼 보이게 표시합니다')
+
     # 5) 순수 함수 실행 (QuickJS)
     try:
         import quickjs
@@ -245,7 +253,8 @@ def main():
         import quickjs
         names = ['guideCacheProduct_', 'guideFindProduct_', 'guideAddItem', 'guideSendToRx', 'applyGuidePending',
                  'guideRxTargetBadge_', 'guideHospitalBarHtml_', 'guideSetHospital', 'rxOpenFromGuide',
-                 'rxApplyGuideRecNow', 'rxOpenGuideFromRx']
+                 'rxApplyGuideRecNow', 'rxOpenGuideFromRx',
+                 'rxCodeNorm_', 'rxCodeKey_', 'rxDedupeRows_']
         blocks = [extract_fn(js, n) for n in names]
         if any(b is None for b in blocks):
             check(False, '가이드→처방전 함수를 추출하지 못했습니다: %s' % [n for n, b in zip(names, blocks) if b is None])
@@ -327,6 +336,91 @@ def main():
                   '처방 셋팅에서 병원 선택이 처방전 선택으로 이어지지 않습니다')
     except ImportError:
         pass
+
+    # 7) 보험코드 정규화·중복 정리 실행 검사 (v1.7 보수)
+    try:
+        import quickjs
+        ctx = quickjs.Context()
+        ctx.eval('var STATE = { rxMonth: "2026-11" };')
+        ctx.eval('var __CACHE = { products: {}, byClient: {} };')
+        ctx.eval('function rxCacheRead() { return JSON.parse(JSON.stringify(__CACHE)); }')
+        for name in ['rxCodeNorm_', 'rxCodeKey_', 'rxDedupeRows_', 'rxBuildRows_']:
+            block = extract_fn(js, name)
+            check(block is not None, '%s 를 추출하지 못했습니다' % name)
+            if block:
+                ctx.eval(block)
+        got = ctx.eval('''
+          [ rxCodeNorm_("73001620"), rxCodeNorm_("073001620"), rxCodeNorm_(73001620),
+            rxCodeNorm_("01291"), rxCodeNorm_("M2094163"),
+            rxCodeKey_("073001620") === rxCodeKey_("73001620"),
+            rxCodeKey_("073001620") === rxCodeKey_("073001480") ].join("|")
+        ''')
+        got = got.decode() if isinstance(got, bytes) else got
+        check(got == '073001620|073001620|073001620|01291|M2094163|true|false',
+              '보험코드 정규화 결과가 다릅니다: %s' % got)
+        dedup = ctx.eval('''
+          (function () {
+            var rows = rxDedupeRows_([
+              { 보험코드: "073001620", 품목명: "건피드정", 수량: 5 },
+              { 보험코드: "73001620", 품목명: "건피드정", 수량: 9 },
+              { 보험코드: "073001480", 품목명: "라베건정10mg", 수량: 3 },
+              { 보험코드: "73001480", 품목명: "라베건정10mg", 수량: 3 }
+            ]);
+            return [rows.length, rows.map(function (r) { return r.보험코드; }).join(",")].join("|");
+          })()
+        ''')
+        dedup = dedup.decode() if isinstance(dedup, bytes) else dedup
+        check(dedup == '2|073001620,073001480', '보험코드 표기 차이 중복이 남습니다: %s' % dedup)
+
+        # 현장 상황: 시트는 73001620(숫자), 사이트 캐시는 073001620 → 4줄이 아니라 2줄
+        built = ctx.eval('''
+          (function () {
+            var saved = { rows: [
+              { 보험코드: 73001620, 품목명: '건피드정', 규격: '', 제약사: '건일바이오팜㈜', 약가: 119, 수수료율: 52, 수량: 10000, 처방ID: 'RX1' },
+              { 보험코드: 73001480, 품목명: '라베건정10mg', 규격: '', 제약사: '건일바이오팜㈜', 약가: 454, 수수료율: 58, 수량: 10000, 처방ID: 'RX2' }
+            ] };
+            var quick = { items: [
+              { 보험코드: '073001620', 품목명: '건피드정', 규격: '', 제약사: '건일바이오팜㈜', 약가: 119, 수수료율: 52, 최근수량: 10000, 최근월: '2026-11' },
+              { 보험코드: '073001480', 품목명: '라베건정10mg', 규격: '', 제약사: '건일바이오팜㈜', 약가: 454, 수수료율: 58, 최근수량: 10000, 최근월: '2026-11' }
+            ] };
+            __CACHE.byClient['C0001'] = {
+              '073001620': { lastQty: 10000, lastMonth: '2026-11', at: 2 },
+              '073001480': { lastQty: 10000, lastMonth: '2026-11', at: 1 }
+            };
+            __CACHE.products['073001620'] = { 보험코드: '073001620', 품목명: '건피드정', 약가: 119, 수수료율: 52, at: 2 };
+            __CACHE.products['073001480'] = { 보험코드: '073001480', 품목명: '라베건정10mg', 약가: 454, 수수료율: 58, at: 1 };
+            var rows = rxBuildRows_(saved, quick, 'C0001', {});
+            return [rows.length, rows.map(function (r) { return r.보험코드 + ':' + (r.saved ? 'saved' : 'no') + ':' + r.수량; }).join(',')].join('|');
+          })()
+        ''')
+        built = built.decode() if isinstance(built, bytes) else built
+        check(built == '2|073001620:saved:10000,073001480:saved:10000',
+              '현장 상황에서 처방 목록이 두 줄로 정리되지 않았습니다: %s' % built)
+
+        # 수량 입력칸: 지난 수량을 실제 입력값처럼 보이지 않게 ('지난 10,000' 안내)
+        rowfn = extract_fn(js, 'renderRxRows')
+        check(rowfn is not None, 'renderRxRows 를 추출하지 못했습니다')
+        if rowfn:
+            q = quickjs.Context()
+            q.eval('''
+            var STATE = { rxClient: 'C0001', rxRows: [
+              { 보험코드: '073001620', 품목명: '건피드정', 규격: '', 제약사: '건일바이오팜㈜',
+                약가: 119, 수수료율: 52, 수량: '', 지난수량: 10000, 지난월: '2026-11', saved: false }
+            ] };
+            var __html = '';
+            var document = { getElementById: function () { return { set innerHTML(v) { __html = v; } }; } };
+            function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+            function fmtNum(n) { return String(Math.round(Number(n || 0))).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ','); }
+            ''')
+            q.eval(rowfn)
+            q.eval('renderRxRows();')
+            html = q.eval('__html')
+            html = html.decode() if isinstance(html, bytes) else html
+            check('placeholder="지난 10,000"' in html, '수량칸 안내가 지난 10,000 이 아닙니다: %s' % html[:200])
+            check('value=""' in html, '수량칸이 빈 값으로 그려지지 않습니다')
+            check('073001620' in html, '보험코드가 표시되지 않습니다')
+    except ImportError:
+        print('(quickjs 없음 — 보험코드 정규화 실행 검사 생략: pip install quickjs)')
 
     print('=' * 62)
     if fails:

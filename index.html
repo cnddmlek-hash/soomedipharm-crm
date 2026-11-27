@@ -4152,11 +4152,75 @@
    // =========================================================================
    const RX_CACHE_KEY = 'crm_rx_cache_v2';
 
+   /**
+    * 보험코드 정규화 — 앞자리 0 을 절대 잃지 않게 (서버 Code.gs 의 normalizeInsuranceCode_ 와 같은 규칙)
+    *  · '073001620' / '73001620' / 73001620 을 모두 '073001620' 으로 맞춥니다.
+    */
+   function rxCodeNorm_(v) {
+     let s = String(v === null || v === undefined ? '' : v).trim();
+     if (!s) return '';
+     s = s.replace(/\.0+$/, '');
+     if (/^\d{7,8}$/.test(s)) s = ('000000000' + s).slice(-9);
+     return s;
+   }
+
+   /** 비교용 키 — 앞자리 0 을 무시 (073001620 === 73001620) */
+   function rxCodeKey_(v) {
+     const s = rxCodeNorm_(v).replace(/\s+/g, '');
+     if (!s) return '';
+     if (/^\d+$/.test(s)) return s.replace(/^0+/, '') || '0';
+     return s.toUpperCase();
+   }
+
+   /** 목록에 같은 약(보험코드 정규화 기준)이 두 줄로 남지 않게 한 줄로 만듭니다. */
+   function rxDedupeRows_(rows) {
+     const out = [];
+     const seen = {};
+     (rows || []).forEach(function (r) {
+       if (!r) return;
+       const code = rxCodeNorm_(r.보험코드);
+       const key = rxCodeKey_(code);
+       if (key) {
+         if (seen[key]) return;
+         seen[key] = true;
+       }
+       const row = Object.assign({}, r);
+       row.보험코드 = code;
+       out.push(row);
+     });
+     return out;
+   }
+
+   /** 저장된 캐시도 숫자로 굳은 보험코드(73001620)를 073001620 으로 합쳐서 돌려줍니다. */
+   function rxCacheNormalize_(c) {
+     const out = { products: {}, byClient: {} };
+     Object.keys((c && c.products) || {}).forEach(function (k) {
+       const p = c.products[k] || {};
+       const code = rxCodeNorm_(p.보험코드 || k);
+       if (!code) return;
+       const prev = out.products[code];
+       if (!prev || Number(p.at || 0) >= Number(prev.at || 0)) {
+         out.products[code] = Object.assign({}, p, { 보험코드: code });
+       }
+     });
+     Object.keys((c && c.byClient) || {}).forEach(function (client) {
+       const mine = c.byClient[client] || {};
+       const dst = out.byClient[client] = {};
+       Object.keys(mine).forEach(function (k) {
+         const code = rxCodeNorm_(k);
+         if (!code) return;
+         const prev = dst[code];
+         if (!prev || Number((mine[k] || {}).at || 0) >= Number((prev || {}).at || 0)) dst[code] = mine[k];
+       });
+     });
+     return out;
+   }
+
    function rxCacheRead() {
      try {
        const raw = localStorage.getItem(RX_CACHE_KEY);
        const o = raw ? JSON.parse(raw) : null;
-       if (o && o.products && o.byClient) return o;
+       if (o && o.products && o.byClient) return rxCacheNormalize_(o);
      } catch (e) {}
      return { products: {}, byClient: {} };
    }
@@ -4175,10 +4239,12 @@
    /** 이 병원 품목으로 캐시에 기록 — 다음 입력부터 서버 조회 없이 바로 뜸 */
    function rxCachePut(clientCode, item) {
      if (!clientCode || !item || !item.보험코드) return;
+     const code = rxCodeNorm_(item.보험코드);
+     if (!code) return;
      const c = rxCacheRead();
      const now = Date.now();
-     c.products[item.보험코드] = {
-       보험코드: item.보험코드,
+     c.products[code] = {
+       보험코드: code,
        품목명: item.품목명 || '',
        규격: item.규격 || '',
        제약사: item.제약사 || '',
@@ -4188,7 +4254,7 @@
      };
      rxTrim_(c.products, 800);
      if (!c.byClient[clientCode]) c.byClient[clientCode] = {};
-     c.byClient[clientCode][item.보험코드] = {
+     c.byClient[clientCode][code] = {
        lastQty: Number(item.수량 || item.lastQty || 0),
        lastMonth: STATE.rxMonth || '',
        at: now
@@ -4200,11 +4266,12 @@
    function rxRowsFromCache(clientCode) {
      const c = rxCacheRead();
      const mine = (c.byClient && c.byClient[clientCode]) || {};
-     return Object.keys(mine).sort(function (a, b) { return (mine[b].at || 0) - (mine[a].at || 0); }).map(function (bc) {
+     const rows = Object.keys(mine).sort(function (a, b) { return (mine[b].at || 0) - (mine[a].at || 0); }).map(function (bc) {
        const p = c.products[bc] || {};
+       const code = rxCodeNorm_(bc);
        return {
-         보험코드: bc,
-         품목명: p.품목명 || bc,
+         보험코드: code,
+         품목명: p.품목명 || code,
          규격: p.규격 || '',
          제약사: p.제약사 || '',
          약가: Number(p.약가 || 0),
@@ -4215,6 +4282,7 @@
          saved: false
        };
      });
+     return rxDedupeRows_(rows);
    }
 
    function rxLocalSearch(q) {
@@ -4225,10 +4293,10 @@
      const seen = {};
      Object.keys(c.products || {}).forEach(function (k) {
        const p = c.products[k];
-       if (!seen[p.보험코드]) { seen[p.보험코드] = 1; p.fromCache = true; pool.push(p); }
+       if (!seen[rxCodeKey_(p.보험코드)]) { seen[rxCodeKey_(p.보험코드)] = 1; p.fromCache = true; pool.push(p); }
      });
      (STATE.rxFrequent || []).forEach(function (p) {
-       if (!seen[p.보험코드]) { seen[p.보험코드] = 1; pool.push(p); }
+       if (!seen[rxCodeKey_(p.보험코드)]) { seen[rxCodeKey_(p.보험코드)] = 1; pool.push(p); }
      });
      return pool.filter(function (p) {
        const hay = (String(p.품목명 || '') + ' ' + String(p.보험코드 || '') + ' ' + String(p.제약사 || '')).toLowerCase();
@@ -4241,6 +4309,52 @@
        if (ap !== bp) return ap - bp;
        return an.length - bn.length;
      }).slice(0, 20);
+   }
+
+   /**
+    * 처방전 목록 만들기 — ① 이 달 저장된 처방 ② 병원 빠른 품목 ③ 사이트 캐시
+    *  · 같은 약이면 보험코드 표기('073001620' / '73001620')가 달라도 한 줄만 남깁니다.
+    */
+   function rxBuildRows_(saved, quick, clientCode, typed) {
+     const rows = [];
+     const seen = {};
+     ((saved && saved.rows) || []).forEach(function (s) {
+       const code = rxCodeNorm_(s.보험코드);
+       const key = rxCodeKey_(code);
+       if (key && seen[key]) return;
+       rows.push({
+         보험코드: code, 품목명: s.품목명, 규격: s.규격, 제약사: s.제약사,
+         약가: s.약가, 수수료율: s.수수료율, 수량: s.수량, 지난수량: 0, 지난월: '',
+         saved: true, 처방ID: s.처방ID
+       });
+       if (key) seen[key] = true;
+     });
+     ((quick && quick.items) || []).forEach(function (it) {
+       const code = rxCodeNorm_(it.보험코드);
+       const key = rxCodeKey_(code);
+       if (key && seen[key]) return;
+       rows.push({
+         보험코드: code, 품목명: it.품목명, 규격: it.규격, 제약사: it.제약사,
+         약가: it.약가, 수수료율: it.수수료율, 수량: (typed || {})[key] || '',
+         지난수량: it.최근수량 || 0, 지난월: it.최근월 || '', saved: false
+       });
+       if (key) seen[key] = true;
+     });
+     const cache = rxCacheRead();
+     const mine = (cache.byClient && cache.byClient[clientCode]) || {};
+     Object.keys(mine).sort(function (a, b) { return (mine[b].at || 0) - (mine[a].at || 0); }).forEach(function (bc) {
+       const code = rxCodeNorm_(bc);
+       const key = rxCodeKey_(code);
+       if (key && seen[key]) return;
+       const p = (cache.products || {})[bc] || {};
+       rows.push({
+         보험코드: code, 품목명: p.품목명 || code, 규격: p.규격 || '', 제약사: p.제약사 || '',
+         약가: Number(p.약가 || 0), 수수료율: Number(p.수수료율 || 0),
+         수량: (typed || {})[key] || '', 지난수량: Number(mine[bc].lastQty || 0), 지난월: mine[bc].lastMonth || '', saved: false
+       });
+       if (key) seen[key] = true;
+     });
+     return rxDedupeRows_(rows);
    }
 
    async function loadPrescriptionModule() {
@@ -4439,40 +4553,8 @@
      }
 
      const typed = {};
-     STATE.rxRows.forEach(function (r) { if (Number(r.수량) > 0) typed[r.보험코드] = r.수량; });
-     const rows = [];
-     const seen = {};
-     ((saved && saved.rows) || []).forEach(function (s) {
-       rows.push({
-         보험코드: s.보험코드, 품목명: s.품목명, 규격: s.규격, 제약사: s.제약사,
-         약가: s.약가, 수수료율: s.수수료율, 수량: s.수량, 지난수량: 0, 지난월: '',
-         saved: true, 처방ID: s.처방ID
-       });
-       seen[s.보험코드] = true;
-     });
-     ((quick && quick.items) || []).forEach(function (it) {
-       if (seen[it.보험코드]) return;
-       rows.push({
-         보험코드: it.보험코드, 품목명: it.품목명, 규격: it.규격, 제약사: it.제약사,
-         약가: it.약가, 수수료율: it.수수료율, 수량: typed[it.보험코드] || '',
-         지난수량: it.최근수량 || 0, 지난월: it.최근월 || '', saved: false
-       });
-       seen[it.보험코드] = true;
-     });
-     const cache = rxCacheRead();
-     const mine = (cache.byClient && cache.byClient[clientCode]) || {};
-     Object.keys(mine).sort(function (a, b) { return (mine[b].at || 0) - (mine[a].at || 0); }).forEach(function (bc) {
-       if (seen[bc]) return;
-       const p = (cache.products || {})[bc] || {};
-       rows.push({
-         보험코드: bc, 품목명: p.품목명 || bc, 규격: p.규격 || '', 제약사: p.제약사 || '',
-         약가: Number(p.약가 || 0), 수수료율: Number(p.수수료율 || 0),
-         수량: typed[bc] || '', 지난수량: Number(mine[bc].lastQty || 0), 지난월: mine[bc].lastMonth || '', saved: false
-       });
-       seen[bc] = true;
-     });
-
-     STATE.rxRows = rows;
+     STATE.rxRows.forEach(function (r) { if (Number(r.수량) > 0) typed[rxCodeKey_(r.보험코드)] = r.수량; });
+     STATE.rxRows = rxBuildRows_(saved, quick, clientCode, typed);
      renderRxRows();
      updateRxSummary();
      // 병원 목록을 서버 응답으로 새로 깐 뒤에도 가이드에서 보낸 품목이 날아가지 않게 다시 합칩니다.
@@ -4496,7 +4578,7 @@
      const r = STATE.guideRec;
      if (!r || !(r.picks || []).length) { showToast('처방 셋팅에서 추천 세팅을 먼저 만들어 주세요.'); return; }
      (r.picks || []).forEach(guideCacheProduct_);
-     const codes = r.picks.map(function (p) { return String(p.보험코드 || '').trim(); }).filter(Boolean);
+     const codes = r.picks.map(function (p) { return rxCodeNorm_(p.보험코드); }).filter(Boolean);
      STATE.guidePending = codes.slice();
      STATE.rxGuideCodes = codes.slice();
      const added = applyGuidePending();
@@ -4538,7 +4620,7 @@
            '</div>' +
          '</div>' +
          '<div class="rx-qty">' +
-           '<input type="number" inputmode="numeric" min="0" id="rx-q-' + i + '" value="' + esc(String(val)) + '" placeholder="' + (r.지난수량 ? String(r.지난수량) : '0') + '" oninput="onRxQtyInput(' + i + ', this.value)" onfocus="this.select()" />' +
+           '<input type="number" inputmode="numeric" min="0" id="rx-q-' + i + '" value="' + esc(String(val)) + '" placeholder="' + (r.지난수량 ? '지난 ' + fmtNum(r.지난수량) : '') + '" oninput="onRxQtyInput(' + i + ', this.value)" onfocus="this.select()" />' +
            '<span class="u">개</span>' +
          '</div>' +
          '<div class="rx-amt" id="rx-amt-' + i + '"><b>' + (amount ? fmtNum(amount) + '원' : '-') + '</b><small>' + (fee ? '수수료 ' + fmtNum(fee) + '원' : '수수료 -') + '</small></div>' +
@@ -4639,7 +4721,7 @@
      if (!STATE.rxClient) { showToast('먼저 병원(거래처)을 선택해 주세요.'); return; }
      const items = STATE.rxRows.filter(function (r) { return (Number(r.수량) || 0) > 0; }).map(function (r) {
        return {
-         보험코드: r.보험코드, 품목명: r.품목명, 규격: r.규격, 제약사: r.제약사,
+         보험코드: rxCodeNorm_(r.보험코드), 품목명: r.품목명, 규격: r.규격, 제약사: r.제약사,
          약가: Number(r.약가) || 0, 수량: Number(r.수량) || 0, 수수료율: Number(r.수수료율) || 0
        };
      });
@@ -4759,10 +4841,11 @@
        if (q !== STATE.rxQuery) return;
        const merged = [];
        const seen = {};
-       rxLocalSearch(q).forEach(function (it) { if (!seen[it.보험코드]) { seen[it.보험코드] = 1; merged.push(it); } });
+       rxLocalSearch(q).forEach(function (it) { const k = rxCodeKey_(it.보험코드); if (!seen[k]) { seen[k] = 1; merged.push(it); } });
        ((res && res.items) || []).forEach(function (it) {
-         if (seen[it.보험코드]) return;
-         seen[it.보험코드] = 1;
+         const k = rxCodeKey_(it.보험코드);
+         if (seen[k]) return;
+         seen[k] = 1;
          it.fromServer = true;
          merged.push(it);
        });
@@ -4827,14 +4910,15 @@
    }
 
    function rxFindProduct(code) {
-     const c = String(code || '').trim();
+     const c = rxCodeNorm_(code);
      if (!c) return null;
-     const inResults = ((STATE.rxResults && STATE.rxResults.items) || []).filter(function (i) { return i.보험코드 === c; })[0];
+     const key = rxCodeKey_(c);
+     const inResults = ((STATE.rxResults && STATE.rxResults.items) || []).filter(function (i) { return rxCodeKey_(i.보험코드) === key; })[0];
      if (inResults) return inResults;
-     const inFreq = (STATE.rxFrequent || []).filter(function (i) { return i.보험코드 === c; })[0];
+     const inFreq = (STATE.rxFrequent || []).filter(function (i) { return rxCodeKey_(i.보험코드) === key; })[0];
      if (inFreq) return inFreq;
      const cache = rxCacheRead();
-     const p = (cache.products || {})[c];
+     const p = (cache.products || {})[c] || (cache.products || {})[String(code || '').trim()];
      return p || null;
    }
 
@@ -4842,7 +4926,8 @@
      if (!STATE.rxClient) { showToast('먼저 병원(거래처)을 선택해 주세요.'); return; }
      const it = rxFindProduct(code);
      if (!it) return;
-     const existsIdx = STATE.rxRows.findIndex(function (r) { return r.보험코드 === it.보험코드; });
+     const itCode = rxCodeNorm_(it.보험코드);
+     const existsIdx = STATE.rxRows.findIndex(function (r) { return rxCodeKey_(r.보험코드) === rxCodeKey_(itCode); });
      if (existsIdx !== -1) {
        showToast('이미 목록에 있습니다. 개수만 입력하세요.');
        const el = document.getElementById('rx-q-' + existsIdx);
@@ -4850,7 +4935,7 @@
        return;
      }
      STATE.rxRows.push({
-       보험코드: it.보험코드, 품목명: it.품목명, 규격: it.규격 || '', 제약사: it.제약사 || '',
+       보험코드: itCode, 품목명: it.품목명, 규격: it.규격 || '', 제약사: it.제약사 || '',
        약가: Number(it.약가 || 0), 수수료율: Number(it.수수료율 || 0),
        수량: '', 지난수량: 0, 지난월: '', saved: false
      });
@@ -6347,7 +6432,7 @@
 
    /** 가이드/추천에서 품목을 처방전 입력으로 넘김 */
    function guideAddItem(code) {
-     const c = String(code || '').trim();
+     const c = rxCodeNorm_(code);
      if (!c) return;
      const p = guideFindProduct_(c);      // 추천/가이드/빠른목록 어디서 왔든 품목을 찾아 캐시
      if (p) guideCacheProduct_(p);
@@ -6361,10 +6446,10 @@
    /** 가이드에서 받은 품목을 보험코드로 기억 (경구/주사 모두) */
    function guideCacheProduct_(p) {
      if (!p) return;
-     const code = String(p.보험코드 || '').trim();
+     const code = rxCodeNorm_(p.보험코드);
      if (!code) return;
      STATE.guideProductCache = STATE.guideProductCache || {};
-     STATE.guideProductCache[code] = p;
+     STATE.guideProductCache[code] = Object.assign({}, p, { 보험코드: code });
    }
 
    /**
@@ -6373,9 +6458,9 @@
     *    가이드 캐시 → 지금 화면의 추천 → 진료과 가이드 목록 → 제품마스터 → 처방전 빠른목록 순으로 찾습니다.
     */
    function guideFindProduct_(code) {
-     const c = String(code || '').trim();
+     const c = rxCodeNorm_(code);
      if (!c) return null;
-     const same = function (x) { return String((x && x.보험코드) || '').trim() === c; };
+     const same = function (x) { return rxCodeKey_(x && x.보험코드) === rxCodeKey_(c); };
      const cached = (STATE.guideProductCache || {})[c];
      if (cached) return cached;
 
@@ -6411,7 +6496,7 @@
      const r = STATE.guideRec;
      if (!r || !r.picks.length) { showToast('먼저 추천 세팅을 만들어 주세요.'); return; }
      (r.picks || []).forEach(guideCacheProduct_);       // 보내기 직전에 한 번 더 캐시
-     const codes = r.picks.map(function (p) { return String(p.보험코드 || '').trim(); }).filter(Boolean);
+     const codes = r.picks.map(function (p) { return rxCodeNorm_(p.보험코드); }).filter(Boolean);
      STATE.guidePending = codes.slice();
      STATE.rxGuideCodes = codes.slice();                 // 병원 목록을 새로 불러와도 살아남게
      STATE.rxRows = [];                                  // 이전 병원 목록이 남아 있으면 섞이므로 비움
@@ -6431,7 +6516,7 @@
      STATE.rxGuideCodes = STATE.rxGuideCodes || [];
      const codes = STATE.rxGuideCodes.slice();
      (STATE.guidePending || []).forEach(function (c) {
-       const code = String(c || '').trim();
+       const code = rxCodeNorm_(c);
        if (code && codes.indexOf(code) === -1) codes.push(code);
      });
      if (!codes.length) return 0;
@@ -6440,13 +6525,14 @@
      let added = 0;
      let missing = 0;
      codes.forEach(function (code) {
-       if (STATE.rxRows.some(function (r) { return String(r.보험코드 || '').trim() === String(code); })) return;
+       const key = rxCodeKey_(code);
+       if (STATE.rxRows.some(function (r) { return rxCodeKey_(r.보험코드) === key; })) return;
        const p = guideFindProduct_(code);
        if (!p) { missing++; return; }
        const name = p.품목명 || p.제품명 || '';
        if (!name) { missing++; return; }
        STATE.rxRows.push({
-         보험코드: String(p.보험코드 || code).trim(),
+         보험코드: rxCodeNorm_(p.보험코드 || code),
          품목명: name,
          규격: p.규격 || '',
          제약사: p.제약사 || (p.표 === '경구' ? '' : '자사'),

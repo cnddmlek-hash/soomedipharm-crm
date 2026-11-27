@@ -34,6 +34,27 @@ var __UI_ALERTS = [];
 
 function __padRow(row, n) { while (row.length < n) row.push(''); return row; }
 
+/* --------------------------------------------------------------------------
+   실제 구글 시트처럼 "입력한 대로" 해석(USER_ENTERED)하는 규칙을 흉내냅니다.
+   · 텍스트 서식('@')이 아닌 칸에 '073001620' 을 쓰면 숫자 73001620 이 되고,
+     '2026-11' 은 날짜(2026-11-01)가 됩니다. — 현장에서 난 두 가지 버그의 원인
+   · setNumberFormat('@') 로 잡아 둔 칸은 문자열 그대로 남습니다.
+   -------------------------------------------------------------------------- */
+function __userEntered_(v, fmt) {
+  if (typeof v !== 'string') return v;
+  if (fmt === '@') return v;
+  var s = v.trim();
+  if (s === '') return '';
+  if (/^[-+]?\d+$/.test(s)) return Number(s);                       // 앞자리 0 소실
+  var m = /^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?$/.exec(s);
+  if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +(m[3] || 1)));   // '2026-11' → 2026-11-01
+  return v;
+}
+
+function __cellFormat_(sheet, row, col) {
+  return (sheet.formats && sheet.formats[row + ':' + col]) || '';
+}
+
 function Range_(sheet, row, col, numRows, numCols) {
   this.sheet = sheet;
   this.row = row; this.col = col;
@@ -57,7 +78,7 @@ Range_.prototype.setValue = function (v) {
   for (var r = 0; r < this.numRows; r++) {
     var idx = this.row - 1 + r;
     __padRow(this.sheet.values[idx] = this.sheet.values[idx] || [], this.col);
-    this.sheet.values[idx][this.col - 1] = v;
+    this.sheet.values[idx][this.col - 1] = __userEntered_(v, __cellFormat_(this.sheet, this.row + r, this.col));
   }
   return this;
 };
@@ -65,17 +86,28 @@ Range_.prototype.setValues = function (vals) {
   for (var r = 0; r < vals.length; r++) {
     var idx = this.row - 1 + r;
     var target = this.sheet.values[idx] = this.sheet.values[idx] || [];
-    for (var c = 0; c < vals[r].length; c++) target[this.col - 1 + c] = vals[r][c];
+    for (var c = 0; c < vals[r].length; c++) {
+      target[this.col - 1 + c] = __userEntered_(vals[r][c], __cellFormat_(this.sheet, this.row + r, this.col + c));
+    }
   }
   return this;
 };
-Range_.prototype.setNumberFormat = function () { return this; };
+Range_.prototype.setNumberFormat = function (fmt) {
+  this.sheet.formats = this.sheet.formats || {};
+  for (var r = 0; r < this.numRows; r++) {
+    for (var c = 0; c < this.numCols; c++) {
+      this.sheet.formats[(this.row + r) + ':' + (this.col + c)] = String(fmt || '');
+    }
+  }
+  return this;
+};
 Range_.prototype.setBackground = function () { return this; };
 Range_.prototype.setFontWeight = function () { return this; };
 
 function Sheet_(name, values) {
   this.name = name;
   this.values = values || [];
+  this.formats = {};
 }
 Sheet_.prototype.getName = function () { return this.name; };
 Sheet_.prototype.getLastRow = function () {
@@ -94,7 +126,12 @@ Sheet_.prototype.getLastColumn = function () {
 Sheet_.prototype.getRange = function (row, col, numRows, numCols) {
   return new Range_(this, row, col, numRows, numCols);
 };
-Sheet_.prototype.appendRow = function (arr) { this.values.push(arr.slice()); };
+Sheet_.prototype.appendRow = function (arr) {
+  var idx = this.values.length;
+  var row = [];
+  for (var c = 0; c < arr.length; c++) row.push(__userEntered_(arr[c], __cellFormat_(this, idx + 1, c + 1)));
+  this.values.push(row);
+};
 Sheet_.prototype.deleteRow = function (i) { this.values.splice(i - 1, 1); };
 Sheet_.prototype.setFrozenRows = function () { return this; };
 Sheet_.prototype.getDataRange = function () {

@@ -1090,6 +1090,193 @@ t('HIRA: 로그인 토큰이 없으면 거부', function () {
   throwsMatch(function () { getHiraPrevisitBriefing({ name: '부산동래한병원' }, ''); }, '로그인');
 });
 
+// ------------------------------------------------------------------ 13. v1.8 — 보험코드 앞자리 0 보존 · 중복 방지
+/** 처방내역 시트에 행을 직접 추가 (시트가 숫자·날짜로 바꿔 버린 예전 상태 재현용) */
+function addRxRow_(obj) {
+  var head = __SHEETS['처방내역'][0];
+  var row = head.map(function (h) { return obj[h] === undefined ? '' : obj[h]; });
+  __SHEETS['처방내역'].push(row);
+  return row;
+}
+function rxSheetRow_(prescriptionId) {
+  var list = __SHEETS['처방내역'], iId = list[0].indexOf('처방ID');
+  for (var i = 1; i < list.length; i++) {
+    if (String(list[i][iId]) === String(prescriptionId)) return { row: list[i], rowNo: i + 1 };
+  }
+  return null;
+}
+function rxRowsOfCode_(codeKey) {
+  return getAllRowsAsObjects_('처방내역').filter(function (r) {
+    return (insuranceCodeKey_(r['보험코드']) || String(r['보험코드'] || '')) === codeKey;
+  });
+}
+
+t('보험코드: 앞자리 0 이 잘린 7~8자리는 9자리로 되살림', function () {
+  eq(normalizeInsuranceCode_('73001620'), '073001620');
+  eq(normalizeInsuranceCode_('073001620'), '073001620');
+  eq(normalizeInsuranceCode_(73001620), '073001620');
+  eq(normalizeInsuranceCode_(' 073001480 '), '073001480');
+  eq(normalizeInsuranceCode_(''), '');
+  eq(normalizeInsuranceCode_('M2094163'), 'M2094163');
+  eq(normalizeInsuranceCode_('01291'), '01291', '5자리 제품코드는 건드리지 않음');
+});
+t('보험코드: 073001620 과 73001620 은 같은 약(비교 키 동일)', function () {
+  eq(insuranceCodeKey_('073001620'), insuranceCodeKey_('73001620'));
+  eq(insuranceCodeKey_(73001620), '73001620');
+  ok(insuranceCodeKey_('073001620') !== insuranceCodeKey_('073001480'), '다른 약이 합쳐짐');
+  eq(insuranceCodeKey_(''), '');
+});
+t('기준월: 날짜로 바뀐 2026-11-01 도 2026-11 로 읽음', function () {
+  eq(normalizeMonth_('2026-11'), '2026-11');
+  eq(normalizeMonth_('2026-11-01'), '2026-11');
+  eq(normalizeMonth_(new Date(Date.UTC(2026, 10, 1))), '2026-11');
+  eq(normalizeMonth_('2026-11-28 1:46:54'), '2026-11');
+});
+
+t('처방 저장: 보험코드 073001620 이 시트에 텍스트로 남아 앞자리 0 유지', function () {
+  var before = __SHEETS['처방내역'].length;
+  try {
+    var code = getClients(true, TOKEN)[0].거래처코드;
+    // 예전 캐시에서처럼 앞자리 0 이 없는 코드가 올라와도 9자리로 되살려 저장해야 합니다.
+    var res = savePrescriptions({
+      기준월: '2026-11', 처방일: '2026-11-28', 거래처코드: code,
+      items: [{ 보험코드: '73001620', 품목명: '건피드정', 규격: '', 제약사: '건일바이오팜㈜', 약가: 119, 수량: 10, 수수료율: 52 }]
+    }, TOKEN);
+    ok(res.success, '저장 실패');
+    eq(res.created, 1, '새 행이 생겨야 함');
+    var hit = rxSheetRow_(res.rows[0].처방ID);
+    ok(hit, '저장된 행을 찾지 못함');
+    var iCode = __SHEETS['처방내역'][0].indexOf('보험코드');
+    eq(hit.row[iCode], '073001620', '시트에 앞자리 0 이 사라짐');
+    eq(typeof hit.row[iCode], 'string', '시트 보험코드가 숫자로 바뀜');
+    var fmt = getSheet_('처방내역').formats[hit.rowNo + ':' + (iCode + 1)];
+    eq(fmt, '@', '보험코드 열이 텍스트 서식이 아님');
+    ok(res.rows[0].보험코드 === '073001620', '응답 코드가 9자리가 아님: ' + res.rows[0].보험코드);
+  } finally {
+    __SHEETS['처방내역'].length = before;
+  }
+});
+
+t('처방 저장: 기준월 2026-11 이 날짜로 바뀌지 않고 그 달 조회에 잡힘', function () {
+  var before = __SHEETS['처방내역'].length;
+  try {
+    var code = getClients(true, TOKEN)[0].거래처코드;
+    var res = savePrescriptions({
+      기준월: '2026-11', 처방일: '2026-11-28', 거래처코드: code,
+      items: [{ 보험코드: '073001480', 품목명: '라베건정10mg', 규격: '', 제약사: '건일바이오팜㈜', 약가: 454, 수량: 7, 수수료율: 58 }]
+    }, TOKEN);
+    ok(res.success, '저장 실패');
+    var hit = rxSheetRow_(res.rows[0].처방ID);
+    var iMonth = __SHEETS['처방내역'][0].indexOf('기준월');
+    eq(hit.row[iMonth], '2026-11', '기준월이 날짜(직렬값)로 바뀜');
+    var got = getPrescriptions('2026-11', code, TOKEN);
+    ok(got.rows.some(function (r) { return insuranceCodeKey_(r.보험코드) === '73001480'; }), '그 달 조회에 안 잡힘');
+    eq(got.rows.filter(function (r) { return insuranceCodeKey_(r.보험코드) === '73001480'; })[0].기준월, '2026-11');
+  } finally {
+    __SHEETS['처방내역'].length = before;
+  }
+});
+
+t('처방 저장: 앞자리 0 없는 예전 줄(73001620)은 새로 만들지 않고 갱신', function () {
+  var before = __SHEETS['처방내역'].length;
+  try {
+    var code = getClients(true, TOKEN)[0].거래처코드;
+    // 시트가 예전에 숫자·날짜로 바꿔 저장해 둔 상태를 그대로 재현
+    addRxRow_({
+      처방ID: 'RXOLD0001', 기준월: new Date(Date.UTC(2026, 10, 1)), 처방일: new Date(Date.UTC(2026, 10, 1)),
+      거래처코드: code, 거래처명: '수아의원', 담당자: '최담당', 제약사: '건일바이오팜㈜',
+      보험코드: 73001620, 품목명: '건피드정', 규격: '', 약가: 119, 수량: 5,
+      처방금액: 595, 수수료율: 52, 예상수수료: 309, 비고: '', 등록일시: '2026-11-01 09:00:00'
+    });
+    var res = savePrescriptions({
+      기준월: '2026-11', 처방일: '2026-11-28', 거래처코드: code,
+      items: [{ 보험코드: '073001620', 품목명: '건피드정', 규격: '', 제약사: '건일바이오팜㈜', 약가: 119, 수량: 9, 수수료율: 52 }]
+    }, TOKEN);
+    eq(res.created, 0, '같은 약인데 새 행이 생김');
+    eq(res.updated, 1, '갱신이 안 됨');
+    eq(rxRowsOfCode_('73001620').length, 1, '같은 약이 두 줄로 남음');
+    var row = rxRowsOfCode_('73001620')[0];
+    eq(row['처방ID'], 'RXOLD0001', '처방ID 가 바뀜');
+    eq(row['수량'], 9, '수량이 갱신되지 않음');
+    eq(row['보험코드'], '073001620', '보험코드가 9자리 텍스트로 고쳐지지 않음');
+    eq(row['기준월'], '2026-11', '기준월이 텍스트로 고쳐지지 않음');
+  } finally {
+    __SHEETS['처방내역'].length = before;
+  }
+});
+
+t('빠른 입력: 073001620 과 73001620 이 두 줄로 보이지 않음', function () {
+  var before = __SHEETS['처방내역'].length;
+  try {
+    var code = getClients(true, TOKEN)[0].거래처코드;
+    addRxRow_({
+      처방ID: 'RXOLD0002', 기준월: '2026-11', 처방일: '2026-11-01', 거래처코드: code, 거래처명: '수아의원',
+      담당자: '최담당', 제약사: '건일바이오팜㈜', 보험코드: 73001620, 품목명: '건피드정', 규격: '',
+      약가: 119, 수량: 10000, 처방금액: 1190000, 수수료율: 52, 예상수수료: 618800, 비고: '', 등록일시: '2026-11-01 10:00:00'
+    });
+    var quick = getPrescriptionQuickItems(code, TOKEN);
+    var hits = quick.items.filter(function (it) { return insuranceCodeKey_(it.보험코드) === '73001620'; });
+    eq(hits.length, 1, '같은 약이 ' + hits.length + '줄로 내려감');
+    eq(hits[0].보험코드, '073001620');
+    eq(hits[0].사용횟수, 1);
+    eq(hits[0].최근월, '2026-11');
+    eq(hits[0].최근수량, 10000);
+    var freq = getFrequentElpharmaProducts(100, TOKEN).items.filter(function (it) { return insuranceCodeKey_(it.보험코드) === '73001620'; });
+    eq(freq.length, 1, '자주 쓴 품목에 두 줄로 나옴');
+  } finally {
+    __SHEETS['처방내역'].length = before;
+  }
+});
+
+t('처방 조회: 같은 달 같은 약의 앞자리0 중복 줄은 한 줄로', function () {
+  var before = __SHEETS['처방내역'].length;
+  try {
+    var code = getClients(true, TOKEN)[0].거래처코드;
+    addRxRow_({
+      처방ID: 'RXOLD0003', 기준월: '2026-11', 처방일: '2026-11-01', 거래처코드: code, 거래처명: '수아의원',
+      담당자: '최담당', 제약사: '건일바이오팜㈜', 보험코드: 73001480, 품목명: '라베건정10mg', 규격: '',
+      약가: 454, 수량: 5, 처방금액: 2270, 수수료율: 58, 예상수수료: 1317, 비고: '', 등록일시: '2026-11-01 10:00:00'
+    });
+    addRxRow_({
+      처방ID: 'RXNEW0004', 기준월: '2026-11', 처방일: '2026-11-28', 거래처코드: code, 거래처명: '수아의원',
+      담당자: '최담당', 제약사: '건일바이오팜㈜', 보험코드: '073001480', 품목명: '라베건정10mg', 규격: '',
+      약가: 454, 수량: 8, 처방금액: 3632, 수수료율: 58, 예상수수료: 2107, 비고: '', 등록일시: '2026-11-28 10:00:00'
+    });
+    var got = getPrescriptions('2026-11', code, TOKEN);
+    var rows = got.rows.filter(function (r) { return insuranceCodeKey_(r.보험코드) === '73001480'; });
+    eq(rows.length, 1, '같은 약이 ' + rows.length + '줄로 내려감');
+    eq(rows[0].수량, 8, '가장 최근 저장 줄이 남지 않음');
+    eq(rows[0].중복행, 2, '중복 줄 수 표시가 없음');
+    eq((rows[0].처방IDs || []).length, 2, '함께 지울 처방ID 가 없음');
+    eq(got.summary.건수, got.rows.length, '합계 건수에 중복이 더해짐');
+  } finally {
+    __SHEETS['처방내역'].length = before;
+  }
+});
+
+t('처방 삭제: 앞자리 0 으로 갈라진 같은 약 줄을 함께 지움', function () {
+  var before = __SHEETS['처방내역'].length;
+  try {
+    var code = getClients(true, TOKEN)[0].거래처코드;
+    addRxRow_({
+      처방ID: 'RXDEL0001', 기준월: '2026-12', 처방일: '2026-12-01', 거래처코드: code, 거래처명: '수아의원',
+      담당자: '최담당', 제약사: '건일바이오팜㈜', 보험코드: 73001620, 품목명: '건피드정', 규격: '',
+      약가: 119, 수량: 10, 처방금액: 1190, 수수료율: 52, 예상수수료: 619, 비고: '', 등록일시: '2026-12-01 10:00:00'
+    });
+    addRxRow_({
+      처방ID: 'RXDEL0002', 기준월: '2026-12', 처방일: '2026-12-02', 거래처코드: code, 거래처명: '수아의원',
+      담당자: '최담당', 제약사: '건일바이오팜㈜', 보험코드: '073001620', 품목명: '건피드정', 규격: '',
+      약가: 119, 수량: 10, 처방금액: 1190, 수수료율: 52, 예상수수료: 619, 비고: '', 등록일시: '2026-12-02 10:00:00'
+    });
+    var del = deletePrescription('RXDEL0002', TOKEN);
+    ok(del.success, '삭제 실패');
+    eq(del.deleted, 2, '갈라진 중복 줄이 남음');
+    eq(rxRowsOfCode_('73001620').length, 0, '삭제하고도 줄이 남음');
+  } finally {
+    __SHEETS['처방내역'].length = before;
+  }
+});
+
 // ------------------------------------------------------------------ 결과
 var PASSED = RESULTS.filter(function (r) { return r.ok; }).length;
 var FAILED = RESULTS.length - PASSED;
