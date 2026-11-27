@@ -71,7 +71,7 @@ def main():
         print('(esprima 없음 — 문법 검사 생략: pip install esprima)')
 
     # 2) v1.6 요소
-    check("const APP_VERSION = 'v1.8'" in js, 'APP_VERSION 이 v1.8 이 아닙니다')
+    check("const APP_VERSION = 'v1.9'" in js, 'APP_VERSION 이 v1.9 가 아닙니다')
     check('id: \'drug\'' in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
     check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
     check('guideTabBar_' in js and 'switchGuideTab' in js, '경구제/주사제 탭이 없습니다')
@@ -110,7 +110,7 @@ def main():
     check('renderHiraPage' in js and '비거래처 심평원(HIRA) 사전조회' in js, '비거래처 사전조회 화면이 없습니다')
     # 메뉴 순서: 거래처 등록/관리 → 거래처 상세정보 → 월별 실적 → 처방 셋팅 → 처방전 입력 → 약 검색 → 주문 → 원장 → 설정
     order_ids = re.findall(r"\n       id: '([a-z]+)',", js)
-    expect_order = ['clients', 'clientinfo', 'perf', 'guide', 'prescription', 'drug', 'turnover', 'ledger', 'docs']
+    expect_order = ['clients', 'clientinfo', 'perf', 'guide', 'prescription', 'order', 'drug', 'turnover', 'ledger', 'docs']
     check(order_ids[:len(expect_order)] == expect_order, '사이드바 메뉴 순서가 다릅니다: %s' % order_ids)
     check(not re.search(r"label: '\s*\d+\.", js), '메뉴 이름 앞에 숫자가 붙었습니다')
     check('loadHiraModule' in js and 'hiraBase' in js, '사전조회 초기 로딩이 없습니다')
@@ -637,6 +637,128 @@ def main():
             check('담당자 × 월 직납 매출(확정)' in html_master, '담당자×월 기준(직납) 표시가 없습니다')
     except ImportError:
         pass
+
+    # 10) v1.9 — 화면 정리(접기·펼치기) + 매출/수금 등록 단독 메뉴
+    check("id: 'order'" in js and 'renderOrderPage' in js and 'loadOrderModule' in js,
+          '매출 · 수금 등록 단독 메뉴가 없습니다')
+    check("label: '매출 · 수금 등록'" in js, '단독 메뉴 이름이 매출 · 수금 등록이 아닙니다')
+    check("shortLabel: '매출수금'" in js, '모바일 메뉴 짧은 이름(매출수금)이 없습니다')
+    check(order_ids[:len(expect_order)][-1] == 'docs', '사이드바 맨 마지막이 (마스터) 이메일 발송이력 · 설정이 아닙니다')
+    tv = re.search(r'function renderTurnoverPage\(container\)\s*\{(.*?)\n   \}', js, re.S)
+    check(bool(tv), 'renderTurnoverPage 를 찾지 못했습니다')
+    if tv:
+        check('매출 / 수금 등록' not in tv.group(1), '주문 · 회전일 관리에 매출/수금 탭이 남아 있습니다')
+        check('회전일 대시보드' in tv.group(1) and '제품마스터' in tv.group(1),
+              '주문 · 회전일 관리에 회전일 대시보드·제품마스터 탭이 남아 있지 않습니다')
+    for name in ['orderFromDetail', 'injectSendToOrder']:
+        body_fn = re.search(r'function %s\([^)]*\)\s*\{(.*?)\n   \}' % name, js, re.S)
+        check(bool(body_fn) and "switchMenu('order')" in body_fn.group(1),
+              '%s 가 매출 · 수금 등록 메뉴로 이동하지 않습니다' % name)
+    check('recentTxTableHtml_' in js and 'recent-tx-box' in js, '최근 등록 거래내역 박스가 없습니다')
+    check('function renderRecentTxBox_' in js and 'function recentTxTableHtml_' in js, '최근 거래내역 렌더 함수가 없습니다')
+    # 10-a) 접기·펼치기
+    check('function toggleInjCautions' in js and 'injCautionsOpen' in js, '배합금기 접기/펼치기가 없습니다')
+    check('function toggleCoverageGuide' in js and 'coverageOpen' in js, '급여·삭감 가이드 접기/펼치기가 없습니다')
+    check('function toggleInjProtoGroup' in js and 'injProtoOpen' in js and 'function setInjProtoAll' in js,
+          '프로토콜 목적별 아코디언이 없습니다')
+    check('collapse-caret' in js and '펼치기 ▼' in js and '접기 ▲' in js, '접기/펼치기 버튼 표기가 없습니다')
+    check('injWarnHtml_' in js and '선택한 조합에 배합·혼합 주의' in js,
+          '품목 체크 시 배합금기 경고 배너가 없습니다')
+    check('검색어와 맞는 그룹을 펼쳤습니다' in js, '프로토콜 검색 자동 펼침 표시가 없습니다')
+
+    # 10-b) 접기·펼치기 실행 검사 (기본은 접힘 · 1줄 요약)
+    try:
+        import quickjs
+        ctx = quickjs.Context()
+        ctx.eval('function esc(s) { return String(s == null ? "" : s); }')
+        ctx.eval('function fmtNum(n) { return String(Math.round(Number(n || 0))); }')
+        ctx.eval('function payTypeBadge() { return ""; }')
+        ctx.eval('function injectSendToOrder() {}')
+        ctx.eval('''
+          var STATE = { injCautionsOpen: false, injProtoOpen: {}, injProtoQuery: '', coverageOpen: false,
+                        coverage: null, coverageCat: '', injProto: null };
+          var __els = {};
+          var document = { getElementById: function (id) {
+            if (!__els[id]) __els[id] = { _html: '', set innerHTML(v) { this._html = v; }, get innerHTML() { return this._html; } };
+            return __els[id];
+          } };
+        ''')
+        for name in ['injCautionsHtml_', 'toggleInjCautions', 'renderCoverageCard', 'toggleCoverageGuide',
+                     'renderInjectProtocols', 'toggleInjProtoGroup', 'setInjProtoAll', 'renderInjectCards']:
+            block = extract_fn(js, name)
+            check(block is not None, '%s 를 추출하지 못했습니다' % name)
+            if block:
+                ctx.eval(block)
+
+        def qv(v):
+            return v.decode() if isinstance(v, bytes) else v
+
+        ctx.eval('''
+          STATE.injProto = {
+            cautions: [
+              { 케이스: '태반주사(자하거추출물)', 주의: '정맥 믹스 금지 — 허가사항 확인', 출처: '실무 기준' },
+              { 케이스: '푸르설티아민(마늘주사) + 알칼리성 주사제', 주의: '같은 백 혼합 금지', 출처: '실무 기준' },
+              { 케이스: '글루타치온 + 고용량 비타민C', 주의: '투여일 나누기', 출처: 'RNT p14' }
+            ],
+            protocols: [
+              { 분류: '수액 기본', 케이스: '생리식염수 고르기', 성분: '염화나트륨 0.9%', 참고제품: '중외', 출처: 'a', 우리제품: [] },
+              { 분류: '수액 기본', 케이스: '5% 포도당 고르기', 성분: '포도당', 참고제품: '중외', 출처: 'a', 우리제품: [] },
+              { 분류: '통증·해열', 케이스: '감기 몸살', 성분: '아세트아미노펜', 참고제품: '아세트', 출처: 'b', 우리제품: [] }
+            ],
+            cards: []
+          };
+        ''')
+        closed = qv(ctx.eval('injCautionsHtml_()'))
+        check('펼치기 ▼' in closed, '배합금기가 기본으로 펼쳐져 있습니다')
+        check('(3건)' in closed, '배합금기 건수가 제목에 없습니다')
+        check('태반주사(자하거추출물)' in closed, '접힌 상태의 1줄 요약이 없습니다')
+        check('정맥 믹스 금지' not in closed, '접힌 상태인데 배합금기 상세가 그대로 보입니다')
+        opened = qv(ctx.eval('STATE.injCautionsOpen = true; injCautionsHtml_()'))
+        check('정맥 믹스 금지' in opened and '접기 ▲' in opened, '배합금기를 펼치면 상세가 나오지 않습니다')
+
+        ctx.eval('''
+          STATE.coverage = {
+            items: [
+              { 구분: '당뇨', 항목: 'HbA1c 기준', 내용: '당뇨 1·2·3제 기준 확인', 근거: '고시' },
+              { 구분: '용량', 항목: '상한 초과', 내용: '1일 상한 초과 시 삭감', 근거: '고시' }
+            ],
+            categories: [ { 구분: '당뇨', 개수: 1 }, { 구분: '용량', 개수: 1 } ]
+          };
+          STATE.coverageOpen = false; STATE.coverageCat = '';
+          renderCoverageCard();
+        ''')
+        cov_closed = qv(ctx.eval('__els["guide-coverage"].innerHTML'))
+        check('펼치기 ▼' in cov_closed and '당뇨' in cov_closed, '급여·삭감 가이드가 접힌 상태로 안 나옵니다')
+        check('HbA1c' not in cov_closed, '접힌 급여 가이드에 표 내용이 그대로 보입니다')
+        ctx.eval('toggleCoverageGuide();')
+        cov_open = qv(ctx.eval('__els["guide-coverage"].innerHTML'))
+        check('HbA1c' in cov_open and '접기 ▲' in cov_open, '급여·삭감 가이드를 펼치면 표가 나오지 않습니다')
+
+        # 프로토콜 — 기본은 그룹 헤더만, 검색하면 매칭 그룹 자동 펼침
+        ctx.eval('STATE.injProtoQuery = ""; STATE.injProtoOpen = {}; renderInjectProtocols();')
+        p_closed = qv(ctx.eval('__els["inj-protocol"].innerHTML'))
+        check('수액 기본' in p_closed and '통증·해열' in p_closed, '프로토콜 그룹 헤더가 없습니다')
+        check('생리식염수 고르기' not in p_closed, '기본 상태에서 프로토콜이 전부 펼쳐져 있습니다')
+        check(p_closed.count('펼치기 ▼') == 2, '접힌 그룹마다 펼치기 버튼이 없습니다: %d' % p_closed.count('펼치기 ▼'))
+        ctx.eval('toggleInjProtoGroup("통증·해열");')
+        p_one = qv(ctx.eval('__els["inj-protocol"].innerHTML'))
+        check('감기 몸살' in p_one, '그룹을 눌러도 펼쳐지지 않습니다')
+        check('생리식염수 고르기' not in p_one, '다른 그룹까지 같이 펼쳐졌습니다')
+        ctx.eval('STATE.injProtoQuery = "숙취"; STATE.injProtoOpen = {}; renderInjectProtocols();')
+        p_search = qv(ctx.eval('__els["inj-protocol"].innerHTML'))
+        check('감기 몸살' in p_search and '생리식염수 고르기' in p_search,
+              '검색어가 있을 때 매칭 그룹이 자동으로 펼쳐지지 않습니다')
+        ctx.eval('STATE.injProtoQuery = ""; STATE.injProtoOpen = {}; renderInjectProtocols();')
+        p_back = qv(ctx.eval('__els["inj-protocol"].innerHTML'))
+        check('감기 몸살' not in p_back, '검색어를 비우면 다시 접힌 상태로 돌아가지 않습니다')
+        ctx.eval('setInjProtoAll(true);')
+        p_all = qv(ctx.eval('__els["inj-protocol"].innerHTML'))
+        check('감기 몸살' in p_all and '생리식염수 고르기' in p_all, '모두 펼치기가 동작하지 않습니다')
+        ctx.eval('setInjProtoAll(false);')
+        p_none = qv(ctx.eval('__els["inj-protocol"].innerHTML'))
+        check('감기 몸살' not in p_none, '모두 접기가 동작하지 않습니다')
+    except ImportError:
+        print('(quickjs 없음 — 접기·펼치기 실행 검사 생략: pip install quickjs)')
 
     print('=' * 62)
     if fails:
