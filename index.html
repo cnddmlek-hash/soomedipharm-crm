@@ -226,6 +226,8 @@
    .kpi-val.danger { color: var(--danger); }
    .kpi-val.primary { color: var(--primary); }
    .kpi-val.success { color: var(--success); }
+   .kpi-sub { margin-top: 3px; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+   .perf-note { margin: -6px 0 14px; font-size: 12px; color: var(--muted); line-height: 1.5; }
 
    .toolbar {
      display: flex;
@@ -1144,7 +1146,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.7';
+   const APP_VERSION = 'v1.8';
 
    const STATE = {
      // 로그인/권한
@@ -1186,6 +1188,7 @@
      // 월별 실적 (v1.3)
      perfMonth: '',
      perfMonths: 6,
+     perfMatrixMetric: 'total',   // 담당자×월 표 기준: total(예상 총매출) | direct(직납) | rx(예상 처방)
      perfManager: '',
      perfData: null,
      perfShowClients: false,
@@ -3969,19 +3972,90 @@
    }
 
    function perfSumRows(rows) {
-     const s = { 거래처수: 0, 매출합계: 0, 매출공급가: 0, 매출건수: 0, 수금합계: 0, 수금건수: 0, 미수금: 0, 전월매출: 0 };
+     const s = {
+       거래처수: 0, 직납매출: 0, 직납공급가: 0, 직납건수: 0,
+       예상처방금액: 0, 처방건수: 0, 예상수수료: 0, 예상총매출: 0, 총건수: 0,
+       수금합계: 0, 수금건수: 0, 미수금: 0, 전월총매출: 0
+     };
      (rows || []).forEach(function (r) {
+       const c = perfCell_(r.당월);
        s.거래처수 += r.거래처수 || 0;
-       s.매출합계 += r.당월.매출합계 || 0;
-       s.매출공급가 += r.당월.매출공급가 || 0;
-       s.매출건수 += r.당월.매출건수 || 0;
-       s.수금합계 += r.당월.수금합계 || 0;
-       s.수금건수 += r.당월.수금건수 || 0;
+       s.직납매출 += c.직납매출;
+       s.직납공급가 += c.직납공급가;
+       s.직납건수 += c.직납건수;
+       s.예상처방금액 += c.예상처방금액;
+       s.처방건수 += c.처방건수;
+       s.예상수수료 += c.예상수수료;
+       s.예상총매출 += c.예상총매출;
+       s.총건수 += c.총건수;
+       s.수금합계 += c.수금합계;
+       s.수금건수 += c.수금건수;
        s.미수금 += r.미수금 || 0;
-       s.전월매출 += r.전월매출 || 0;
+       s.전월총매출 += (r.전월총매출 !== undefined && r.전월총매출 !== null) ? r.전월총매출 : (r.전월매출 || 0);
      });
-     s.전월대비 = s.전월매출 > 0 ? Math.round(((s.매출합계 - s.전월매출) / s.전월매출) * 1000) / 10 : null;
+     s.전월대비 = s.전월총매출 > 0 ? Math.round(((s.예상총매출 - s.전월총매출) / s.전월총매출) * 1000) / 10 : null;
      return s;
+   }
+
+   /**
+    * 실적 셀 값 정리 — 서버(Code.gs)가 아직 예전 버전이라 처방 실적 항목이 없어도
+    * 화면이 깨지지 않도록 '직납 = 매출합계, 예상 처방 = 0'으로 채웁니다.
+    */
+   function perfCell_(c) {
+     const x = c || {};
+     const direct = (x.직납매출 !== undefined && x.직납매출 !== null) ? x.직납매출 : (x.매출합계 || 0);
+     const rx = ((x.처방금액 !== undefined && x.처방금액 !== null) ? x.처방금액 : (x.예상처방금액 || 0)) || 0;
+     const totalRaw = (x.총매출 !== undefined && x.총매출 !== null) ? x.총매출
+       : ((x.예상총매출 !== undefined && x.예상총매출 !== null) ? x.예상총매출 : (direct + rx));
+     const totalSales = totalRaw;
+     const directCount = (x.직납건수 !== undefined && x.직납건수 !== null) ? x.직납건수 : (x.매출건수 || 0);
+     return {
+       month: x.month || '',
+       직납매출: direct,
+       직납공급가: (x.직납공급가 !== undefined) ? x.직납공급가 : (x.매출공급가 || 0),
+       직납건수: directCount,
+       매출합계: x.매출합계 || 0,
+       매출공급가: x.매출공급가 || 0,
+       매출건수: x.매출건수 || 0,
+       수금합계: x.수금합계 || 0,
+       수금건수: x.수금건수 || 0,
+       예상처방금액: rx,
+       처방금액: rx,
+       처방건수: x.처방건수 || 0,
+       예상수수료: x.예상수수료 || 0,
+       예상총매출: totalSales,
+       총매출: totalSales,
+       총건수: (x.총건수 !== undefined && x.총건수 !== null) ? x.총건수 : (directCount + (x.처방건수 || 0))
+     };
+   }
+
+   /** 금액 + 건수(작게) — 값이 0이면 '-' (표가 숫자로만 가득 차지 않게) */
+   function perfAmt_(v, cnt, unit) {
+     const main = (v || 0) ? fmtNum(v) : '<span style="color:var(--muted);">-</span>';
+     const tail = (cnt || 0) ? ' <small style="color:var(--muted);font-weight:400;">' + fmtNum(cnt) + (unit || '건') + '</small>' : '';
+     return main + tail;
+   }
+
+   function perfMatrixMetric_() {
+     const m = STATE.perfMatrixMetric || 'total';
+     return (m === 'direct' || m === 'rx') ? m : 'total';
+   }
+
+   function perfMatrixValue_(cell, metric) {
+     const c = perfCell_(cell);
+     if (metric === 'direct') return c.직납매출;
+     if (metric === 'rx') return c.예상처방금액;
+     return c.예상총매출;
+   }
+
+   function setPerfMatrixMetric(v) {
+     STATE.perfMatrixMetric = v || 'total';
+     renderActiveMenu();
+   }
+
+   function perfRxNote_() {
+     const d = STATE.perfData || {};
+     return d.rxNote || '처방 실적은 익익월 정산 확정 전 입력 기준 예상치입니다.';
    }
 
    function renderPerfPage(container) {
@@ -3993,63 +4067,83 @@
      }
 
      const mf = STATE.perfManager || '';
-     const managers = (d.managers || []).filter(function (m) { return !mf || m.담당자 === mf; });
-     const sum = mf ? perfSumRows(managers) : {
-       거래처수: d.totals.거래처수,
-       매출합계: d.totals.당월.매출합계,
-       매출공급가: d.totals.당월.매출공급가,
-       매출건수: d.totals.당월.매출건수,
-       수금합계: d.totals.당월.수금합계,
-       수금건수: d.totals.당월.수금건수,
-       미수금: d.totals.미수금,
-       전월매출: d.totals.전월매출,
-       전월대비: d.totals.전월대비
-     };
+     const managersAll = (d.managers || []).map(function (m) {
+       return Object.assign({}, m, { 당월: perfCell_(m.당월) });
+     });
+     const managers = managersAll.filter(function (m) { return !mf || m.담당자 === mf; });
+     const sum = mf ? perfSumRows(managers) : (function () {
+       const t = perfCell_(d.totals && d.totals.당월);
+       const tot = d.totals || {};
+       return {
+         거래처수: tot.거래처수 || 0,
+         직납매출: t.직납매출, 직납공급가: t.직납공급가, 직납건수: t.직납건수,
+         예상처방금액: t.예상처방금액, 처방건수: t.처방건수, 예상수수료: t.예상수수료,
+         예상총매출: t.예상총매출, 총건수: t.총건수,
+         수금합계: t.수금합계, 수금건수: t.수금건수,
+         미수금: tot.미수금 || 0,
+         전월총매출: (tot.전월총매출 !== undefined && tot.전월총매출 !== null) ? tot.전월총매출 : (tot.전월매출 || 0),
+         전월대비: tot.전월대비 === undefined ? null : tot.전월대비
+       };
+     })();
 
-     const maxSales = Math.max.apply(null, [1].concat(managers.map(function (m) { return m.당월.매출합계 || 0; })));
+     const maxSales = Math.max.apply(null, [1].concat(managers.map(function (m) { return m.당월.예상총매출 || 0; })));
      /* 담당자 필터가 걸리면 추이·매트릭스 합계도 그 담당자 것만 합산 (화면 간 숫자가 어긋나지 않게) */
      const trendSeries = (mf && managers.length)
        ? (d.months || []).map(function (m) {
-           const acc = { month: m, 매출합계: 0, 매출공급가: 0, 매출건수: 0, 수금합계: 0, 수금건수: 0 };
+           const acc = {
+             month: m, 직납매출: 0, 직납공급가: 0, 직납건수: 0,
+             예상처방금액: 0, 처방건수: 0, 예상수수료: 0, 예상총매출: 0, 수금합계: 0, 수금건수: 0
+           };
            managers.forEach(function (mg) {
-             const s = (mg.series || []).filter(function (x) { return x.month === m; })[0];
-             if (!s) return;
-             acc.매출합계 += s.매출합계 || 0; acc.매출공급가 += s.매출공급가 || 0; acc.매출건수 += s.매출건수 || 0;
-             acc.수금합계 += s.수금합계 || 0; acc.수금건수 += s.수금건수 || 0;
+             const raw = (mg.series || []).filter(function (x) { return x.month === m; })[0];
+             if (!raw) return;
+             const s = perfCell_(raw);
+             acc.직납매출 += s.직납매출; acc.직납공급가 += s.직납공급가; acc.직납건수 += s.직납건수;
+             acc.예상처방금액 += s.예상처방금액; acc.처방건수 += s.처방건수; acc.예상수수료 += s.예상수수료;
+             acc.예상총매출 += s.예상총매출; acc.수금합계 += s.수금합계; acc.수금건수 += s.수금건수;
            });
            return acc;
          })
-       : (d.totals.series || []);
-     const maxMonth = Math.max.apply(null, [1].concat(trendSeries.map(function (s) { return s.매출합계 || 0; })));
+       : ((d.totals && d.totals.series) || []).map(function (raw) {
+           const s = perfCell_(raw);
+           return {
+             month: s.month, 직납매출: s.직납매출, 직납공급가: s.직납공급가, 직납건수: s.직납건수,
+             예상처방금액: s.예상처방금액, 처방건수: s.처방건수, 예상수수료: s.예상수수료,
+             예상총매출: s.예상총매출, 수금합계: s.수금합계, 수금건수: s.수금건수
+           };
+         });
+     const maxMonth = Math.max.apply(null, [1].concat(trendSeries.map(function (s) { return s.예상총매출 || 0; })));
 
      const managerOptions = ['<option value="">전체 담당자</option>'].concat((d.managers || []).map(function (m) {
        return '<option value="' + esc(m.담당자) + '"' + (mf === m.담당자 ? ' selected' : '') + '>' + esc(m.담당자) + '</option>';
      })).join('');
 
      const managerRowsHtml = managers.length ? managers.map(function (m) {
+       const c = m.당월;
        return '<tr>' +
          '<td><strong>' + esc(m.담당자) + '</strong></td>' +
          '<td class="center">' + m.거래처수 + '</td>' +
-         '<td class="num"><strong>' + fmtNum(m.당월.매출합계) + '</strong></td>' +
-         '<td class="num">' + fmtNum(m.당월.매출공급가) + '</td>' +
-         '<td class="center">' + fmtNum(m.당월.매출건수) + '건</td>' +
-         '<td class="num">' + fmtNum(m.당월.수금합계) + '</td>' +
-         '<td class="center">' + fmtNum(m.당월.수금건수) + '건</td>' +
-         '<td class="num">' + fmtNum(m.전월매출) + '</td>' +
-         '<td class="center">' + perfDeltaHtml(m.전월대비) + '</td>' +
+         '<td class="num"><strong style="color:var(--primary);">' + perfAmt_(c.예상총매출, c.총건수) + '</strong></td>' +
+         '<td class="num">' + perfAmt_(c.직납매출, c.직납건수) + '</td>' +
+         '<td class="num">' + perfAmt_(c.예상처방금액, c.처방건수, '품목') + '</td>' +
+         '<td class="num">' + perfAmt_(c.예상수수료) + '</td>' +
+         '<td class="num" style="color:var(--success);">' + perfAmt_(c.수금합계, c.수금건수) + '</td>' +
          '<td class="num">' + fmtNum(m.미수금) + '</td>' +
-         '<td><div class="perf-bar"><i style="width:' + Math.round(((m.당월.매출합계 || 0) / maxSales) * 100) + '%;"></i></div></td>' +
+         '<td class="center">' + perfDeltaHtml(m.전월대비) + '</td>' +
+         '<td><div class="perf-bar"><i style="width:' + Math.round(((c.예상총매출 || 0) / maxSales) * 100) + '%;"></i></div></td>' +
        '</tr>';
-     }).join('') : '<tr><td colspan="11" class="center" style="padding:20px;color:var(--muted);">해당 기간 거래내역이 없습니다.</td></tr>';
+     }).join('') : '<tr><td colspan="10" class="center" style="padding:20px;color:var(--muted);">해당 기간 실적이 없습니다.</td></tr>';
 
      const managerCardsHtml = managers.length ? managers.map(function (m) {
+       const c = m.당월;
        return '<div class="m-card">' +
-         '<div class="m-card-head"><span>' + esc(m.담당자) + '</span><span>' + perfDeltaHtml(m.전월대비) + '</span></div>' +
-         '<div class="m-card-row"><span class="k">당월 매출(합계)</span><strong>' + fmtNum(m.당월.매출합계) + '원</strong></div>' +
-         '<div class="m-card-row"><span class="k">공급가액</span><span>' + fmtNum(m.당월.매출공급가) + '원</span></div>' +
-         '<div class="m-card-row"><span class="k">당월 수금</span><span style="color:var(--success);font-weight:700;">' + fmtNum(m.당월.수금합계) + '원</span></div>' +
+         '<div class="m-card-head"><span>' + esc(m.담당자) + ' <small style="color:var(--muted);font-weight:400;">' + m.거래처수 + '곳</small></span><span>' + perfDeltaHtml(m.전월대비) + '</span></div>' +
+         '<div class="m-card-row"><span class="k">예상 총매출</span><strong>' + fmtNum(c.예상총매출) + '원</strong></div>' +
+         '<div class="m-card-row"><span class="k">· 직납 매출(확정)</span><span>' + fmtNum(c.직납매출) + '원</span></div>' +
+         '<div class="m-card-row"><span class="k">· 예상 처방금액</span><span>' + fmtNum(c.예상처방금액) + '원 (' + fmtNum(c.처방건수) + '품목)</span></div>' +
+         '<div class="m-card-row"><span class="k">예상 수수료</span><span>' + fmtNum(c.예상수수료) + '원</span></div>' +
+         '<div class="m-card-row"><span class="k">당월 수금</span><span style="color:var(--success);font-weight:700;">' + fmtNum(c.수금합계) + '원</span></div>' +
          '<div class="m-card-row"><span class="k">미수금</span><span>' + fmtNum(m.미수금) + '원</span></div>' +
-         '<div class="m-card-row"><span class="k">건수 · 거래처</span><span>' + fmtNum(m.당월.매출건수) + '건 / ' + m.거래처수 + '곳</span></div>' +
        '</div>';
      }).join('') : '<p style="text-align:center;color:var(--muted);">데이터가 없습니다.</p>';
 
@@ -4057,47 +4151,60 @@
        const isTarget = s.month === d.targetMonth;
        return '<tr' + (isTarget ? ' style="background:#eff6ff;"' : '') + '>' +
          '<td><strong>' + esc(s.month) + '</strong>' + (isTarget ? ' <span class="badge badge-blue">기준월</span>' : '') + '</td>' +
-         '<td class="num">' + fmtNum(s.매출합계) + '</td>' +
-         '<td class="num">' + fmtNum(s.매출공급가) + '</td>' +
-         '<td class="center">' + fmtNum(s.매출건수) + '건</td>' +
+         '<td class="num"><strong>' + fmtNum(s.예상총매출) + '</strong></td>' +
+         '<td class="num">' + fmtNum(s.직납매출) + '</td>' +
+         '<td class="num">' + fmtNum(s.예상처방금액) + '</td>' +
+         '<td class="num">' + fmtNum(s.예상수수료) + '</td>' +
          '<td class="num" style="color:var(--success);">' + fmtNum(s.수금합계) + '</td>' +
-         '<td><div class="perf-bar"><i style="width:' + Math.round(((s.매출합계 || 0) / maxMonth) * 100) + '%;"></i></div></td>' +
+         '<td><div class="perf-bar"><i style="width:' + Math.round(((s.예상총매출 || 0) / maxMonth) * 100) + '%;"></i></div></td>' +
        '</tr>';
      }).join('');
 
+     const metric = perfMatrixMetric_();
      const matrixHead = '<th>담당자</th>' + (d.months || []).map(function (m) { return '<th class="num">' + esc(m.slice(5)) + '월</th>'; }).join('') + '<th class="num">합계</th>';
      const matrixRows = managers.length ? managers.map(function (m) {
-       const cells = (m.series || []).map(function (s) { return '<td class="num">' + (s.매출합계 ? fmtNum(s.매출합계) : '<span style="color:var(--muted);">-</span>') + '</td>'; }).join('');
-       const total = (m.series || []).reduce(function (acc, s) { return acc + (s.매출합계 || 0); }, 0);
+       const cells = (m.series || []).map(function (s) {
+         const v = perfMatrixValue_(s, metric);
+         return '<td class="num">' + (v ? fmtNum(v) : '<span style="color:var(--muted);">-</span>') + '</td>';
+       }).join('');
+       const total = (m.series || []).reduce(function (acc, s) { return acc + perfMatrixValue_(s, metric); }, 0);
        return '<tr><td><strong>' + esc(m.담당자) + '</strong></td>' + cells + '<td class="num"><strong>' + fmtNum(total) + '</strong></td></tr>';
      }).join('') : '';
      const matrixMonthTotals = (d.months || []).map(function (m) {
        let v = 0;
        managers.forEach(function (mg) {
          const s = (mg.series || []).filter(function (x) { return x.month === m; })[0];
-         v += s ? (s.매출합계 || 0) : 0;
+         if (s) v += perfMatrixValue_(s, metric);
        });
        return v;
      });
      const matrixTotal = '<tr style="background:#f8fafc;font-weight:700;"><td>합계</td>' +
        matrixMonthTotals.map(function (v) { return '<td class="num">' + fmtNum(v) + '</td>'; }).join('') +
        '<td class="num">' + fmtNum(matrixMonthTotals.reduce(function (a, v) { return a + v; }, 0)) + '</td></tr>';
+     const matrixMetricLabel = metric === 'direct' ? '직납 매출(확정)' : (metric === 'rx' ? '예상 처방금액' : '예상 총매출');
 
-     const clientRows = (d.clients || []).filter(function (c) { return !mf || String(c.담당자 || '').trim() === mf; });
+     const clientRows = (d.clients || []).filter(function (c) { return !mf || String(c.담당자 || '').trim() === mf; })
+       .map(function (c) { return Object.assign({}, c, { _m: perfCell_(c) }); });
      const clientTable = clientRows.length ? clientRows.map(function (c) {
+       const m = c._m;
        return '<tr>' +
          '<td><strong>' + esc(c.거래처명) + '</strong> <small style="color:var(--muted);">(' + esc(c.거래처코드) + ')</small></td>' +
          '<td>' + esc(c.담당자 || '-') + '</td>' +
-         '<td class="num">' + (c.매출합계 ? fmtNum(c.매출합계) : '<span style="color:var(--muted);">-</span>') + '</td>' +
-         '<td class="center">' + (c.매출건수 || 0) + '건</td>' +
-         '<td class="num">' + (c.수금합계 ? fmtNum(c.수금합계) : '<span style="color:var(--muted);">-</span>') + '</td>' +
+         '<td class="num"><strong>' + perfAmt_(m.예상총매출, m.총건수) + '</strong></td>' +
+         '<td class="num">' + perfAmt_(m.직납매출, m.직납건수) + '</td>' +
+         '<td class="num">' + perfAmt_(m.예상처방금액, m.처방건수, '품목') + '</td>' +
+         '<td class="num">' + perfAmt_(m.예상수수료) + '</td>' +
+         '<td class="num">' + perfAmt_(m.수금합계, m.수금건수) + '</td>' +
          '<td class="num">' + (c.미수금 ? fmtNum(c.미수금) : '<span style="color:var(--muted);">-</span>') + '</td>' +
        '</tr>';
-     }).join('') : '<tr><td colspan="6" class="center" style="padding:20px;color:var(--muted);">표시할 거래처가 없습니다.</td></tr>';
+     }).join('') : '<tr><td colspan="8" class="center" style="padding:20px;color:var(--muted);">표시할 거래처가 없습니다.</td></tr>';
 
+     const hasAny = (sum.직납매출 || 0) + (sum.예상처방금액 || 0) > 0;
+     /* 시트 서버(Apps Script)가 v1.8 이전이면 처방 실적이 아직 안 합산됩니다 — 화면에서 바로 알립니다. */
+     const serverOld = STATE.serverVersion && !serverAtLeast_('v1.8');
      container.innerHTML =
        '<div class="page-header">' +
-         '<h2 class="page-title">📈 월별 실적 (담당자별 매출 · 수금)' +
+         '<h2 class="page-title">📈 월별 실적 (직납 + 예상 처방)' +
            (d.isMaster ? '' : '<small style="font-size:12px;color:var(--muted);font-weight:500;"> · 내 담당 거래처만 표시</small>') +
          '</h2>' +
          '<span class="badge badge-blue">기준월 ' + esc(d.targetMonth) + ' · 집계 ' + esc(d.monthEnd) + '까지</span>' +
@@ -4106,37 +4213,66 @@
          '<div class="toolbar">' +
            '<input type="month" id="perf-month" style="max-width:155px;" value="' + esc(d.targetMonth) + '" onchange="changePerfMonth(this.value)" />' +
            '<select style="max-width:120px;" onchange="setPerfMonths(this.value)">' +
-             [3, 6, 12].map(function (n) { return '<option value="' + n + '"' + (Number(d.months.length) === n ? ' selected' : '') + '>' + n + '개월 추이</option>'; }).join('') +
+             [3, 6, 12].map(function (n) { return '<option value="' + n + '"' + (Number((d.months || []).length) === n ? ' selected' : '') + '>' + n + '개월 추이</option>'; }).join('') +
            '</select>' +
            (d.isMaster ? '<select style="max-width:150px;" onchange="setPerfManager(this.value)">' + managerOptions + '</select>' : '') +
            '<div style="margin-left:auto;"><button class="btn btn-outline btn-sm" onclick="loadPerfModule()">🔄 새로고침</button></div>' +
          '</div>' +
-         (d.managers.length ? '' : '<p style="margin:0 0 8px;font-size:12.5px;color:var(--muted);">ⓘ 아직 ‘매출/수금 등록’에 거래내역이 없어 실적이 0으로 나옵니다. 주문을 등록하면 이 화면에 쌓입니다.</p>') +
+         (hasAny ? '' : '<p style="margin:0 0 8px;font-size:12.5px;color:var(--muted);">ⓘ 아직 ‘주문 · 매출/수금 등록’과 ‘처방전 입력’에 실적이 없어 0으로 나옵니다. 주문이나 처방전을 입력하면 이 화면에 쌓입니다.</p>') +
        '</div>' +
        '<div class="kpi-grid">' +
-         '<div class="kpi-card"><div class="kpi-label">당월 매출 (합계금액)</div><div class="kpi-val primary">' + fmtNum(sum.매출합계) + '원</div></div>' +
-         '<div class="kpi-card"><div class="kpi-label">당월 수금</div><div class="kpi-val success">' + fmtNum(sum.수금합계) + '원</div></div>' +
-         '<div class="kpi-card"><div class="kpi-label">미수금 (누적)</div><div class="kpi-val' + (sum.미수금 > 0 ? ' danger' : '') + '">' + fmtNum(sum.미수금) + '원</div></div>' +
-         '<div class="kpi-card"><div class="kpi-label">전월 대비</div><div class="kpi-val">' + perfDeltaHtml(sum.전월대비) + '</div></div>' +
+         '<div class="kpi-card"><div class="kpi-label">당월 예상 총매출 (직납확정 + 예상 처방)</div>' +
+           '<div class="kpi-val primary">' + fmtNum(sum.예상총매출) + '원</div>' +
+           '<div class="kpi-sub">직납확정 ' + fmtNum(sum.직납매출) + ' + 예상 처방 ' + fmtNum(sum.예상처방금액) + '</div></div>' +
+         '<div class="kpi-card"><div class="kpi-label">직납 매출 (확정)</div>' +
+           '<div class="kpi-val">' + fmtNum(sum.직납매출) + '원</div>' +
+           '<div class="kpi-sub">공급가액 ' + fmtNum(sum.직납공급가) + '원 · ' + fmtNum(sum.직납건수) + '건</div></div>' +
+         '<div class="kpi-card"><div class="kpi-label">예상 처방금액</div>' +
+           '<div class="kpi-val">' + fmtNum(sum.예상처방금액) + '원</div>' +
+           '<div class="kpi-sub">예상 수수료 ' + fmtNum(sum.예상수수료) + '원 · ' + fmtNum(sum.처방건수) + '품목</div></div>' +
+         '<div class="kpi-card"><div class="kpi-label">당월 수금 / 미수금</div>' +
+           '<div class="kpi-val success">' + fmtNum(sum.수금합계) + '원</div>' +
+           '<div class="kpi-sub">미수금(누적) ' + fmtNum(sum.미수금) + '원 · 전월비 ' + perfDeltaHtml(sum.전월대비) + '</div></div>' +
        '</div>' +
+       '<p class="perf-note">※ ' + esc(perfRxNote_()) +
+         ' <b>직납 매출</b>은 거래내역 기준 확정, <b>예상 처방금액·예상 수수료·예상 총매출</b>은 처방전 입력 기준입니다. 미수금은 직납(거래내역) 기준입니다.</p>' +
+       (serverOld
+         ? '<p class="perf-note" style="color:var(--danger);">⚠️ 시트 서버(Code.gs)가 <b>' + esc(STATE.serverVersion) +
+           '</b> 라서 <b>처방 실적이 아직 합산되지 않습니다</b>. 구글 시트 Apps Script 에 최신 <b>Code.gs</b>를 넣고 ' +
+           '[배포 관리 → 수정 → 버전: 새 버전]으로 재배포하면 이 화면에 예상 처방이 함께 나옵니다.</p>'
+         : '') +
        '<div class="card">' +
-         '<div class="card-title"><span>👥 담당자별 ' + esc(d.targetMonth) + ' 실적</span><small style="font-weight:500;font-size:12px;color:var(--muted);">공급가액 = 부가세 제외</small></div>' +
+         '<div class="card-title"><span>👥 담당자별 ' + esc(d.targetMonth) + ' 실적</span><small style="font-weight:500;font-size:12px;color:var(--muted);">직납 = 거래내역 확정 · 처방 = 입력 기준 예상</small></div>' +
          '<div class="table-wrap desktop-table"><table><thead><tr>' +
-           '<th>담당자</th><th class="center">거래처</th><th class="num">매출(합계)</th><th class="num">공급가액</th><th class="center">매출건수</th>' +
-           '<th class="num">수금</th><th class="center">수금건수</th><th class="num">전월매출</th><th class="center">전월비</th><th class="num">미수금</th><th style="min-width:80px;">비중</th>' +
+           '<th>담당자</th><th class="center">거래처</th><th class="num">예상 총매출</th><th class="num">직납 매출</th>' +
+           '<th class="num">예상 처방금액</th><th class="num">예상 수수료</th><th class="num">수금</th><th class="num">미수금</th>' +
+           '<th class="center">전월비</th><th style="min-width:80px;">비중</th>' +
          '</tr></thead><tbody>' + managerRowsHtml +
-           '<tr style="background:#f1f5f9;font-weight:700;"><td>합계</td><td class="center">' + sum.거래처수 + '</td><td class="num">' + fmtNum(sum.매출합계) + '</td><td class="num">' + fmtNum(sum.매출공급가) + '</td><td class="center">' + fmtNum(sum.매출건수) + '건</td><td class="num">' + fmtNum(sum.수금합계) + '</td><td class="center">' + fmtNum(sum.수금건수) + '건</td><td class="num">' + fmtNum(sum.전월매출) + '</td><td class="center">' + perfDeltaHtml(sum.전월대비) + '</td><td class="num">' + fmtNum(sum.미수금) + '</td><td></td></tr>' +
+           '<tr style="background:#f1f5f9;font-weight:700;"><td>합계</td><td class="center">' + sum.거래처수 + '</td>' +
+             '<td class="num">' + fmtNum(sum.예상총매출) + '</td>' +
+             '<td class="num">' + fmtNum(sum.직납매출) + '</td>' +
+             '<td class="num">' + fmtNum(sum.예상처방금액) + '</td>' +
+             '<td class="num">' + fmtNum(sum.예상수수료) + '</td>' +
+             '<td class="num">' + fmtNum(sum.수금합계) + '</td>' +
+             '<td class="num">' + fmtNum(sum.미수금) + '</td>' +
+             '<td class="center">' + perfDeltaHtml(sum.전월대비) + '</td><td></td></tr>' +
          '</tbody></table></div>' +
          '<div class="mobile-cards">' + managerCardsHtml + '</div>' +
        '</div>' +
        '<div class="card">' +
-         '<div class="card-title"><span>📅 월별 추이 (최근 ' + d.months.length + '개월 · 합계)</span></div>' +
+         '<div class="card-title"><span>📅 월별 추이 (최근 ' + (d.months || []).length + '개월 · 합계)</span></div>' +
          '<div class="table-wrap"><table><thead><tr>' +
-           '<th>기준월</th><th class="num">매출(합계)</th><th class="num">공급가액</th><th class="center">건수</th><th class="num">수금</th><th style="min-width:90px;">추이</th>' +
+           '<th>기준월</th><th class="num">예상 총매출</th><th class="num">직납 매출</th><th class="num">예상 처방금액</th>' +
+           '<th class="num">예상 수수료</th><th class="num">수금</th><th style="min-width:90px;">추이</th>' +
          '</tr></thead><tbody>' + trendRows + '</tbody></table></div>' +
        '</div>' +
        '<div class="card">' +
-         '<div class="card-title"><span>🧮 담당자 × 월 매출(합계)</span></div>' +
+         '<div class="card-title"><span>🧮 담당자 × 월 ' + esc(matrixMetricLabel) + '</span>' +
+           '<select style="max-width:150px;font-size:12px;padding:4px 6px;" onchange="setPerfMatrixMetric(this.value)">' +
+             [['total', '예상 총매출'], ['direct', '직납 매출'], ['rx', '예상 처방금액']].map(function (o) {
+               return '<option value="' + o[0] + '"' + (metric === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+             }).join('') +
+           '</select></div>' +
          '<div class="table-wrap"><table><thead><tr>' + matrixHead + '</tr></thead><tbody>' + (matrixRows || '<tr><td colspan="' + ((d.months || []).length + 2) + '" class="center" style="padding:18px;color:var(--muted);">데이터가 없습니다.</td></tr>') + matrixTotal + '</tbody></table></div>' +
        '</div>' +
        '<div class="card">' +
@@ -4144,7 +4280,8 @@
            '<button class="btn btn-outline btn-sm" onclick="togglePerfClients()">' + (STATE.perfShowClients ? '접기' : '펼치기') + '</button>' +
          '</div>' +
          (STATE.perfShowClients
-           ? '<div class="table-wrap"><table><thead><tr><th>거래처</th><th>담당자</th><th class="num">매출(합계)</th><th class="center">건수</th><th class="num">수금</th><th class="num">미수금</th></tr></thead><tbody>' + clientTable + '</tbody></table></div>'
+           ? '<div class="table-wrap"><table><thead><tr><th>거래처</th><th>담당자</th><th class="num">예상 총매출</th><th class="num">직납 매출</th>' +
+               '<th class="num">예상 처방금액</th><th class="num">예상 수수료</th><th class="num">수금</th><th class="num">미수금</th></tr></thead><tbody>' + clientTable + '</tbody></table></div>'
            : '<p style="margin:0;font-size:12.5px;color:var(--muted);">거래처별 내역은 [펼치기]를 누르면 보입니다.</p>') +
        '</div>';
    }

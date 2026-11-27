@@ -91,8 +91,34 @@ def main():
         for name in ['looksParenteral_', 'dosageFormOf_', 'productsOfForm_', 'productIndexByIngredient_',
                      'injectCategoryOf_', 'injectPicks_', 'getInjectGuide']:
             check(name in code, 'Code.gs 에 %s 가 없습니다' % name)
-        check("const APP_VERSION = 'v1.7'" in code, 'Code.gs 버전이 v1.7 이 아닙니다')
+        check("const APP_VERSION = 'v1.8'" in code, 'Code.gs 버전이 v1.8 이 아닙니다')
         check(re.search(r'getInjectGuide\s*:\s*getInjectGuide', code) is not None, 'getInjectGuide 가 apiFunctions_ 에 없습니다')
+
+    # ---------------- 2-h. v1.8 월별 실적 — 직납(거래내역) + 예상 처방(처방내역) 합산
+    if code:
+        check('function prescriptionPerfRows_' in code, 'prescriptionPerfRows_ 가 없습니다')
+        gmp = re.search(r'function getMonthlyPerformance\(targetMonth, monthsBack, managerFilter, token\)\s*\{(.*?)\n\}', code, re.S)
+        check(bool(gmp), 'getMonthlyPerformance 를 찾지 못했습니다')
+        if gmp:
+            body = gmp.group(1)
+            check('prescriptionPerfRows_' in body, '월별 실적이 처방내역을 집계하지 않습니다')
+            check('finishCell' in body and '총매출' in body, '직납+예상 처방 총매출 합산이 없습니다')
+            check('처방금액' in body and '예상수수료' in body, '처방금액·예상수수료 집계가 없습니다')
+            check('전월총매출' in body, '전월 총매출(전월비 기준)이 없습니다')
+            check('rxNote' in body, '처방 예상 안내 문구(rxNote)가 없습니다')
+        ppr = re.search(r'function prescriptionPerfRows_\(user, clientMap\)\s*\{(.*?)\n\}', code, re.S)
+        check(bool(ppr), 'prescriptionPerfRows_ 본문을 찾지 못했습니다')
+        if ppr:
+            body = ppr.group(1)
+            check('normalizePrescriptionRow_' in body, '처방 줄이 요율등급 차감 계산을 거치지 않습니다')
+            check('insuranceCodeKey_' in body, '처방 줄 중복(보험코드 앞자리 0)을 합치지 않습니다')
+            check('normalizeMonth_' in body, '기준월을 정규화하지 않습니다')
+        # 예상수수료는 응답에 예상 이름으로도 함께 나가야 화면 라벨과 어긋나지 않습니다.
+        check('예상처방금액' in code and '예상총매출' in code, '응답에 예상처방금액·예상총매출 별칭이 없습니다')
+        # 처방내역 머리글에 집계에 쓰는 열이 있어야 합니다.
+        check(heads.get('처방내역', [])[:15] == ['처방ID', '기준월', '처방일', '거래처코드', '거래처명', '담당자', '제약사',
+                                                '보험코드', '품목명', '규격', '약가', '수량', '처방금액', '수수료율', '예상수수료'],
+              '처방내역 머리글이 다릅니다: %s' % heads.get('처방내역'))
 
     # ---------------- 2-f. v1.7 거래처코드 Sxxx 채번 · 심평원 연동
     if code:

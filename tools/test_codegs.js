@@ -1280,6 +1280,185 @@ t('처방 삭제: 앞자리 0 으로 갈라진 같은 약 줄을 함께 지움',
   }
 });
 
+// ------------------------------------------------------------------ 14. v1.8 — 월별 실적: 직납(거래내역) + 예상 처방(처방내역) 합산
+function addTxRow_(obj) {
+  var head = __SHEETS['거래내역'][0];
+  var row = head.map(function (h) { return obj[h] === undefined ? '' : obj[h]; });
+  __SHEETS['거래내역'].push(row);
+  return row;
+}
+function perfMgr_(res, name) {
+  return (res.managers || []).filter(function (m) { return m.담당자 === name; })[0];
+}
+function perfClient_(res, code) {
+  return (res.clients || []).filter(function (c) { return c.거래처코드 === code; })[0];
+}
+/** 직납·처방 시험용 데이터로 바꿔 실행하고, 끝나면 원래 시트로 되돌립니다. */
+function withPerfFixtures_(fn) {
+  var rxBackup = __SHEETS['처방내역'].slice(1);
+  var txBackup = __SHEETS['거래내역'].slice(1);
+  var cl = __SHEETS['거래처'];
+  var iMgr = cl[0].indexOf('담당자');
+  var iCode = cl[0].indexOf('거래처코드');
+  var mgrBefore = cl.map(function (r) { return r[iMgr]; });
+  var codeA = cl[1][iCode], codeB = cl[2][iCode];
+  __SHEETS['처방내역'].length = 1;
+  __SHEETS['거래내역'].length = 1;
+  try {
+    cl[2][iMgr] = '정담당';   // 두 번째 거래처는 다른 담당자 (STAFF 노출 확인용)
+    var today = formatDate_(new Date());
+    var ym = currentMonth_();
+    addTxRow_({ 거래ID: 'TXPERF1', 날짜: today, 구분: '매출', 거래처코드: codeA, 거래처명: 'A의원', 품목명: '테스트주', 수량: 10, 단가: 100000, 공급가액: 909091, 부가세: 90909, 합계금액: 1000000 });
+    addTxRow_({ 거래ID: 'TXPERF2', 날짜: today, 구분: '수금', 거래처코드: codeA, 거래처명: 'A의원', 합계금액: 400000, 수금유형: '현금' });
+    addRxRow_({ 처방ID: 'RXPERF1', 기준월: ym, 처방일: today, 거래처코드: codeA, 거래처명: 'A의원', 담당자: '최충의', 제약사: '테스트제약', 보험코드: '073001620', 품목명: '건피드정', 규격: '', 약가: 1000, 수량: 10, 처방금액: 10000, 수수료율: 50, 예상수수료: 5000, 비고: '', 등록일시: today + ' 09:00:00' });
+    addRxRow_({ 처방ID: 'RXPERF2', 기준월: ym, 처방일: today, 거래처코드: codeA, 거래처명: 'A의원', 담당자: '최충의', 제약사: '테스트제약', 보험코드: '073001480', 품목명: '라베건정10mg', 규격: '', 약가: 2000, 수량: 5, 처방금액: 10000, 수수료율: 60, 예상수수료: 6000, 비고: '', 등록일시: today + ' 09:00:01' });
+    addRxRow_({ 처방ID: 'RXPERF3', 기준월: ym, 처방일: today, 거래처코드: codeB, 거래처명: 'B의원', 담당자: '정담당', 제약사: '테스트제약', 보험코드: '649104260', 품목명: '아카에정', 규격: '', 약가: 500, 수량: 4, 처방금액: 2000, 수수료율: 40, 예상수수료: 800, 비고: '', 등록일시: today + ' 10:00:00' });
+    fn({ codeA: codeA, codeB: codeB, ym: ym, today: today });
+  } finally {
+    __SHEETS['처방내역'].length = 1;
+    __SHEETS['거래내역'].length = 1;
+    rxBackup.forEach(function (r) { __SHEETS['처방내역'].push(r); });
+    txBackup.forEach(function (r) { __SHEETS['거래내역'].push(r); });
+    cl.forEach(function (r, i) { r[iMgr] = mgrBefore[i]; });
+  }
+}
+
+t('월별 실적: 직납 매출·예상 처방금액·예상 총매출이 각각 집계됨', function () {
+  withPerfFixtures_(function (fx) {
+    var res = getMonthlyPerformance(fx.ym, 3, '', TOKEN);
+    var m = perfMgr_(res, '최충의');
+    ok(m, '최충의 담당자 행이 없습니다');
+    eq(m.당월.직납매출, 1000000, '직납매출');
+    eq(m.당월.매출합계, 1000000, '매출합계(직납 별칭)');
+    eq(m.당월.예상처방금액, 20000, '예상 처방금액');
+    eq(m.당월.처방금액, 20000, '처방금액 별칭');
+    eq(m.당월.예상총매출, 1020000, '예상 총매출 = 직납 + 예상 처방');
+    eq(m.당월.총매출, 1020000, '총매출 별칭');
+    eq(m.당월.처방건수, 2, '처방 품목 줄 수');
+    eq(m.당월.직납건수, 1, '매출 건수');
+    eq(m.당월.예상수수료, 11000, 'MASTER 는 원본 예상수수료 그대로');
+    eq(m.당월.수금합계, 400000, '수금');
+    eq(m.미수금, 600000, '미수금은 직납(거래내역) 기준');
+    ok(m.당월.예상총매출 === m.당월.직납매출 + m.당월.예상처방금액, '총매출 합산식 불일치');
+  });
+});
+
+t('월별 실적: 처방만 있는 담당자도 행으로 나오고 직납은 0', function () {
+  withPerfFixtures_(function (fx) {
+    var res = getMonthlyPerformance(fx.ym, 3, '', TOKEN);
+    var m = perfMgr_(res, '정담당');
+    ok(m, '처방만 있는 담당자 행이 없습니다');
+    eq(m.당월.직납매출, 0, '직납매출');
+    eq(m.당월.예상처방금액, 2000, '예상 처방금액');
+    eq(m.당월.예상총매출, 2000, '예상 총매출');
+    eq(m.미수금, 0, '미수금');
+  });
+});
+
+t('월별 실적: 합계(totals)가 직납·예상 처방·예상 총매출을 함께 담음', function () {
+  withPerfFixtures_(function (fx) {
+    var res = getMonthlyPerformance(fx.ym, 3, '', TOKEN);
+    eq(res.totals.당월.직납매출, 1000000, '합계 직납');
+    eq(res.totals.당월.예상처방금액, 22000, '합계 예상 처방');
+    eq(res.totals.당월.예상총매출, 1022000, '합계 예상 총매출');
+    eq(res.totals.당월.수금합계, 400000, '합계 수금');
+    eq(res.totals.미수금, 600000, '합계 미수금');
+    eq(res.months.length, 3, '추이 개월 수');
+    var last = res.totals.series[res.totals.series.length - 1];
+    eq(last.month, res.targetMonth, '추이 마지막 달이 기준월이 아님');
+    eq(last.예상총매출, 1022000, '추이 마지막 달 예상 총매출');
+    eq(last.직납매출, 1000000, '추이 직납');
+    eq(last.예상처방금액, 22000, '추이 예상 처방');
+  });
+});
+
+t('월별 실적: 병원별 표에 예상 총매출·직납·예상 처방·예상 수수료가 함께', function () {
+  withPerfFixtures_(function (fx) {
+    var res = getMonthlyPerformance(fx.ym, 3, '', TOKEN);
+    var a = perfClient_(res, fx.codeA);
+    ok(a, '병원별 행 없음');
+    eq(a.직납매출, 1000000, '병원 직납');
+    eq(a.예상처방금액, 20000, '병원 예상 처방');
+    eq(a.예상총매출, 1020000, '병원 예상 총매출');
+    eq(a.예상수수료, 11000, '병원 예상 수수료');
+    eq(a.미수금, 600000, '병원 미수금');
+    var b = perfClient_(res, fx.codeB);
+    eq(b.예상총매출, 2000, '처방만 있는 병원');
+    eq(b.예상수수료, 800, '처방만 있는 병원 수수료');
+    // 정렬: 예상 총매출 큰 병원이 위
+    eq(res.clients[0].거래처코드, fx.codeA, '병원별 정렬이 예상 총매출 순이 아님');
+  });
+});
+
+t('월별 실적: 담당자 필터를 걸면 그 담당자만 집계', function () {
+  withPerfFixtures_(function (fx) {
+    var res = getMonthlyPerformance(fx.ym, 3, '정담당', TOKEN);
+    eq(res.managers.length, 1, '필터가 안 걸림');
+    eq(res.managers[0].담당자, '정담당');
+    eq(res.totals.당월.예상총매출, 2000, '필터 합계가 그 담당자 것만이 아님');
+    eq(res.clients.length, 1, '병원별도 필터 안 됨');
+  });
+});
+
+t('월별 실적: STAFF 는 본인 담당 거래처만 + 예상수수료가 등급 차감값', function () {
+  withPerfFixtures_(function (fx) {
+    var cl = __SHEETS['거래처'];
+    var iMgr = cl[0].indexOf('담당자');
+    cl[1][iMgr] = '최담당';           // S001 을 choi(최담당) 담당으로
+    setTier_('choi', '2단계');
+    var res = getMonthlyPerformance(fx.ym, 3, '', STAFF_TOKEN);
+    eq(res.managers.length, 1, 'STAFF 에 타 담당자 실적이 보임');
+    var m = res.managers[0];
+    eq(m.당월.직납매출, 1000000, 'STAFF 직납');
+    eq(m.당월.예상처방금액, 20000, 'STAFF 예상 처방');
+    // 원본 50% → 48%, 60% → 58% : 10000*0.48 + 10000*0.58
+    eq(m.당월.예상수수료, 10600, 'STAFF 예상수수료가 등급 차감값이 아님');
+    var txt = JSON.stringify(res);
+    ['요율등급', '원본요율', '요율차감'].forEach(function (k) {
+      ok(txt.indexOf(k) === -1, 'STAFF 응답에 ' + k + ' 가 들어 있음');
+    });
+    ok(txt.indexOf('정담당') === -1, 'STAFF 응답에 타 담당자 이름이 들어 있음');
+  });
+});
+
+t('월별 실적: 같은 달 같은 약의 중복 줄(앞자리 0)은 한 번만 집계', function () {
+  withPerfFixtures_(function (fx) {
+    addRxRow_({ 처방ID: 'RXPERF1DUP', 기준월: fx.ym, 처방일: fx.today, 거래처코드: fx.codeA, 거래처명: 'A의원', 담당자: '최충의', 제약사: '테스트제약', 보험코드: '73001620', 품목명: '건피드정', 규격: '', 약가: 1000, 수량: 10, 처방금액: 10000, 수수료율: 50, 예상수수료: 5000, 비고: '', 등록일시: fx.today + ' 09:30:00' });
+    var res = getMonthlyPerformance(fx.ym, 3, '', TOKEN);
+    var m = perfMgr_(res, '최충의');
+    eq(m.당월.예상처방금액, 20000, '중복 줄이 두 번 더해짐');
+    eq(m.당월.처방건수, 2, '중복 줄이 품목 수에 더해짐');
+    var a = perfClient_(res, fx.codeA);
+    eq(a.예상처방금액, 20000, '병원별 중복 합산');
+  });
+});
+
+t('월별 실적: 기준월이 날짜로 굳은 처방 줄도 같은 달로 집계', function () {
+  withPerfFixtures_(function (fx) {
+    var list = __SHEETS['처방내역'];
+    var iM = list[0].indexOf('기준월');
+    list[1][iM] = fx.ym + '-01';   // 시트가 날짜로 바꿔 저장한 상태
+    var res = getMonthlyPerformance(fx.ym, 3, '', TOKEN);
+    var m = perfMgr_(res, '최충의');
+    ok(m, '담당자 행 없음');
+    eq(m.당월.예상처방금액, 20000, '날짜로 굳은 기준월이 집계되지 않음');
+  });
+});
+
+t('월별 실적: 거래기간 밖 달의 처방은 그 달 칸에만 들어감', function () {
+  withPerfFixtures_(function (fx) {
+    addRxRow_({ 처방ID: 'RXPERFOLD', 기준월: '2026-09', 처방일: '2026-09-10', 거래처코드: fx.codeA, 거래처명: 'A의원', 담당자: '최충의', 제약사: '테스트제약', 보험코드: '649100710', 품목명: '암펙솔정', 규격: '', 약가: 100, 수량: 1, 처방금액: 100, 수수료율: 40, 예상수수료: 40, 비고: '', 등록일시: '2026-09-10 10:00:00' });
+    var res = getMonthlyPerformance('2026-11', 6, '', TOKEN);
+    eq(res.months[0], '2026-06', '6개월 추이 시작');
+    var sep = res.totals.series.filter(function (s) { return s.month === '2026-09'; })[0];
+    ok(sep, '2026-09 칸 없음');
+    eq(sep.예상처방금액, 100, '지난 달 예상 처방');
+    var nov = res.totals.series.filter(function (s) { return s.month === '2026-11'; })[0];
+    eq(nov.예상처방금액, 22000, '당월 예상 처방');
+    eq(nov.직납매출, 1000000, '당월 직납');
+  });
+});
+
 // ------------------------------------------------------------------ 결과
 var PASSED = RESULTS.filter(function (r) { return r.ok; }).length;
 var FAILED = RESULTS.length - PASSED;

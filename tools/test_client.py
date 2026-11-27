@@ -11,6 +11,7 @@
 
 사용: python3 tools/test_client.py
 """
+import json
 import os
 import re
 import sys
@@ -70,7 +71,7 @@ def main():
         print('(esprima 없음 — 문법 검사 생략: pip install esprima)')
 
     # 2) v1.6 요소
-    check("const APP_VERSION = 'v1.7'" in js, 'APP_VERSION 이 v1.7 이 아닙니다')
+    check("const APP_VERSION = 'v1.8'" in js, 'APP_VERSION 이 v1.8 이 아닙니다')
     check('id: \'drug\'' in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
     check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
     check('guideTabBar_' in js and 'switchGuideTab' in js, '경구제/주사제 탭이 없습니다')
@@ -161,7 +162,7 @@ def main():
         used = set(re.findall(r"runServer\('([A-Za-z_$][\w$]*)'", js))
         missing = sorted(u for u in used if u not in api)
         check(not missing, 'Code.gs 에 없는 서버 함수 호출: %s' % ', '.join(missing))
-        check('v1.7' in code, 'Code.gs 버전이 v1.7 이 아닙니다')
+        check("const APP_VERSION = 'v1.8'" in code, 'Code.gs 버전이 v1.8 이 아닙니다')
         check(re.search(r'getHiraPrevisitBriefing\s*:\s*getHiraPrevisitBriefing', code) is not None,
               'Code.gs apiFunctions_ 에 getHiraPrevisitBriefing 이 없습니다')
         check(re.search(r'checkHiraApi\s*:\s*checkHiraApi', code) is not None,
@@ -233,6 +234,24 @@ def main():
     check("'지난 ' + fmtNum(r.지난수량)" in js, '수량 입력칸 안내문(지난 N개)이 없습니다')
     check("placeholder=\"' + (r.지난수량 ? String(r.지난수량) : '0') + '\"" not in js,
           '수량 입력칸이 지난 수량을 실제 값처럼 보이게 표시합니다')
+
+    # 4-f) 월별 실적 — 직납(거래내역) + 예상 처방(처방내역) 합산 (v1.8)
+    check('예상 총매출' in js and '예상 처방금액' in js and '예상 수수료' in js,
+          '월별 실적에 예상 표기(예상 총매출·예상 처방금액·예상 수수료)가 없습니다')
+    check('익익월' in js, '처방 실적 예상 안내(익익월 정산) 문구가 없습니다')
+    check('직납 매출 (확정)' in js or '직납 매출(확정)' in js, '직납 매출 확정 표기가 없습니다')
+    check('function perfCell_' in js and 'function perfSumRows' in js, '실적 셀 정리 함수가 없습니다')
+    check('setPerfMatrixMetric' in js and 'perfMatrixValue_' in js, '담당자×월 기준 전환이 없습니다')
+    check('perfRxNote_' in js, '처방 예상 안내 함수가 없습니다')
+    perf_fn = re.search(r'function renderPerfPage\(container\)\s*\{(.*?)\n   \}', js, re.S)
+    check(bool(perf_fn), 'renderPerfPage 를 찾지 못했습니다')
+    if perf_fn:
+        body = perf_fn.group(1)
+        check(body.count('table-wrap') >= 4, '월별 실적 표가 table-wrap 으로 감싸지지 않았습니다')
+        check('예상 총매출' in body and '예상 처방금액' in body and '예상 수수료' in body,
+              '월별 실적 표에 예상 항목 열이 없습니다')
+        check('직납 매출' in body and '수금' in body, '직납·수금 열이 없습니다')
+        check('perf-note' in body, '예상 안내 문구(perf-note)가 화면에 없습니다')
 
     # 5) 순수 함수 실행 (QuickJS)
     try:
@@ -483,6 +502,141 @@ def main():
             check('073001620' in html, '보험코드가 표시되지 않습니다')
     except ImportError:
         print('(quickjs 없음 — 보험코드 정규화 실행 검사 생략: pip install quickjs)')
+
+    # 8) 월별 실적 셀 정리·합산 실행 검사 (직납 + 예상 처방)
+    try:
+        import quickjs
+        ctx = quickjs.Context()
+
+        def q(v):
+            return v.decode() if isinstance(v, bytes) else v
+
+        ctx.eval('function fmtNum(n) { return String(Math.round(Number(n || 0))); }')
+        for name in ['perfCell_', 'perfSumRows']:
+            block = extract_fn(js, name)
+            check(block is not None, '%s 를 추출하지 못했습니다' % name)
+            if block:
+                ctx.eval(block)
+        # 예전 서버(처방 항목 없음) 응답 — 직납=매출합계, 예상 처방 0으로 채워야 함
+        old = q(ctx.eval("JSON.stringify(perfCell_({ month: '2026-11', 매출합계: 1000000, 매출공급가: 909091, 매출건수: 2, 수금합계: 400000, 수금건수: 1 }))"))
+        check('"직납매출":1000000' in old and '"예상처방금액":0' in old and '"예상총매출":1000000' in old,
+              '예전 서버 응답에서 직납/예상 처방 채우기가 틀립니다: %s' % old)
+        # 새 서버 응답 — 직납·예상 처방·예상 총매출이 각각 유지
+        new = q(ctx.eval(
+            "JSON.stringify(perfCell_({ month: '2026-11', 매출합계: 1000000, 직납매출: 1000000,"
+            " 처방금액: 20000, 예상처방금액: 20000, 예상수수료: 11000, 총매출: 1020000, 예상총매출: 1020000,"
+            " 총건수: 3, 수금합계: 400000 }))"))
+        check('"직납매출":1000000' in new and '"예상처방금액":20000' in new and '"예상총매출":1020000' in new,
+              '직납/예상 처방/예상 총매출이 유지되지 않습니다: %s' % new)
+        # 담당자 두 명 합산 — 직납·예상 처방·예상 총매출·수금·미수금
+        summed = q(ctx.eval(
+            "JSON.stringify(perfSumRows(["
+            "{ 담당자: 'A', 거래처수: 2, 미수금: 600000, 전월총매출: 0,"
+            "  당월: { 직납매출: 1000000, 직납공급가: 909091, 직납건수: 1, 처방금액: 20000, 예상처방금액: 20000,"
+            "          처방건수: 2, 예상수수료: 11000, 총매출: 1020000, 예상총매출: 1020000, 총건수: 3,"
+            "          수금합계: 400000, 수금건수: 1 } },"
+            "{ 담당자: 'B', 거래처수: 1, 미수금: 0, 전월총매출: 0,"
+            "  당월: { 직납매출: 0, 처방금액: 2000, 예상처방금액: 2000, 처방건수: 1, 예상수수료: 800,"
+            "          총매출: 2000, 예상총매출: 2000, 총건수: 1, 수금합계: 0 } }"
+            "]))"))
+        d = json.loads(summed)
+        check(d['직납매출'] == 1000000, '합산 직납 오류: %s' % d['직납매출'])
+        check(d['예상처방금액'] == 22000, '합산 예상 처방 오류: %s' % d['예상처방금액'])
+        check(d['예상총매출'] == 1022000, '합산 예상 총매출 오류: %s' % d['예상총매출'])
+        check(d['예상수수료'] == 11800, '합산 예상 수수료 오류: %s' % d['예상수수료'])
+        check(d['수금합계'] == 400000 and d['미수금'] == 600000, '합산 수금·미수금 오류')
+        check(d['전월총매출'] == 0 and d['전월대비'] is None, '전월 없을 때 전월비가 null 이 아닙니다')
+    except ImportError:
+        pass
+
+    # 9) 월별 실적 화면 렌더 실행 검사 — 예상 표기·열 구성·서버 재배포 안내
+    try:
+        import quickjs
+        names = ['perfCell_', 'perfAmt_', 'perfDeltaHtml', 'perfSumRows', 'perfMatrixMetric_',
+                 'perfMatrixValue_', 'perfRxNote_', 'renderPerfPage', 'versionNum_', 'serverAtLeast_']
+        blocks = [extract_fn(js, n) for n in names]
+        missing = [n for n, b in zip(names, blocks) if b is None]
+        check(not missing, '월별 실적 렌더 함수를 추출하지 못했습니다: %s' % missing)
+        if not missing:
+            def q(v):
+                return v.decode() if isinstance(v, bytes) else v
+
+            def render(server_version, metric):
+                ctx = quickjs.Context()
+                ctx.eval("""
+                var STATE = {
+                  perfManager: '', perfShowClients: true, perfMatrixMetric: '%s',
+                  serverVersion: '%s', perfData: null
+                };
+                var __html = '';
+                var container = { set innerHTML(v) { __html = v; } };
+                function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+                function fmtNum(n) { return String(Math.round(Number(n || 0))).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ','); }
+                function renderActiveMenu() {}
+                function togglePerfClients() {}
+                function loadPerfModule() {}
+                function changePerfMonth(v) {}
+                function setPerfMonths(v) {}
+                function setPerfManager(v) {}
+                function setPerfMatrixMetric(v) {}
+                """ % (metric, server_version))
+                for b in blocks:
+                    ctx.eval(b)
+                ctx.eval("""
+                STATE.perfData = {
+                  targetMonth: '2026-11', monthEnd: '2026-11-30', isMaster: true,
+                  months: ['2026-09', '2026-10', '2026-11'],
+                  rxNote: '처방 실적은 익익월 정산 확정 전 입력 기준 예상치입니다.',
+                  managers: [
+                    { 담당자: '최충의', 거래처수: 3, 미수금: 600000, 전월총매출: 0, 전월대비: null,
+                      당월: { 직납매출: 1000000, 직납공급가: 909091, 직납건수: 1, 처방금액: 20000,
+                              예상처방금액: 20000, 처방건수: 2, 예상수수료: 11000,
+                              총매출: 1020000, 예상총매출: 1020000, 총건수: 3, 수금합계: 400000, 수금건수: 1 },
+                      series: [
+                        { month: '2026-09', 직납매출: 0, 예상처방금액: 0, 예상총매출: 0, 예상수수료: 0, 수금합계: 0 },
+                        { month: '2026-10', 직납매출: 500000, 예상처방금액: 0, 예상총매출: 500000, 예상수수료: 0, 수금합계: 0 },
+                        { month: '2026-11', 직납매출: 1000000, 직납공급가: 909091, 직납건수: 1, 예상처방금액: 20000,
+                          처방건수: 2, 예상수수료: 11000, 예상총매출: 1020000, 총건수: 3, 수금합계: 400000, 수금건수: 1 }
+                      ] }
+                  ],
+                  totals: {
+                    거래처수: 3, 미수금: 600000, 전월매출: 0, 전월총매출: 0, 전월대비: null,
+                    당월: { 직납매출: 1000000, 직납공급가: 909091, 직납건수: 1, 예상처방금액: 20000,
+                            처방건수: 2, 예상수수료: 11000, 예상총매출: 1020000, 총건수: 3,
+                            수금합계: 400000, 수금건수: 1 },
+                    series: [
+                      { month: '2026-09', 직납매출: 0, 예상처방금액: 0, 예상총매출: 0, 예상수수료: 0, 수금합계: 0 },
+                      { month: '2026-10', 직납매출: 500000, 예상처방금액: 0, 예상총매출: 500000, 예상수수료: 0, 수금합계: 0 },
+                      { month: '2026-11', 직납매출: 1000000, 예상처방금액: 20000, 예상수수료: 11000, 예상총매출: 1020000, 수금합계: 400000 }
+                    ]
+                  },
+                  clients: [
+                    { 거래처코드: 'S001', 거래처명: '푸른정의원', 담당자: '최충의', 미수금: 600000,
+                      직납매출: 1000000, 직납건수: 1, 예상처방금액: 20000, 처방건수: 2, 예상수수료: 11000,
+                      예상총매출: 1020000, 총건수: 3, 수금합계: 400000, 수금건수: 1 }
+                  ]
+                };
+                renderPerfPage(container);
+                """)
+                return q(ctx.eval('__html'))
+
+            html_new = render('v1.8', 'total')
+            for label in ['예상 총매출', '예상 처방금액', '예상 수수료', '직납 매출', '당월 수금 / 미수금',
+                          '익익월', '1,020,000', '20,000', '11,000', 'table-wrap', 'perf-note']:
+                check(label in html_new, '월별 실적 화면에 %s 가 없습니다' % label)
+            check(html_new.count('table-wrap') >= 4, '월별 실적 표가 모두 table-wrap 으로 감싸지지 않았습니다')
+            check('⚠️ 시트 서버' not in html_new, '서버가 최신인데 재배포 안내가 나옵니다')
+            check('푸른정의원' in html_new, '병원별 표에 거래처가 없습니다')
+            check('onchange="setPerfMatrixMetric' in html_new, '담당자×월 기준 선택기가 없습니다')
+            check('담당자 × 월 예상 총매출' in html_new, '담당자×월 표 제목이 없습니다')
+
+            html_old = render('v1.7', 'rx')
+            check('⚠️ 시트 서버' in html_old and '재배포' in html_old,
+                  '시트 서버가 예전일 때 재배포 안내가 없습니다')
+            html_master = render('v1.8', 'direct')
+            check('담당자 × 월 직납 매출(확정)' in html_master, '담당자×월 기준(직납) 표시가 없습니다')
+    except ImportError:
+        pass
 
     print('=' * 62)
     if fails:
