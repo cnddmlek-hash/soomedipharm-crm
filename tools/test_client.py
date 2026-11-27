@@ -31,6 +31,27 @@ def check(cond, label):
         fails.append(label)
 
 
+
+def extract_fn(js, name):
+    """`   function name(...) { ... }` 블록을 중괄호 깊이로 잘라 냅니다 (QuickJS 실행용)."""
+    m = re.search(r'\n   function %s\(' % re.escape(name), js)
+    if not m:
+        return None
+    start = m.start() + 1
+    i = js.index('{', m.start())
+    depth = 0
+    while i < len(js):
+        ch = js[i]
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                return js[start:i + 1]
+        i += 1
+    return None
+
+
 def main():
     html = open(INDEX, encoding='utf-8').read()
     scripts = re.findall(r'<script>(.*?)</script>', html, re.S)
@@ -159,6 +180,21 @@ def main():
     else:
         print('(Code.gs 없음 — 서버 함수 대조 생략)')
 
+    # 4-b) 가이드 → 처방전 연결 (v1.7 버그 수정)
+    check('STATE.rxGuideCodes' in js and 'rxGuideCodes: []' in js, '가이드 품목 유지 목록(rxGuideCodes)이 없습니다')
+    rec_fn = re.search(r'function renderGuideRecommend\(\)\s*\{(.*?)\n   \}', js, re.S)
+    check(bool(rec_fn) and 'forEach(guideCacheProduct_)' in rec_fn.group(1), '추천 렌더에서 품목 캐시가 없습니다')
+    send_fn = re.search(r'function guideSendToRx\(\)\s*\{(.*?)\n   \}', js, re.S)
+    check(bool(send_fn) and 'guideCacheProduct_' in send_fn.group(1), '보내기 시점 캐시가 없습니다')
+    check(bool(send_fn) and 'rxGuideCodes' in send_fn.group(1), '보내기 시점 유지목록 기록이 없습니다')
+    add_fn = re.search(r'function guideAddItem\(code\)\s*\{(.*?)\n   \}', js, re.S)
+    check(bool(add_fn) and 'guideFindProduct_' in add_fn.group(1), '+담기 시점 품목 조회가 없습니다')
+    lrx = re.search(r'async function loadRxData\(opts\)\s*\{(.*?)\n   \}', js, re.S)
+    check(bool(lrx) and 'applyGuidePending()' in lrx.group(1), '처방전 목록 로드 후 가이드 품목 재적용이 없습니다')
+    ap = re.search(r'function applyGuidePending\(\)\s*\{(.*?)\n   \}', js, re.S)
+    check(bool(ap) and 'rxGuideCodes' in ap.group(1), 'applyGuidePending 이 유지목록을 쓰지 않습니다')
+    check(bool(ap) and 'if (!STATE.rxClient) return 0' in ap.group(1), '병원 미선택 시 보류 처리가 없습니다')
+
     # 5) 순수 함수 실행 (QuickJS)
     try:
         import quickjs
@@ -183,6 +219,61 @@ def main():
             check(False, 'birthDday_ 함수를 추출하지 못했습니다')
     except ImportError:
         print('(quickjs 없음 — 순수 함수 실행 검사 생략: pip install quickjs)')
+
+    # 6) 가이드 → 처방전 연결 실행 검사 (이엘파마 경구 품목이 STATE.products 에 없어도 유지되는지)
+    try:
+        import quickjs
+        names = ['guideCacheProduct_', 'guideFindProduct_', 'guideAddItem', 'guideSendToRx', 'applyGuidePending']
+        blocks = [extract_fn(js, n) for n in names]
+        if any(b is None for b in blocks):
+            check(False, '가이드→처방전 함수를 추출하지 못했습니다: %s' % [n for n, b in zip(names, blocks) if b is None])
+        else:
+            ctx = quickjs.Context()
+            ctx.eval('''
+            var STATE = {
+              guideRec: { picks: [
+                { 보험코드: 'E100', 품목명: '베아셋정', 규격: '', 제약사: '대웅바이오', 약가: 1063, 수수료율: 54, 성분: '아세트아미노펜' },
+                { 보험코드: 'E200', 품목명: '아토타틴정10mg', 규격: '', 제약사: '(주)일화', 약가: 1971, 수수료율: 34, 성분: '아토르바스타틴' }
+              ] },
+              guideData: null, guideProductCache: {}, guidePending: [], rxGuideCodes: [],
+              rxRows: [], rxClient: '', rxFrequent: [], products: [],
+              rxDirty: false, rxMonth: '2026-11'
+            };
+            var __toasts = [], __menus = [], __renders = 0, __sums = 0;
+            function showToast(m) { __toasts.push(String(m)); }
+            function switchMenu(id) { __menus.push(String(id)); }
+            function renderRxRows() { __renders++; }
+            function updateRxSummary() { __sums++; }
+            function esc(s) { return String(s == null ? '' : s); }
+            ''')
+            for b in blocks:
+                ctx.eval(b)
+
+            # (A) 추천에서 '처방전 입력으로 보내기' → 병원 선택 후 서버 목록이 0건이어도 유지
+            ctx.eval("guideSendToRx();")
+            check(ctx.eval("__menus.join(',')").decode() if isinstance(ctx.eval("__menus.join(',')"), bytes) else ctx.eval("__menus.join(',')") == 'prescription', '보내기가 처방전 화면으로 이동하지 않음')
+            ctx.eval("STATE.rxClient = 'S001'; STATE.rxRows = [];")   # 서버가 저장·빠른 품목 0건을 돌려준 상황
+            ctx.eval("applyGuidePending();")
+            got = ctx.eval("[STATE.rxRows.length, (STATE.rxRows[0]||{}).보험코드, (STATE.rxRows[0]||{}).품목명, (STATE.rxRows[0]||{}).수량, String((STATE.rxRows[0]||{}).saved)].join('|')")
+            got = got.decode() if isinstance(got, bytes) else got
+            check(got == '2|E100|베아셋정||false', '병원 선택 후 가이드 품목이 유지되지 않음: %s' % got)
+            check(ctx.eval("Object.keys(STATE.guideProductCache).length") == 2, '추천 품목이 보험코드로 캐시되지 않음')
+
+            # (B) 캐시가 비어 있어도 +담기/보내기 시점에 되찾아 담는지
+            ctx.eval("STATE.guideProductCache = {}; STATE.rxRows = []; STATE.guidePending = []; STATE.rxGuideCodes = []; guideAddItem('E200');")
+            ctx.eval("applyGuidePending();")
+            got2 = ctx.eval("[STATE.rxRows.length, (STATE.rxRows[0]||{}).보험코드].join('|')")
+            got2 = got2.decode() if isinstance(got2, bytes) else got2
+            check(got2 == '1|E200', '+담기 품목이 처방전 목록에 안 들어감: %s' % got2)
+
+            # (C) 병원 미선택이면 보류 — 목록을 비우지 않음
+            ctx.eval("STATE.rxClient = ''; STATE.rxRows = []; STATE.guidePending = ['E100'];")
+            ctx.eval("applyGuidePending();")
+            hold = ctx.eval("[STATE.rxRows.length, STATE.guidePending.join(',')].join('|')")
+            hold = hold.decode() if isinstance(hold, bytes) else hold
+            check(hold == '0|E100', '병원 미선택 시 품목이 사라짐: %s' % hold)
+    except ImportError:
+        pass
 
     print('=' * 62)
     if fails:
