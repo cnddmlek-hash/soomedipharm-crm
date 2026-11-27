@@ -2746,7 +2746,8 @@
      renderActiveMenu();
    }
 
-   function renderHiraPage(container) {
+   function renderHiraPage(container, opts) {
+     const emb = Boolean(opts && opts.embedded);   // 다른 화면(거래처 상세정보) 탭에 넣을 때는 제목 줄 생략
      const base = STATE.hiraBase || {};
      const apiGuide = base.apiGuide || {};
      const depts = base.deptOptions || [];
@@ -2756,10 +2757,12 @@
      const outdated = STATE.serverVersion && !serverAtLeast_('v1.7');
 
      container.innerHTML =
-       '<div class="page-header">' +
-         '<h2 class="page-title">🏥 비거래처 사전조회 <small style="font-size:12px;color:var(--muted);font-weight:500;">심평원(HIRA) 공개자료 + 우리 다처방</small></h2>' +
-         '<span class="badge ' + (base.configured ? 'badge-success' : 'badge-muted') + '">' + (base.configured ? '심평원 실시간 조회 켜짐' : '오프라인 브리핑 모드') + '</span>' +
-       '</div>' +
+       (emb
+         ? '<div style="display:flex;justify-content:flex-end;margin-bottom:6px;"><span class="badge ' + (base.configured ? 'badge-success' : 'badge-muted') + '">' + (base.configured ? '심평원 실시간 조회 켜짐' : '오프라인 브리핑 모드') + '</span></div>'
+         : '<div class="page-header">' +
+             '<h2 class="page-title">🏥 비거래처 사전조회 <small style="font-size:12px;color:var(--muted);font-weight:500;">심평원(HIRA) 공개자료 + 우리 다처방</small></h2>' +
+             '<span class="badge ' + (base.configured ? 'badge-success' : 'badge-muted') + '">' + (base.configured ? '심평원 실시간 조회 켜짐' : '오프라인 브리핑 모드') + '</span>' +
+           '</div>') +
        (outdated
          ? '<div class="card" style="border-color:#fde68a;background:#fffbeb;"><div style="font-size:12.5px;line-height:1.6;color:#92400e;">' +
              '⚠️ 시트 서버(Code.gs)가 <b>' + esc(STATE.serverVersion) + '</b> 라서 <b>비거래처 사전조회</b>는 아직 동작하지 않습니다. 구글 시트 Apps Script 에 최신 <b>Code.gs</b>를 넣고 [배포 관리 → 수정 → 새 버전]으로 재배포해 주세요.' +
@@ -3232,7 +3235,7 @@
      const box = document.getElementById('ci-body');
      if (!box) return;
      if (tab === 'hira') {
-       renderHiraPage(box);
+       renderHiraPage(box, { embedded: true });
        if (!STATE.hiraBase) loadHiraBase_();
        return;
      }
