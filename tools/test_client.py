@@ -48,9 +48,9 @@ def main():
     except ImportError:
         print('(esprima 없음 — 문법 검사 생략: pip install esprima)')
 
-    # 2) v1.5 요소
-    check("const APP_VERSION = 'v1.5'" in js, 'APP_VERSION 이 v1.5 가 아닙니다')
-    check("id: 'drug'" in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
+    # 2) v1.6 요소
+    check("const APP_VERSION = 'v1.6'" in js, 'APP_VERSION 이 v1.6 이 아닙니다')
+    check('id: \'drug\'' in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
     check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
     check('guideTabBar_' in js and 'switchGuideTab' in js, '경구제/주사제 탭이 없습니다')
     check("'💊 경구제 셋팅 (원외처방)'" in js or '경구제 셋팅 (원외처방)' in js, '경구제 셋팅 탭이 없습니다')
@@ -84,6 +84,21 @@ def main():
     check('loadBirthdaySettings' in js and 'installBirthdayTrigger' in js, '생일 알림 설정이 없습니다')
     check('applyGuidePending' in js, '처방전으로 보내기 연결이 없습니다')
 
+    # 2-b) 요율등급 3단계 (v1.6) — MASTER 전용 화면 요소
+    check('RATE_TIER_CHOICES' in js, '요율등급 선택지가 없습니다')
+    check('1단계 (-1%p)' in js and '2단계 (-2%p)' in js and '3단계 (-3%p)' in js,
+          '요율등급 1·2·3단계 표기가 없습니다')
+    check('function userSetTier' in js, 'userSetTier 함수가 없습니다')
+    check("runServer('updateUserTier'" in js, 'updateUserTier 호출이 없습니다')
+    check('tierOptionsHtml_' in js, '등급 선택지 생성 함수가 없습니다')
+    users_fn = re.search(r'function usersSectionHtml_\(\)\s*\{(.*?)\n   \}', js, re.S)
+    check(bool(users_fn), 'usersSectionHtml_ 를 찾지 못했습니다')
+    if users_fn:
+        body = users_fn.group(1)
+        check('tierCell' in body and 'userSetTier' in body, '사용자 목록에 등급 선택기가 없습니다')
+        check('요율등급' in body, '사용자 목록에 요율등급 열이 없습니다')
+        check('차감 없음' in body, 'MASTER 행의 차감 없음 표기가 없습니다')
+
     # 3) 정의된 함수 목록
     defined = set(re.findall(r'function\s+([A-Za-z_$][\w$]*)\s*\(', js))
     defined |= set(re.findall(r'const\s+([A-Za-z_$][\w$]*)\s*=\s*function', js))
@@ -104,7 +119,11 @@ def main():
         used = set(re.findall(r"runServer\('([A-Za-z_$][\w$]*)'", js))
         missing = sorted(u for u in used if u not in api)
         check(not missing, 'Code.gs 에 없는 서버 함수 호출: %s' % ', '.join(missing))
-        check('v1.5' in code, 'Code.gs 버전이 v1.5 가 아닙니다')
+        check('v1.6' in code, 'Code.gs 버전이 v1.6 이 아닙니다')
+        check(re.search(r'updateUserTier\s*:\s*updateUserTier', code) is not None,
+              'Code.gs apiFunctions_ 에 updateUserTier 가 없습니다')
+        for name in ['rateCutPercent_', 'applyRateCut_', 'normalizeTier_', 'productsForUser_', 'setUserTierCell_']:
+            check(name in code, 'Code.gs 에 %s 가 없습니다' % name)
         for name in ['getInjectGuide', 'getInjectProtocols', 'getCoverageNotes', 'getDeptGuide', 'recommendRegimen', 'looksParenteral_', 'dosageFormOf_',
                      'recommendMinMakers_', 'evalMakerSet_', 'cmpMakerEval_', 'betterPick_',
                      'nameStem_', 'similarNameHits_', 'drugAutoLink', 'injectProtocolMatches_', 'kpicHealth']:

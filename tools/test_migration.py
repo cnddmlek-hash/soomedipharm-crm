@@ -69,7 +69,15 @@ def main():
             check(got[:len(base)] == base, '%s 기존 열 순서가 바뀌었습니다: %s' % (name, got[:len(base)]))
         check(heads.get('거래처', [])[-3:] == ['원장성함', '원장생일', '취향/특이사항'], '거래처 v1.4 열이 뒤에 붙지 않았습니다')
         check(heads.get('제품마스터', [])[-2:] == ['성분명', '성분키'], '제품마스터 성분 열이 없습니다')
-        check(heads.get('사용자', [])[-1] == '이메일', '사용자 이메일 열이 없습니다')
+        check(heads.get('사용자', [])[-2:] == ['이메일', '요율등급'], '사용자 이메일·요율등급 열 순서가 다릅니다: %s' % heads.get('사용자'))
+
+        # v1.6 요율등급 — 서버 상수·기본값
+        check("const RATE_TIER_CUTS = { '1단계': 1, '2단계': 2, '3단계': 3 }" in code, 'RATE_TIER_CUTS 정의가 다릅니다')
+        check("const DEFAULT_STAFF_TIER = '2단계'" in code, '기존 STAFF 기본 등급이 2단계가 아닙니다')
+        check("const NEW_SIGNUP_TIER = '3단계'" in code, '신규 가입 기본 등급이 3단계가 아닙니다')
+        for name in ['rateCutPercent_', 'applyRateCut_', 'publicUser_', 'updateUserTier', 'setUserTierCell_', 'productRateMap_']:
+            check(name in code, 'Code.gs 에 %s 가 없습니다' % name)
+        check(re.search(r'updateUserTier\s*:\s*updateUserTier', code) is not None, 'updateUserTier 가 apiFunctions_ 에 없습니다')
         for tab in V14_TABS:
             check(tab in heads and len(heads[tab]) >= 6, '%s 탭 머리글이 없습니다' % tab)
         check(heads.get('진료과성분', [])[-1] == '처방포인트', '진료과성분 처방포인트 열이 없습니다')
@@ -83,7 +91,7 @@ def main():
         for name in ['looksParenteral_', 'dosageFormOf_', 'productsOfForm_', 'productIndexByIngredient_',
                      'injectCategoryOf_', 'injectPicks_', 'getInjectGuide']:
             check(name in code, 'Code.gs 에 %s 가 없습니다' % name)
-        check("const APP_VERSION = 'v1.5'" in code, 'Code.gs 버전이 v1.5 가 아닙니다')
+        check("const APP_VERSION = 'v1.6'" in code, 'Code.gs 버전이 v1.6 이 아닙니다')
         check(re.search(r'getInjectGuide\s*:\s*getInjectGuide', code) is not None, 'getInjectGuide 가 apiFunctions_ 에 없습니다')
 
     # ---------------- 2-d. v1.5.1 최소 제약사 — 상한 안에서 요율 최대화
@@ -103,6 +111,22 @@ def main():
 
     # ---------------- 3-b. v1.5 제형 구분 (경상제/주사) — fixtures 기준
     fx = load('sheets.json')
+    # ---------------- 2-e. v1.6 요율등급 — 기존 STAFF 2단계 · MASTER 공란
+    if isinstance(fx, dict) and '사용자' in fx:
+        ut = fx['사용자']
+        if ut and '요율등급' in ut[0]:
+            hi = ut[0].index('요율등급')
+            tiers = {}
+            for r in ut[1:]:
+                tier = str(r[hi]).strip() if len(r) > hi else ''
+                tiers.setdefault(str(r[ut[0].index('권한')]).strip().upper(), []).append(tier)
+            check(tiers.get('MASTER') == [''], 'MASTER 계정의 요율등급은 공란이어야 합니다: %s' % tiers.get('MASTER'))
+            bad = [t for t in tiers.get('STAFF', []) if t not in ('1단계', '2단계', '3단계')]
+            check(not bad, 'STAFF 요율등급 값이 이상합니다: %s' % bad)
+            check(tiers.get('STAFF', []).count('2단계') >= 1, '기존 STAFF 가 2단계가 아닙니다: %s' % tiers.get('STAFF'))
+        else:
+            check(False, 'fixtures 사용자 탭에 요율등급 열이 없습니다')
+
     if isinstance(fx, dict) and '제품마스터' in fx and '이엘파마품목' in fx:
         def tab_rows(tab):
             t = fx[tab]

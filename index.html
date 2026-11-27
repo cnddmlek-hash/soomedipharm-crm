@@ -254,6 +254,17 @@
      box-shadow: 0 0 0 2px rgba(14,165,233,0.18);
    }
 
+   /* 설정 → 사용자 목록의 요율등급 선택기 (MASTER 전용 화면) */
+   .tier-select {
+     width: auto;
+     min-width: 124px;
+     padding: 4px 8px;
+     font-size: 12.5px;
+     font-weight: 700;
+     color: #1e3a5f;
+     cursor: pointer;
+   }
+
    .btn {
      display: inline-flex;
      align-items: center;
@@ -1125,7 +1136,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.5';
+   const APP_VERSION = 'v1.6';
 
    const STATE = {
      // 로그인/권한
@@ -6217,6 +6228,12 @@
        const roleBadge = u.권한 === 'MASTER'
          ? '<span class="badge badge-blue">MASTER</span>'
          : '<span class="badge badge-muted">STAFF</span>';
+       /* 요율등급 — MASTER 화면에만 보이는 값. STAFF 에게는 서버가 아예 내려보내지 않습니다. */
+       const tierCell = u.권한 === 'MASTER'
+         ? '<span class="badge badge-muted">차감 없음</span>'
+         : '<select class="select tier-select" data-uid="' + esc(u.아이디) + '" onchange="userSetTier(this.dataset.uid, this.value)" title="회원이 보는 수수료율에서 %p 만큼 차감합니다 (최소 0%)">' +
+             tierOptionsHtml_(u.요율등급) +
+           '</select>';
        let action = '';
        if (isMe) {
          action = '<span style="color:var(--muted);font-size:11.5px;">본인 계정</span>';
@@ -6229,10 +6246,11 @@
          '<td><strong>' + esc(u.아이디) + '</strong>' + (isMe ? ' <small style="color:var(--muted);">(나)</small>' : '') + '</td>' +
          '<td>' + esc(u.담당자명) + '</td>' +
          '<td class="center">' + roleBadge + '</td>' +
+         '<td class="center">' + tierCell + '</td>' +
          '<td class="center">' + stateBadge + '</td>' +
          '<td class="center">' + action + '</td>' +
        '</tr>';
-     }).join('') : '<tr><td colspan="5" class="center" style="padding:20px;color:var(--muted);">등록된 계정이 없습니다.</td></tr>';
+     }).join('') : '<tr><td colspan="6" class="center" style="padding:20px;color:var(--muted);">등록된 계정이 없습니다.</td></tr>';
 
      return '<div class="card">' +
        '<div class="card-title"><span>👥 사용자 목록 · 가입 승인' +
@@ -6242,14 +6260,45 @@
          ? '<div style="background:var(--warn-bg);border:1px solid #fde68a;border-radius:8px;padding:9px 12px;font-size:12.5px;color:#92400e;margin-bottom:10px;line-height:1.6;">승인 대기 ' + pending + '명이 있습니다. [✓ 승인]을 누르면 바로 로그인할 수 있습니다.</div>'
          : '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">가입 신청한 계정은 사용여부 <strong>N</strong>으로 들어오며, 승인해야 로그인됩니다.</div>') +
        '<div class="table-wrap"><table><thead><tr>' +
-         '<th>아이디</th><th>담당자명</th><th class="center">권한</th><th class="center">상태</th><th class="center">관리</th>' +
+         '<th>아이디</th><th>담당자명</th><th class="center">권한</th><th class="center">요율등급</th><th class="center">상태</th><th class="center">관리</th>' +
        '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
-       '<small style="display:block;margin-top:8px;color:var(--muted);font-size:11.5px;line-height:1.6;">* 비밀번호는 서버에서도 화면으로 내려보내지 않습니다. 본인은 상단 🔑 버튼에서 직접 변경합니다.</small>' +
+       '<small style="display:block;margin-top:8px;color:var(--muted);font-size:11.5px;line-height:1.6;">* 비밀번호는 서버에서도 화면으로 내려보내지 않습니다. 본인은 상단 🔑 버튼에서 직접 변경합니다.<br />* <strong>요율등급</strong>은 그 회원이 보는 수수료율에서 빼는 값입니다 — 1단계 -1%p · 2단계 -2%p · 3단계 -3%p(최소 0%). 등급을 고르면 바로 저장됩니다. 마스터는 원본 요율 그대로입니다.</small>' +
      '</div>';
    }
 
    function normalizeNameLite_(v) {
      return String(v == null ? '' : v).replace(/\s+/g, '').toLowerCase();
+   }
+
+   /** 요율등급 선택지 — 1단계(-1%p) / 2단계(-2%p) / 3단계(-3%p) */
+   const RATE_TIER_CHOICES = [
+     { value: '1단계', label: '1단계 (-1%p)' },
+     { value: '2단계', label: '2단계 (-2%p)' },
+     { value: '3단계', label: '3단계 (-3%p)' }
+   ];
+
+   function tierOptionsHtml_(current) {
+     const cur = String(current || '2단계');
+     return RATE_TIER_CHOICES.map(function (t) {
+       return '<option value="' + t.value + '"' + (t.value === cur ? ' selected' : '') + '>' + t.label + '</option>';
+     }).join('');
+   }
+
+   /** 회원 요율등급 변경 (MASTER 전용 · 고르는 즉시 저장) */
+   async function userSetTier(userId, tier) {
+     if (!STATE.isMaster) { showToast('MASTER 권한 전용 기능입니다.'); return; }
+     try {
+       const res = await runServer('updateUserTier', [userId, tier], { silent: true });
+       if (!res || res.success !== true) {
+         showToast('오류: ' + ((res && res.message) || '등급을 바꾸지 못했습니다.'));
+         await loadMailLogsModule();
+         return;
+       }
+       showToast(res.message || '요율등급을 변경했습니다.');
+       await loadMailLogsModule();
+     } catch (e) {
+       showToast(isMissingFunctionError_(e) ? '시트 서버(Code.gs)를 최신 버전으로 재배포해 주세요.' : ('오류: ' + friendlyError_(e)));
+     }
    }
 
    /** 가입 승인(Y) / 비활성(N) 전환 */

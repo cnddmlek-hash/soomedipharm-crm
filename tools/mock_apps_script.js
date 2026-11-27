@@ -16,7 +16,7 @@ var __UI_ALERTS = [];
   var add = {
     '거래처': ['원장성함', '원장생일', '취향/특이사항'],
     '제품마스터': ['성분명', '성분키'],
-    '사용자': ['이메일']
+    '사용자': ['이메일', '요율등급']
   };
   Object.keys(add).forEach(function (name) {
     var t = __SHEETS[name];

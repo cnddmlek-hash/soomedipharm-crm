@@ -707,6 +707,231 @@ t('진단: 시트별 적재 건수', function () {
   ok(st.rows['진료과성분'] > 0, '진료과성분 없음');
 });
 
+// ------------------------------------------------------------------ 10. 요율 등급 3단계 차등 (v1.6)
+function prodByCode_(list, code) {
+  return list.filter(function (x) { return String(x.보험코드) === String(code); })[0] || null;
+}
+function rateMapFrom_(list) {
+  var map = {};
+  (list || []).forEach(function (x) { map[String(x.보험코드 || '')] = Number(x.수수료율) || 0; });
+  return map;
+}
+
+// 테스트 순서를 위해 현재 등급을 바꾸는 헬퍼 (MASTER 토큰 사용)
+function setTier_(id, tier) {
+  var res = updateUserTier(id, tier, TOKEN);
+  ok(res && res.success, '등급 변경 실패: ' + (res && res.message));
+  return res;
+}
+
+t('요율등급: MASTER 는 원본 요율 그대로', function () {
+  var raw = getProductsRaw_();
+  var mine = getProducts(TOKEN);
+  eq(raw.length, mine.length);
+  var diff = raw.filter(function (p, i) { return Number(mine[i].수수료율) !== Number(p.수수료율); });
+  eq(diff.length, 0, 'MASTER 요율이 원본과 다름');
+});
+
+t('요율등급: STAFF 기본 2단계 = 원본 -2%p', function () {
+  setTier_('choi', '2단계');
+  var raw = getProductsRaw_();
+  var staff = getProducts(STAFF_TOKEN);
+  eq(raw.length, staff.length);
+  var bad = [];
+  raw.forEach(function (p, i) {
+    var want = Math.max(0, Number(p.수수료율) - 2);
+    if (Number(staff[i].수수료율) !== want) bad.push(p.제품명 + ':' + staff[i].수수료율 + '≠' + want);
+  });
+  eq(bad.length, 0, '2단계 차감 오류 ' + bad.slice(0, 3).join(', '));
+});
+
+t('요율등급: 1단계(-1%p) · 3단계(-3%p) 즉시 반영', function () {
+  var raw = getProductsRaw_();
+  [['1단계', 1], ['3단계', 3]].forEach(function (pair) {
+    setTier_('choi', pair[0]);
+    var staff = login('choi', 'test');
+    var mine = getProducts(staff.token);
+    var p = prodByCode_(raw, '647202372') || raw[0];
+    var got = prodByCode_(mine, p.보험코드);
+    eq(got.수수료율, Math.max(0, Number(p.수수료율) - pair[1]), pair[0] + ' 차감 오류');
+  });
+  setTier_('choi', '2단계');
+});
+
+t('요율등급: 요율이 차감보다 낮으면 0% 로 막힘', function () {
+  var pm = __SHEETS['제품마스터'], head = pm[0];
+  var row = head.map(function () { return ''; });
+  row[head.indexOf('보험코드')] = 'TESTLOW001';
+  row[head.indexOf('제품명')] = '테스트저요율주';
+  row[head.indexOf('규격')] = '1mL';
+  row[head.indexOf('기준단가')] = 1000;
+  row[head.indexOf('수수료율')] = 1;
+  row[head.indexOf('급여구분')] = '급여';
+  pm.push(row);
+  try {
+    setTier_('choi', '3단계');
+    var got = prodByCode_(getProducts(STAFF_TOKEN), 'TESTLOW001');
+    ok(got, '테스트 제품이 STAFF 목록에 없음');
+    eq(got.수수료율, 0, '0% 하한 미적용');
+    eq(prodByCode_(getProducts(TOKEN), 'TESTLOW001').수수료율, 1, 'MASTER 원본 훼손');
+  } finally {
+    pm.pop();
+    setTier_('choi', '2단계');
+  }
+});
+
+t('요율등급: STAFF 응답에 등급·차감률·원본요율 없음', function () {
+  setTier_('choi', '2단계');
+  var lg = login('choi', 'test');
+  ok(!('요율등급' in lg.user), 'login.user 에 요율등급');
+  var boot = getBootstrapData(lg.token);
+  ok(!('요율등급' in boot.user), 'bootstrap.user 에 요율등급');
+  ok(JSON.stringify(boot).indexOf('요율등급') === -1, '부트스트랩 응답 어딘가에 요율등급');
+  ok(JSON.stringify(boot).indexOf('차감') === -1, '부트스트랩 응답에 차감 안내');
+  eq(Object.keys(boot.user).sort().join(','), '권한,담당자명,아이디', 'bootstrap.user 필드');
+  var prods = getProducts(lg.token);
+  ok(prods.every(function (p) { return !('요율등급' in p) && !('원본수수료율' in p) && !('차감' in p); }), '제품 응답에 등급 필드');
+});
+
+t('요율등급: 검색·주사·추천·자동연동 경로도 차감된 요율만', function () {
+  setTier_('choi', '2단계');
+  var st = login('choi', 'test').token;
+  // (1) 이엘파마 검색
+  var ms = searchElpharmaProducts('정', 20, TOKEN);
+  var ss = searchElpharmaProducts('정', 20, st);
+  var mMap = rateMapFrom_(ms.items);
+  var bad = ss.items.filter(function (x) {
+    return mMap[x.보험코드] !== undefined && Number(x.수수료율) !== Math.max(0, mMap[x.보험코드] - 2);
+  });
+  eq(bad.length, 0, '이엘파마 검색 요율 미차감');
+  ok(JSON.stringify(ss).indexOf('요율등급') === -1, '검색 응답에 요율등급');
+  // (2) 주사제 셋팅
+  var mi = getInjectGuide({ limit: 10 }, TOKEN);
+  var si = getInjectGuide({ limit: 10 }, st);
+  var iMap = rateMapFrom_(mi.picks);
+  var ibad = si.picks.filter(function (x) {
+    return iMap[x.보험코드] !== undefined && Number(x.수수료율) !== Math.max(0, iMap[x.보험코드] - 2);
+  });
+  eq(ibad.length, 0, '주사 셋팅 요율 미차감');
+  // (3) 처방 세팅 추천
+  var keys = {};
+  ms.items.forEach(function (x) { if (x.성분명) keys[ingredientKey_(x.성분명)] = 1; });
+  var keyList = Object.keys(keys).filter(Boolean).slice(0, 3);
+  if (keyList.length) {
+    var mr = recommendRegimen({ mode: 'maxrate', ingredients: keyList }, TOKEN);
+    var sr = recommendRegimen({ mode: 'maxrate', ingredients: keyList }, st);
+    eq(mr.picks.length, sr.picks.length, '추천 품목 수가 다름');
+    if (mr.picks.length) {
+      near(sr.summary.평균수수료율, Math.max(0, mr.summary.평균수수료율 - 2), 0.11, '추천 평균 요율 미차감');
+    }
+  }
+  // (4) 약 검색 자동연동
+  var ma = drugAutoLink('안티옥시', {}, TOKEN);
+  var sa = drugAutoLink('안티옥시', {}, st);
+  var aMap = rateMapFrom_(ma.우리제품);
+  var abad = sa.우리제품.filter(function (x) {
+    return aMap[x.보험코드] !== undefined && Number(x.수수료율) !== Math.max(0, aMap[x.보험코드] - 2);
+  });
+  eq(abad.length, 0, '자동연동 요율 미차감');
+});
+
+t('요율등급: STAFF 는 사용자 목록(등급)을 볼 수 없음', function () {
+  throwsMatch(function () { getUsersList(STAFF_TOKEN); }, '마스터');
+  throwsMatch(function () { updateUserTier('jung', '1단계', STAFF_TOKEN); }, '마스터');
+});
+
+t('요율등급: MASTER 만 등급 변경 가능 · 잘못된 값은 거부', function () {
+  var bad = updateUserTier('jung', '4단계', TOKEN);
+  ok(!bad.success, '없는 등급이 통과됨');
+  var master = updateUserTier('master', '1단계', TOKEN);
+  ok(!master.success, 'MASTER 계정 등급이 바뀜');
+  var noUser = updateUserTier('없는아이디', '1단계', TOKEN);
+  ok(!noUser.success, '없는 계정 변경이 통과됨');
+  var good = setTier_('jung', '1단계');
+  eq(good.요율등급, '1단계');
+  eq(findUserById_('jung').요율등급, '1단계');
+  setTier_('jung', '2단계');
+});
+
+t('요율등급: MASTER 사용자 목록에 등급·차감 정보가 보임', function () {
+  var res = getUsersList(TOKEN);
+  ok(res.users.every(function (u) { return '요율등급' in u; }), '등급 필드 없음');
+  var staff = res.users.filter(function (u) { return u.권한 === 'STAFF'; });
+  ok(staff.length > 0, 'STAFF 없음');
+  ok(staff.every(function (u) { return ['1단계', '2단계', '3단계'].indexOf(u.요율등급) !== -1; }), 'STAFF 등급 값 이상');
+  ok(staff.every(function (u) { return u.요율차감 === { '1단계': 1, '2단계': 2, '3단계': 3 }[u.요율등급]; }), 'STAFF 차감률 불일치');
+  var master = res.users.filter(function (u) { return u.권한 === 'MASTER'; })[0];
+  eq(master.요율등급, '', 'MASTER 에 등급이 붙음');
+  eq(master.요율차감, 0, 'MASTER 차감률');
+  eq(res.tiers.length, 3, '등급 목록이 3개가 아님');
+});
+
+t('요율등급: 신규 가입 신청은 3단계 기본', function () {
+  var reg = registerUser('newtier99', '1234', '신규사원');
+  ok(reg.success, '가입 실패: ' + reg.message);
+  eq(findUserById_('newtier99').요율등급, '3단계', '신규 가입 기본 등급');
+  var row = getUsersList(TOKEN).users.filter(function (u) { return u.아이디 === 'newtier99'; })[0];
+  eq(row.요율등급, '3단계');
+  eq(row.사용여부, 'N');
+  // 승인 후 로그인 → 요율은 원본-3%p
+  toggleUserActive('newtier99', 'Y', TOKEN);
+  var lg = login('newtier99', '1234');
+  ok(lg.success, '승인 후 로그인 실패');
+  var raw = getProductsRaw_();
+  var mine = getProducts(lg.token);
+  var p = prodByCode_(raw, '647202372') || raw[0];
+  eq(prodByCode_(mine, p.보험코드).수수료율, Math.max(0, Number(p.수수료율) - 3), '신규 가입 3단계 차감 오류');
+});
+
+t('요율등급: 시트 등급이 비어 있으면 2단계로 계산', function () {
+  var list = __SHEETS['사용자'], head = list[0];
+  var idx = head.indexOf('요율등급');
+  var row = list.filter(function (r) { return r[0] === 'jung'; })[0];
+  var before = row[idx];
+  row[idx] = '';
+  try {
+    var lg = login('jung', 'test');
+    var raw = getProductsRaw_();
+    var p = prodByCode_(raw, '647202372') || raw[0];
+    eq(prodByCode_(getProducts(lg.token), p.보험코드).수수료율, Math.max(0, Number(p.수수료율) - 2), '빈 등급 기본값 오류');
+  } finally {
+    row[idx] = before;
+  }
+});
+
+t('요율등급: 처방 저장은 원본 요율 · STAFF 조회는 차감', function () {
+  var list = __SHEETS['거래처'], head = list[0];
+  var iMgr = head.indexOf('담당자'), iCode = head.indexOf('거래처코드');
+  var beforeMgr = list[1][iMgr];
+  list[1][iMgr] = '최담당';
+  var code = list[1][iCode];
+  setTier_('choi', '2단계');
+  var p = prodByCode_(getProductsRaw_(), '647202372') || getProductsRaw_()[0];
+  try {
+    var staffRate = Math.max(0, Number(p.수수료율) - 2);
+    var save = savePrescriptions({
+      기준월: currentMonth_(), 처방일: formatDate_(new Date()), 거래처코드: code,
+      items: [{ 보험코드: p.보험코드, 품목명: p.제품명, 규격: p.규격, 약가: p.기준단가, 수량: 3, 수수료율: staffRate }]
+    }, STAFF_TOKEN);
+    ok(save.success, '처방 저장 실패');
+    var sheetRow = getAllRowsAsObjects_('처방내역').filter(function (r) {
+      return String(r['보험코드']) === String(p.보험코드) && String(r['기준월']) === currentMonth_();
+    })[0];
+    ok(sheetRow, '처방내역 행 없음');
+    eq(sheetRow['수수료율'], p.수수료율, '시트에 원본 요율이 남지 않음');
+    eq(sheetRow['예상수수료'], Math.round(sheetRow['처방금액'] * p.수수료율 / 100), '시트 예상수수료 불일치');
+    var st = getPrescriptions(currentMonth_(), code, STAFF_TOKEN);
+    var stRow = st.rows.filter(function (r) { return String(r.보험코드) === String(p.보험코드); })[0];
+    eq(stRow.수수료율, staffRate, 'STAFF 조회 요율 미차감');
+    eq(stRow.예상수수료, Math.round(stRow.처방금액 * staffRate / 100), 'STAFF 예상수수료 미차감');
+    var ms = getPrescriptions(currentMonth_(), code, TOKEN);
+    var msRow = ms.rows.filter(function (r) { return String(r.보험코드) === String(p.보험코드); })[0];
+    eq(msRow.수수료율, p.수수료율, 'MASTER 조회 요율이 원본이 아님');
+  } finally {
+    list[1][iMgr] = beforeMgr;
+  }
+});
+
 // ------------------------------------------------------------------ 결과
 var PASSED = RESULTS.filter(function (r) { return r.ok; }).length;
 var FAILED = RESULTS.length - PASSED;
