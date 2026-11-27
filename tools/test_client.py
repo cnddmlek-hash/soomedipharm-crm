@@ -194,6 +194,17 @@ def main():
     check(bool(send_fn) and 'rxGuideCodes' in send_fn.group(1), '보내기 시점 유지목록 기록이 없습니다')
     add_fn = re.search(r'function guideAddItem\(code\)\s*\{(.*?)\n   \}', js, re.S)
     check(bool(add_fn) and 'guideFindProduct_' in add_fn.group(1), '+담기 시점 품목 조회가 없습니다')
+    # v1.7 보수 — + 담기 토글 / 담은 것만 보내기 / 보내기 버튼 문구
+    check(bool(add_fn) and 'state.guidepending' in add_fn.group(1).lower() and 'filter' in add_fn.group(1),
+          '+담기가 토글(다시 누르면 빼기)이 아닙니다')
+    check('guideSendBtnLabel_' in js and '담은 ' in js and '개 처방전으로 보내기' in js,
+          '보내기 버튼 문구가 담은 개수로 바뀌지 않습니다')
+    check('전체 ' in js and 'guideSendBtnLabel_' in js, '담은 것이 없을 때 전체 개수 표시가 없습니다')
+    check('✓ 담김' in js and 'data-guide-code' in js, '이미 담은 품목의 ✓ 담김 표시가 없습니다')
+    check('guideSyncPendingUI_' in js and "getElementById('guide-send-rx')" in js,
+          '담기 클릭 시 버튼/행 즉시 갱신이 없습니다')
+    check(bool(send_fn) and 'picked.length' in send_fn.group(1) and 'const picked' in send_fn.group(1),
+          '보내기가 담은 품목(picked)을 우선하지 않습니다')
     lrx = re.search(r'async function loadRxData\(opts\)\s*\{(.*?)\n   \}', js, re.S)
     check(bool(lrx) and 'applyGuidePending()' in lrx.group(1), '처방전 목록 로드 후 가이드 품목 재적용이 없습니다')
     ap = re.search(r'function applyGuidePending\(\)\s*\{(.*?)\n   \}', js, re.S)
@@ -252,6 +263,7 @@ def main():
     try:
         import quickjs
         names = ['guideCacheProduct_', 'guideFindProduct_', 'guideAddItem', 'guideSendToRx', 'applyGuidePending',
+                 'guidePendingSet_', 'guidePendingCount_', 'guideSendBtnLabel_', 'guideSyncPendingUI_',
                  'guideRxTargetBadge_', 'guideHospitalBarHtml_', 'guideSetHospital', 'rxOpenFromGuide',
                  'rxApplyGuideRecNow', 'rxOpenGuideFromRx',
                  'rxCodeNorm_', 'rxCodeKey_', 'rxDedupeRows_']
@@ -334,6 +346,56 @@ def main():
             ctx.eval("guideSetHospital('S002');")
             check(ctx.eval('STATE.rxClient').decode() if isinstance(ctx.eval('STATE.rxClient'), bytes) else ctx.eval('STATE.rxClient') == 'S002',
                   '처방 셋팅에서 병원 선택이 처방전 선택으로 이어지지 않습니다')
+
+            # (E) 제보된 버그 — 추천 28개 중 3개만 ＋ 담기 후 보내면, 28개가 아니라 담은 3개만
+            def q(v):
+                return v.decode() if isinstance(v, bytes) else v
+
+            ctx.eval("""
+              (function () {
+                var picks = [];
+                for (var i = 1; i <= 28; i++) {
+                  picks.push({ 보험코드: 'T' + (100 + i), 품목명: '테스트정' + i, 규격: '', 제약사: '테스트제약' + (i % 7),
+                               약가: 1000 + i, 수수료율: 50, 성분: '성분' + i });
+                }
+                STATE.guideRec = { picks: picks, mode: 'maxrate', maxMakers: 3,
+                                   summary: { 추천품목수: 28, 제약사수: 7, 평균수수료율: 50, 성분수: 28 } };
+                STATE.guideProductCache = {};
+                STATE.rxClient = 'S001';
+                STATE.guidePending = []; STATE.rxGuideCodes = []; STATE.rxRows = [];
+              })();
+            """)
+            empty_label = q(ctx.eval("guideSendBtnLabel_(STATE.guideRec)"))
+            check('전체 28개 처방전으로 보내기' in empty_label, '담은 것이 없을 때 보내기 버튼 문구가 다릅니다: %s' % empty_label)
+
+            ctx.eval("guideAddItem('T101'); guideAddItem('T102'); guideAddItem('T103');")
+            check(q(ctx.eval("STATE.guidePending.join(',')")) == 'T101,T102,T103',
+                  '3개 ＋ 담기 결과가 다릅니다: %s' % q(ctx.eval("STATE.guidePending.join(',')")))
+            three_label = q(ctx.eval("guideSendBtnLabel_(STATE.guideRec)"))
+            check('담은 3개 처방전으로 보내기' in three_label, '담은 3개일 때 버튼 문구가 다릅니다: %s' % three_label)
+
+            # 같은 ＋를 다시 누르면 빠지고, 한 번 더 누르면 다시 담긴다(토글)
+            ctx.eval("guideAddItem('T102');")
+            check(q(ctx.eval("STATE.guidePending.join(',')")) == 'T101,T103',
+                  '＋를 다시 눌러도 빠지지 않습니다(토글 아님): %s' % q(ctx.eval("STATE.guidePending.join(',')")))
+            check(q(ctx.eval("STATE.rxGuideCodes.join(',')")) == 'T101,T103',
+                  '뺀 품목이 유지목록(rxGuideCodes)에 남았습니다: %s' % q(ctx.eval("STATE.rxGuideCodes.join(',')")))
+            ctx.eval("guideAddItem('T102');")
+            check(int(ctx.eval("guidePendingCount_()")) == 3, '다시 담은 뒤 담은 개수가 3이 아닙니다')
+
+            # 보내기 — 28개가 아니라 담은 3개만 유지되고 처방전 목록에도 3개만
+            ctx.eval("guideSendToRx();")
+            sent = q(ctx.eval("[STATE.guidePending.length, STATE.guidePending.slice().sort().join(','), STATE.rxGuideCodes.length, STATE.rxRows.length].join('|')"))
+            check(sent == '3|T101,T102,T103|3|0', '담은 3개만 보내지지 않았습니다: %s' % sent)
+            check(q(ctx.eval("__menus[__menus.length - 1]")) == 'prescription', '보내기가 처방전 화면으로 이동하지 않음')
+            ctx.eval("applyGuidePending();")
+            rows3 = q(ctx.eval("STATE.rxRows.map(function (r) { return r.보험코드; }).sort().join(',')"))
+            check(rows3 == 'T101,T102,T103', '처방전 목록에 담은 3개만 들어가지 않았습니다: %s' % rows3)
+
+            # ＋로 담은 것이 하나도 없으면 예전처럼 추천 전체(28개)를 보냅니다
+            ctx.eval("STATE.guidePending = []; STATE.rxGuideCodes = []; STATE.rxRows = []; guideSendToRx();")
+            allsent = q(ctx.eval("[STATE.guidePending.length, STATE.rxGuideCodes.length].join('|')"))
+            check(allsent == '28|28', '담은 것이 없을 때 전체 보내기가 깨졌습니다: %s' % allsent)
     except ImportError:
         pass
 

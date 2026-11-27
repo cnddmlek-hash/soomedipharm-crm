@@ -699,6 +699,8 @@
      padding: 4px 8px; font-size: 12px; cursor: pointer;
    }
    .v14-prod span { font-weight: 700; color: #15803d; }
+   .v14-prod.is-added { border-color: #16a34a; background: #dcfce7; box-shadow: inset 0 0 0 1px #16a34a; }
+   .v14-prod.is-added::after { content: ' ✓'; font-weight: 700; color: #15803d; }
    .v14-dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
    @media (max-width: 700px) { .v14-dash-grid { grid-template-columns: 1fr; } }
    .v14-dash-box { border: 1px solid var(--border); border-radius: 10px; padding: 10px; background: #fbfdff; }
@@ -5647,7 +5649,7 @@
          (cur
            ? '<span class="badge badge-success">' + esc(cur.거래처명) + ' 에 담는 중</span>' +
              '<button class="btn btn-outline btn-sm" onclick="rxOpenFromGuide()">💊 처방전 입력으로 이동</button>'
-           : '<span class="badge badge-amber">병원 미선택 — [처방전 입력으로 보내기] 후 처방전 화면에서 고른 병원으로 담깁니다</span>') +
+           : '<span class="badge badge-amber">병원 미선택 — [💊 담은 N개 처방전으로 보내기] 후 처방전 화면에서 고른 병원으로 담깁니다</span>') +
        '</div>' +
      '</div>';
    }
@@ -5658,7 +5660,7 @@
      STATE.rxClient = c ? c.거래처코드 : '';
      if (c) STATE.rxDate = STATE.rxDate || STATE.today || '';
      renderActiveMenu();
-     if (c) showToast(c.거래처명 + ' 에 담습니다. [💊 처방전 입력으로 보내기]를 누르면 이 병원 목록에 담깁니다.');
+     if (c) showToast(c.거래처명 + ' 에 담습니다. [💊 처방전으로 보내기]를 누르면 이 병원 목록에 담깁니다.');
    }
 
    function rxOpenFromGuide() {
@@ -6281,7 +6283,7 @@
                  '</div>' +
                  '<div class="v14-ing-prod">' +
                    (has ? it.우리제품.slice(0, 3).map(function (p) {
-                     return '<button class="v14-prod" onclick="guideAddItem(\'' + esc(p.보험코드) + '\')" title="처방전 입력에 담기">' +
+                     return '<button class="v14-prod" data-guide-kind="prod" data-guide-code="' + esc(rxCodeNorm_(p.보험코드)) + '" onclick="guideAddItem(\'' + esc(p.보험코드) + '\')" title="처방전 입력에 담기">' +
                        esc(p.품목명) + ' <span>' + (p.수수료율 || 0) + '%</span></button>';
                    }).join('') + (it.경구제수 > 3 ? '<span style="font-size:11.5px;color:var(--muted);align-self:center;">외 ' + (it.경구제수 - 3) + '</span>' : '')
                      : '<span style="color:var(--muted);font-size:12px;">경구제 없음' +
@@ -6396,6 +6398,51 @@
        '</div>';
    }
 
+   /** '+ 담기'로 담아 둔 품목의 보험코드 키 집합 */
+   function guidePendingSet_() {
+     const set = {};
+     (STATE.guidePending || []).forEach(function (c) {
+       const key = rxCodeKey_(c);
+       if (key) set[key] = 1;
+     });
+     return set;
+   }
+
+   function guidePendingCount_() {
+     return Object.keys(guidePendingSet_()).length;
+   }
+
+   /** 보내기 버튼 문구 — 담은 것이 있으면 담은 개수, 없으면 추천 전체 개수 */
+   function guideSendBtnLabel_(r) {
+     const n = guidePendingCount_();
+     const total = ((r && r.picks) || []).length;
+     return n
+       ? '💊 담은 ' + n + '개 처방전으로 보내기'
+       : '💊 전체 ' + total + '개 처방전으로 보내기';
+   }
+
+   /** 화면의 담기 버튼(+ / ✓ 담김)과 보내기 버튼 문구를 지금 담은 목록에 맞춥니다 */
+   function guideSyncPendingUI_() {
+     if (typeof document === 'undefined' || !document.querySelectorAll) return;
+     const set = guidePendingSet_();
+     const btns = document.querySelectorAll('[data-guide-code]');
+     for (let i = 0; i < btns.length; i++) {
+       const el = btns[i];
+       const on = !!set[rxCodeKey_(el.getAttribute('data-guide-code'))];
+       if ((el.getAttribute('data-guide-kind') || 'add') === 'add') {
+         el.className = 'btn ' + (on ? 'btn-accent' : 'btn-outline') + ' btn-sm';
+         el.textContent = on ? '✓ 담김' : '＋';
+       } else if (on) {
+         el.classList.add('is-added');
+       } else {
+         el.classList.remove('is-added');
+       }
+       el.title = on ? '처방전 입력에서 빼기' : '처방전 입력에 담기';
+     }
+     const send = document.getElementById('guide-send-rx');
+     if (send && STATE.guideRec) send.textContent = guideSendBtnLabel_(STATE.guideRec);
+   }
+
    function renderGuideRecommend() {
      const el = document.getElementById('guide-recommend');
      if (!el) return;
@@ -6404,12 +6451,13 @@
      // 추천 품목(이엘파마 경구 포함)을 보험코드로 기억 — 처방전/주문으로 넘길 때 되찾기 위함
      (r.picks || []).forEach(guideCacheProduct_);
      const modeLabel = { maxrate: '요율 최우선', minmaker: '최소 제약사', perIngredient: '성분별 요율 집중' }[r.mode] || r.mode;
+     const pendingSet = guidePendingSet_();
      el.innerHTML =
        '<div class="card">' +
          '<div class="card-title"><span>🎯 추천 세팅 — 💊 경구제 · ' + esc(modeLabel) + '</span>' +
            '<span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">' +
              guideRxTargetBadge_() +
-             '<button class="btn btn-accent btn-sm" onclick="guideSendToRx()">💊 처방전 입력으로 보내기</button>' +
+             '<button class="btn btn-accent btn-sm" id="guide-send-rx" onclick="guideSendToRx()">' + guideSendBtnLabel_(r) + '</button>' +
            '</span></div>' +
          '<div class="kpi-grid" style="margin-bottom:10px;">' +
            '<div class="kpi-card"><div class="kpi-label">추천 품목</div><div class="kpi-val">' + r.summary.추천품목수 + '개</div></div>' +
@@ -6422,25 +6470,41 @@
          (r.mode === 'minmaker' ? guideMakerChipsHtml_(r) : '') +
          '<div class="table-wrap"><table><thead><tr><th>성분</th><th>추천 품목</th><th>제약사</th><th class="num">약가</th><th class="num">수수료율</th><th class="center">담기</th></tr></thead><tbody>' +
          r.picks.map(function (p) {
+           const code = rxCodeNorm_(p.보험코드);
+           const on = !!(code && pendingSet[rxCodeKey_(code)]);
            return '<tr><td>' + esc(p.성분) + '</td><td><strong>' + esc(p.품목명) + '</strong> <small style="color:var(--muted);">' + esc(p.규격 || '') + '</small></td>' +
              '<td>' + esc(p.제약사 || '-') + '</td><td class="num">' + fmtNum(p.약가) + '원</td>' +
              '<td class="num"><strong style="color:var(--primary);">' + (p.수수료율 || 0) + '%</strong></td>' +
-             '<td class="center"><button class="btn btn-outline btn-sm" onclick="guideAddItem(\'' + esc(p.보험코드) + '\')">＋</button></td></tr>';
+             '<td class="center"><button class="btn ' + (on ? 'btn-accent' : 'btn-outline') + ' btn-sm" data-guide-kind="add" data-guide-code="' + esc(code) +
+               '" onclick="guideAddItem(\'' + esc(code) + '\')" title="' + (on ? '처방전 입력에서 빼기' : '처방전 입력에 담기') + '">' +
+               (on ? '✓ 담김' : '＋') + '</button></td></tr>';
          }).join('') + '</tbody></table></div>' +
        '</div>';
    }
 
-   /** 가이드/추천에서 품목을 처방전 입력으로 넘김 */
+   /** 가이드/추천에서 품목을 처방전 입력으로 담거나 뺍니다 (＋ 누르면 담기, ✓ 담김 누르면 빼기) */
    function guideAddItem(code) {
      const c = rxCodeNorm_(code);
      if (!c) return;
      const p = guideFindProduct_(c);      // 추천/가이드/빠른목록 어디서 왔든 품목을 찾아 캐시
      if (p) guideCacheProduct_(p);
      STATE.guidePending = STATE.guidePending || [];
-     if (STATE.guidePending.indexOf(c) === -1) STATE.guidePending.push(c);
      STATE.rxGuideCodes = STATE.rxGuideCodes || [];
-     if (STATE.rxGuideCodes.indexOf(c) === -1) STATE.rxGuideCodes.push(c);
-     showToast('처방전 입력 목록에 담았습니다 (' + STATE.guidePending.length + '개). [처방전] 화면에서 병원을 고르면 함께 표시됩니다.');
+     const key = rxCodeKey_(c);
+     const same = function (x) { return rxCodeKey_(x) === key; };
+     const wasIn = STATE.guidePending.some(same);
+     if (wasIn) {
+       STATE.guidePending = STATE.guidePending.filter(function (x) { return !same(x); });
+       STATE.rxGuideCodes = STATE.rxGuideCodes.filter(function (x) { return !same(x); });
+     } else {
+       STATE.guidePending.push(c);
+       if (!STATE.rxGuideCodes.some(same)) STATE.rxGuideCodes.push(c);
+     }
+     guideSyncPendingUI_();
+     const n = guidePendingCount_();
+     showToast(wasIn
+       ? '처방전 입력 목록에서 뺐습니다 (담은 ' + n + '개).'
+       : '처방전 입력 목록에 담았습니다 (' + n + '개). [처방전] 화면에서 병원을 고르면 함께 표시됩니다.');
    }
 
    /** 가이드에서 받은 품목을 보험코드로 기억 (경구/주사 모두) */
@@ -6496,15 +6560,20 @@
      const r = STATE.guideRec;
      if (!r || !r.picks.length) { showToast('먼저 추천 세팅을 만들어 주세요.'); return; }
      (r.picks || []).forEach(guideCacheProduct_);       // 보내기 직전에 한 번 더 캐시
-     const codes = r.picks.map(function (p) { return rxCodeNorm_(p.보험코드); }).filter(Boolean);
-     STATE.guidePending = codes.slice();
+     /* ＋로 직접 담은 품목이 있으면 '담은 것만', 하나도 담지 않았을 때만 추천 전체를 보냅니다. */
+     const picked = (STATE.guidePending || []).map(function (c) { return rxCodeNorm_(c); }).filter(Boolean);
+     const codes = picked.length
+       ? picked
+       : r.picks.map(function (p) { return rxCodeNorm_(p.보험코드); }).filter(Boolean);
+     if (!picked.length) STATE.guidePending = codes.slice();   // 전체를 보낼 때만 담은 목록을 전체로
      STATE.rxGuideCodes = codes.slice();                 // 병원 목록을 새로 불러와도 살아남게
      STATE.rxRows = [];                                  // 이전 병원 목록이 남아 있으면 섞이므로 비움
      const c = STATE.rxClient ? findClient(STATE.rxClient) : null;
      switchMenu('prescription');
+     const what = codes.length + '개 품목(경구제)';
      showToast(c
-       ? r.picks.length + '개 품목(경구제)을 ' + c.거래처명 + ' 에 담았습니다.'
-       : r.picks.length + '개 품목(경구제)을 보냈습니다. 처방전 화면에서 병원을 고르면 함께 표시됩니다.');
+       ? what + '을 ' + c.거래처명 + ' 에 담았습니다.'
+       : what + '을 보냈습니다. 처방전 화면에서 병원을 고르면 함께 표시됩니다.');
    }
 
    /**
