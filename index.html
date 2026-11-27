@@ -708,7 +708,7 @@
  <div id="login-overlay" class="login-overlay">
    <div class="login-card">
      <div class="login-brand">
-       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.4</span></div>
+       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.5</span></div>
        <div class="s">담당자 아이디로 로그인해 주세요</div>
      </div>
      <div class="form-group" style="margin-bottom:10px;">
@@ -1089,7 +1089,7 @@
    <!-- PC 사이드바 -->
    <aside class="sidebar">
      <div class="sidebar-brand">
-       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.4</span></h1>
+       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.5</span></h1>
        <div class="sub" id="brand-sub">로딩 중...</div>
      </div>
      <nav class="sidebar-nav" id="sidebar-nav"></nav>
@@ -1105,7 +1105,7 @@
 
    <!-- 모바일 상단 헤더 -->
    <header class="mobile-header">
-     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.4</span></h1>
+     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.5</span></h1>
      <div style="display:flex;gap:6px;align-items:center;">
        <span id="m-user" class="ver-chip" style="display:none;" onclick="openPasswordModal()" title="내 계정 · 비밀번호 변경"></span>
        <button class="btn btn-sm" id="pw-btn-m" title="비밀번호 변경" aria-label="비밀번호 변경" style="display:none;background:rgba(255,255,255,0.16);color:#fff;" onclick="openPasswordModal()">🔑</button>
@@ -4758,13 +4758,14 @@
          '<div class="toolbar" style="gap:6px;flex-wrap:wrap;">' +
            '<select id="inj-cat" style="max-width:200px;" onchange="setInjectCat(this.value)"><option value="">전체 카테고리</option></select>' +
            '<select id="inj-mode" style="max-width:245px;" onchange="setInjectMode(this.value)">' +
-             '<option value="maxrate">① 요율 최우선 (성분별 최고 이익율)</option>' +
-             '<option value="margin">② 수수료 금액 우선 (약가×요율)</option>' +
-             '<option value="category">③ 카테고리별 균형 세팅</option>' +
+             '<option value="maxrate"' + (STATE.injMode === 'maxrate' ? ' selected' : '') + '>① 요율 최우선 (성분별 최고 이익율)</option>' +
+             '<option value="margin"' + (STATE.injMode === 'margin' ? ' selected' : '') + '>② 수수료 금액 우선 (약가×요율)</option>' +
+             '<option value="category"' + (STATE.injMode === 'category' ? ' selected' : '') + '>③ 카테고리별 균형 세팅</option>' +
            '</select>' +
            '<select id="inj-limit" style="max-width:120px;" onchange="setInjectLimit(this.value)">' +
-             '<option value="10">10품목</option><option value="20">20품목</option>' +
-             '<option value="30">30품목</option><option value="50">50품목</option>' +
+             [10, 20, 30, 50].map(function (n) {
+               return '<option value="' + n + '"' + (Number(STATE.injLimit) === n ? ' selected' : '') + '>' + n + '품목</option>';
+             }).join('') +
            '</select>' +
            '<input type="text" id="inj-q" style="max-width:190px;" placeholder="품목·성분 검색" autocomplete="off" value="' + esc(STATE.injQuery || '') + '" oninput="onInjectQuery(this.value)" />' +
            '<button class="btn btn-primary btn-sm" onclick="runInjectRecommend(true)">🎯 추천 세팅 보기</button>' +
@@ -4790,6 +4791,8 @@
      } catch (e) {
        const box = document.getElementById('inj-protocol');
        if (box) box.innerHTML = '<div class="card" style="color:var(--danger);font-size:12.5px;">' + esc(v14ErrorText_(e)) + '</div>';
+       const c = document.getElementById('inj-cautions');
+       if (c) c.innerHTML = '<div style="font-size:12.5px;color:var(--danger);">⚠️ 배합주의 자료를 불러오지 못했습니다 — ' + esc(v14ErrorText_(e)) + '</div>';
      }
    }
 
