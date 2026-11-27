@@ -1131,6 +1131,9 @@ t('기준월: 날짜로 바뀐 2026-11-01 도 2026-11 로 읽음', function () {
   eq(normalizeMonth_('2026-11-01'), '2026-11');
   eq(normalizeMonth_(new Date(Date.UTC(2026, 10, 1))), '2026-11');
   eq(normalizeMonth_('2026-11-28 1:46:54'), '2026-11');
+  eq(normalizeMonth_('2026년 11월'), '2026-11');
+  eq(normalizeMonth_(46327), '2026-11', '날짜 서식이 벗겨진 직렬값');
+  eq(normalizeMonth_('202611'), '2026-11');
 });
 
 t('처방 저장: 보험코드 073001620 이 시트에 텍스트로 남아 앞자리 0 유지', function () {
