@@ -5551,16 +5551,60 @@
      if (picks.length === (r.picks || []).length) return r;
      const makers = {};
      let rateSum = 0;
-     picks.forEach(function (x) { makers[x.제약사] = 1; rateSum += Number(x.수수료율) || 0; });
-     return Object.assign({}, r, {
-       picks: picks,
-       summary: Object.assign({}, r.summary, {
-         추천품목수: picks.length,
-         제약사수: Object.keys(makers).length,
-         제약사: Object.keys(makers),
-         평균수수료율: picks.length ? Math.round(rateSum / picks.length * 10) / 10 : 0
-       })
+     let amountSum = 0;
+     picks.forEach(function (x) {
+       makers[x.제약사] = 1;
+       rateSum += Number(x.수수료율) || 0;
+       amountSum += (Number(x.약가) || 0) * (Number(x.수수료율) || 0) / 100;
      });
+     const summary = Object.assign({}, r.summary, {
+       추천품목수: picks.length,
+       제약사수: Object.keys(makers).length,
+       제약사: Object.keys(makers),
+       평균수수료율: picks.length ? Math.round(rateSum / picks.length * 10) / 10 : 0,
+       수수료액합계: Math.round(amountSum)
+     });
+     // 예전 서버가 주사·수액을 섞어 보냈을 때는 '상한 1곳 비교' 값도 다시 계산
+     if (summary.요율향상 != null && summary.평균수수료율 !== r.summary.평균수수료율) {
+       summary.요율향상 = Math.round((summary.평균수수료율 - (summary.상한1평균수수료율 || 0)) * 10) / 10;
+     }
+     return Object.assign({}, r, { picks: picks, summary: summary });
+   }
+
+   /** 최소 제약사 — '상한 1곳'만으로 짠 세팅과 비교한 평균 요율 향상 안내 */
+   function guideRateLiftHtml_(r) {
+     const base = r.summary.상한1평균수수료율;
+     if (base == null) return '';
+     const lift = Number(r.summary.요율향상) || 0;
+     if (lift > 0) {
+       return '<div style="font-size:12px;color:#0f766e;margin:-2px 0 8px;line-height:1.6;">' +
+         '제약사 상한 ' + (r.maxMakers || 3) + '곳까지 활용 — 제약사 1곳으로만 짠 세팅(' + base + '%)보다 평균 수수료율 <strong>+' + lift + '%p</strong>' +
+         ' <span style="color:var(--muted);">(요율 더 높은 제약사 품목으로 바꾼 결과)</span></div>';
+     }
+     return '<div style="font-size:12px;color:var(--muted);margin:-2px 0 8px;">이 성분 조합은 제약사 1곳(' + base + '%) 세팅이 이미 가장 높은 평균 수수료율입니다.</div>';
+   }
+
+   /** 최소 제약사 — 제약사별 품목 수 배지 */
+   function guideMakerChipsHtml_(r) {
+     const count = {};
+     const order = [];
+     const codes = {};
+     ((r && r.picks) || []).forEach(function (p) {
+       const m = p.제약사 || '기타';
+       if (!count[m]) { count[m] = 0; order.push(m); }
+       count[m] += 1;
+       codes[p.보험코드 || p.품목명] = 1;
+     });
+     if (order.length < 2) return '';
+     const distinct = Object.keys(codes).length;
+     const picks = ((r && r.picks) || []).length;
+     return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 8px;">' +
+       '<span style="font-size:12px;color:var(--muted);">제약사별</span>' +
+       order.map(function (m) {
+         return '<span class="badge badge-blue">' + esc(m) + ' ' + count[m] + '품목</span>';
+       }).join('') +
+       (distinct < picks ? '<span style="font-size:11.5px;color:var(--muted);">· 서로 다른 품목 ' + distinct + '개(복합제가 여러 성분을 함께 덮음)</span>' : '') +
+       '</div>';
    }
 
    function renderGuideRecommend() {
@@ -5580,6 +5624,8 @@
            '<div class="kpi-card"><div class="kpi-label">선택 성분' + (r.summary.미포함성분 ? ' (미포함 ' + r.summary.미포함성분 + ')' : '') + '</div><div class="kpi-val">' + r.summary.성분수 + '개</div></div>' +
          '</div>' +
          (r.mode === 'minmaker' && r.summary.미포함성분 ? '<div style="font-size:12px;color:#b45309;margin:-2px 0 8px;">제약사 상한 ' + (r.maxMakers || 3) + '곳을 넘어 추천되지 않은 성분 ' + r.summary.미포함성분 + '개 — 상한을 올리거나 다른 필터를 써보세요.</div>' : '') +
+         (r.mode === 'minmaker' ? guideRateLiftHtml_(r) : '') +
+         (r.mode === 'minmaker' ? guideMakerChipsHtml_(r) : '') +
          '<div class="table-wrap"><table><thead><tr><th>성분</th><th>추천 품목</th><th>제약사</th><th class="num">약가</th><th class="num">수수료율</th><th class="center">담기</th></tr></thead><tbody>' +
          r.picks.map(function (p) {
            return '<tr><td>' + esc(p.성분) + '</td><td><strong>' + esc(p.품목명) + '</strong> <small style="color:var(--muted);">' + esc(p.규격 || '') + '</small></td>' +

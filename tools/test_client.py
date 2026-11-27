@@ -61,8 +61,11 @@ def main():
     check('경구제 전용' in js and '주사제 전용' in js, '제형 전용 배지가 없습니다')
     check("form: '경구'" in js, '경구 추천에 form:경구 가 없습니다')
     check('guideOralOnlyRec_' in js, '경구 전용 안전장치가 없습니다')
+    check('guideRateLiftHtml_' in js and '상한1평균수수료율' in js and '요율향상' in js, '최소 제약사 요율 향상 안내가 없습니다')
+    check('guideMakerChipsHtml_' in js, '제약사별 품목 배지가 없습니다')
     check('guideFindProduct_' in js and 'guideCacheProduct_' in js, '가이드 품목 캐시가 없습니다')
     check('setGuideMaxMakers' in js and 'guideMaxMakers' in js, '최소 제약사 개수 선택이 없습니다')
+    check("maxMakers: STATE.guideMaxMakers" in js, '최소 제약사 상한이 서버로 전달되지 않습니다')
     check('injCautionsHtml_' in js and 'renderInjectProtocols' in js and 'renderInjectCards' in js, '주사 프로토콜·배합금기 화면이 없습니다')
     check('injWarnHtml_' in js and 'toggleInjPick' in js, '배합금기 자동 경고가 없습니다')
     check('loadCoverageNotes' in js and 'renderCoverageCard' in js, '급여·삭감 가이드 카드가 없습니다')
@@ -103,6 +106,7 @@ def main():
         check(not missing, 'Code.gs 에 없는 서버 함수 호출: %s' % ', '.join(missing))
         check('v1.5' in code, 'Code.gs 버전이 v1.5 가 아닙니다')
         for name in ['getInjectGuide', 'getInjectProtocols', 'getCoverageNotes', 'getDeptGuide', 'recommendRegimen', 'looksParenteral_', 'dosageFormOf_',
+                     'recommendMinMakers_', 'evalMakerSet_', 'cmpMakerEval_', 'betterPick_',
                      'nameStem_', 'similarNameHits_', 'drugAutoLink', 'injectProtocolMatches_', 'kpicHealth']:
             check(name in code, 'Code.gs 에 %s 가 없습니다' % name)
     else:

@@ -224,6 +224,146 @@ t('추천: 권한 없는 토큰 거부', function () {
   throwsMatch(function () { recommendRegimen({ ingredients: ['aspirin'] }, 'bad-token'); }, '로그인');
 });
 
+// ------------------------------------------- 4-c. 최소 제약사 — 상한 안에서 요율 최대화 (v1.5.1)
+/** 제보 사례 재현용 가짜 성분군 — 한국휴텍스제약(주) 1곳이 12개 성분을 다 덮지만 요율이 낮음 */
+function minMakerCase_() {
+  var spec = [
+    ['amlodipine', '암로디핀', 50, [['한미약품', 55]]],
+    ['losartan', '로사르탄', 50, [['한미약품', 60]]],
+    ['telmisartan', '텔미사르탄', 50, []],
+    ['rosuvastatin', '로수바스타틴', 50, [['아주약품', 55]]],
+    ['atorvastatin', '아토르바스타틴', 50, []],
+    ['ezetimibe', '에제티미브', 50, []],
+    ['metformin', '메트포르민', 45, [['종근당', 50]]],
+    ['gliclazide', '글리클라지드', 40, []],
+    ['sitagliptin', '시타글립틴', 30, [['종근당', 45]]],
+    ['empagliflozin', '엠파글리플로진', 40, []],
+    ['dapagliflozin', '다파글리플로진', 45, []],
+    ['rabeprazole', '라베프라졸', 45, [['대웅제약', 55]]]
+  ];
+  return spec.map(function (row, i) {
+    var list = [{
+      표: '경구', 품목명: '휴텍스' + row[1] + '정', 보험코드: 'H' + i, 성분키: row[0],
+      제약사: '한국휴텍스제약(주)', 약가: 500, 수수료율: row[2], 규격: ''
+    }];
+    (row[3] || []).forEach(function (x, j) {
+      list.push({
+        표: '경구', 품목명: x[0] + row[1] + '정', 보험코드: 'X' + i + '-' + j, 성분키: row[0],
+        제약사: x[0], 약가: 700, 수수료율: x[1], 규격: ''
+      });
+    });
+    return { key: row[0], 성분한글: row[1], list: list };
+  });
+}
+function minMakerRate_(picks) {
+  var sum = 0;
+  picks.forEach(function (x) { sum += Number(x.수수료율) || 0; });
+  return picks.length ? sum / picks.length : 0;
+}
+function minMakerNames_(picks) {
+  var m = {};
+  picks.forEach(function (x) { m[x.제약사] = 1; });
+  return Object.keys(m);
+}
+
+t('최소 제약사: 상한 5곳이 상한 1곳보다 높은 요율 제약사를 써서 평균 요율을 올림', function () {
+  var groups = minMakerCase_();
+  var one = recommendMinMakers_(groups, 1);
+  var five = recommendMinMakers_(groups, 5);
+  eq(one.length, 12, '상한 1곳이 12성분을 다 덮지 못함: ' + one.length);
+  eq(five.length, 12, '상한 5곳에서 성분을 다 덮어야 함: ' + five.length);
+  ok(minMakerRate_(five) > minMakerRate_(one) + 1,
+    '상한 5곳 평균 요율이 오르지 않음: ' + minMakerRate_(five).toFixed(1) + '% vs ' + minMakerRate_(one).toFixed(1) + '%');
+  var names = minMakerNames_(five);
+  ok(names.length <= 5, '제약사 상한 초과: ' + names.length);
+  ok(names.length > 1, '제약사가 1곳에 머묾: ' + names.join(','));
+  var byKey = {};
+  five.forEach(function (x) { byKey[x.성분키] = x; });
+  eq(byKey['losartan'].수수료율, 60, '로사르탄 60% 품목 미적용');
+  eq(byKey['losartan'].제약사, '한미약품', '로사르탄 제약사 오류');
+  eq(byKey['sitagliptin'].수수료율, 45, '시타글립틴 45% 품목 미적용');
+  ['telmisartan', 'atorvastatin', 'ezetimibe', 'gliclazide', 'empagliflozin', 'dapagliflozin'].forEach(function (k) {
+    eq(byKey[k].제약사, '한국휴텍스제약(주)', k + ' 커버 제약사가 빠짐');
+  });
+});
+
+t('최소 제약사: 요율이 같으면 상한이 남아도 제약사를 늘리지 않음', function () {
+  var groups = [
+    { key: 'a', 성분한글: 'A성분', list: [
+      { 표: '경구', 품목명: '가정', 보험코드: 'A1', 성분키: 'a', 제약사: '가제약', 약가: 500, 수수료율: 50, 규격: '' },
+      { 표: '경구', 품목명: '나정', 보험코드: 'A2', 성분키: 'a', 제약사: '나제약', 약가: 500, 수수료율: 50, 규격: '' }] },
+    { key: 'b', 성분한글: 'B성분', list: [
+      { 표: '경구', 품목명: '가정2', 보험코드: 'B1', 성분키: 'b', 제약사: '가제약', 약가: 400, 수수료율: 40, 규격: '' },
+      { 표: '경구', 품목명: '나정2', 보험코드: 'B2', 성분키: 'b', 제약사: '나제약', 약가: 400, 수수료율: 40, 규격: '' }] }
+  ];
+  var res = recommendMinMakers_(groups, 5);
+  eq(res.length, 2, '성분 수 오류');
+  eq(minMakerNames_(res).length, 1, '요율이 같은데 제약사를 늘림: ' + minMakerNames_(res).join(','));
+});
+
+t('최소 제약사: 상한 1~10 어디서도 상한을 넘지 않고, 상한을 올리면 요율은 내려가지 않음', function () {
+  var groups = minMakerCase_();
+  var prev = -1;
+  [1, 2, 3, 4, 5, 10].forEach(function (cap) {
+    var res = recommendMinMakers_(groups, cap);
+    ok(minMakerNames_(res).length <= cap, cap + '곳 상한 초과: ' + minMakerNames_(res).length);
+    eq(JSON.stringify(recommendMinMakers_(groups, cap)), JSON.stringify(res), cap + '곳 결과가 매번 달라짐');
+    var avg = minMakerRate_(res);
+    ok(avg >= prev - 0.001, cap + '곳 평균 요율이 이전 상한보다 낮아짐');
+    prev = avg;
+  });
+});
+
+t('최소 제약사: 상한 안에서 요율보다 커버리지를 먼저 채움', function () {
+  function g(key, name, list) { return { key: key, 성분한글: name, list: list }; }
+  function p(maker, name, code, rate, key) {
+    return { 표: '경구', 품목명: name, 보험코드: code, 성분키: key, 제약사: maker, 약가: 500, 수수료율: rate, 규격: '' };
+  }
+  var groups = [
+    g('a', 'A성분', [p('가제약', '가A정', 'A1', 70, 'a'), p('나제약', '나A정', 'A2', 20, 'a')]),
+    g('b', 'B성분', [p('가제약', '가B정', 'B1', 70, 'b'), p('나제약', '나B정', 'B2', 20, 'b')]),
+    g('c', 'C성분', [p('나제약', '나C정', 'C2', 20, 'c')]),
+    g('d', 'D성분', [p('나제약', '나D정', 'D2', 20, 'd')])
+  ];
+  var one = recommendMinMakers_(groups, 1);
+  eq(one.length, 4, '상한 1곳에서 커버리지를 먼저 채우지 않음: ' + one.length);
+  eq(minMakerNames_(one)[0], '나제약', '커버리지 우선 위반: ' + minMakerNames_(one).join(','));
+  var two = recommendMinMakers_(groups, 2);
+  eq(two.length, 4, '상한 2곳 커버리지 오류: ' + two.length);
+  ok(minMakerRate_(two) > minMakerRate_(one), '상한 2곳에서 요율이 오르지 않음');
+  var byKey = {};
+  two.forEach(function (x) { byKey[x.성분키] = x; });
+  eq(byKey['a'].제약사, '가제약', 'A성분 고요율 제약사 미적용');
+  eq(byKey['c'].제약사, '나제약', 'C성분 커버 제약사가 빠짐');
+});
+
+t('최소 제약사(실데이터): 상한 5곳이 상한 1곳보다 평균 요율이 높고 제약사 수는 5 이하', function () {
+  var keys = readProductRows_().filter(function (p) { return p.표 === '경구' && p.성분키; })
+    .map(function (p) { return p.성분키; })
+    .filter(function (k, i, a) { return a.indexOf(k) === i; });
+  var r1 = recommendRegimen({ mode: 'minmaker', ingredients: keys, maxMakers: 1 }, TOKEN);
+  var r5 = recommendRegimen({ mode: 'minmaker', ingredients: keys, maxMakers: 5 }, TOKEN);
+  eq(r1.summary.제약사수, 1, '상한 1곳인데 제약사가 ' + r1.summary.제약사수 + '곳');
+  ok(r5.summary.제약사수 <= 5, '제약사 상한 초과: ' + r5.summary.제약사수);
+  ok(r5.summary.제약사수 > 1, '상한 5곳인데 1곳에 머묾');
+  ok(r5.summary.추천품목수 >= r1.summary.추천품목수, '상한 5곳 커버리지가 더 적음');
+  ok(r5.summary.평균수수료율 > r1.summary.평균수수료율,
+    '상한 5곳 평균 요율이 오르지 않음: ' + r5.summary.평균수수료율 + '% vs ' + r1.summary.평균수수료율 + '%');
+  eq(r5.summary.상한1평균수수료율, r1.summary.평균수수료율, '상한 1곳 비교값 오류');
+  ok(r5.summary.요율향상 > 0, '요율향상 값이 없음: ' + r5.summary.요율향상);
+  ok(r5.summary.수수료액합계 > 0, '수수료액 합계가 없음');
+  var oneBy = {};
+  r1.picks.forEach(function (x) { oneBy[x.성분키] = x; });
+  var better = r5.picks.filter(function (x) {
+    return oneBy[x.성분키] && (Number(x.수수료율) || 0) > (Number(oneBy[x.성분키].수수료율) || 0);
+  });
+  ok(better.length > 0, '타 제약사 높은 요율 품목이 하나도 반영되지 않음');
+  ok(better.every(function (x) { return x.제약사 && oneBy[x.성분키].제약사 !== x.제약사; }), '같은 제약사에서 요율이 올랐다고 표시됨');
+  eq(r5.summary.미포함성분, Math.max(0, keys.length - r5.picks.length), '미포함성분 계산 오류');
+  ok(r5.summary.서로다른품목수 > 0 && r5.summary.서로다른품목수 <= r5.summary.추천품목수,
+    '서로 다른 품목 수 계산 오류: ' + r5.summary.서로다른품목수);
+});
+
 // ------------------------------------------------------------------ 5-b. 제형 구분 · 주사제 셋팅
 t('제형: …주/수액은 주사·수액, …정/캡슐은 경구', function () {
   ok(looksParenteral_('프리브로펜주208ml(백)'), '주 이름 미탐지');

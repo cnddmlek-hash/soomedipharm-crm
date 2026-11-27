@@ -86,6 +86,13 @@ def main():
         check("const APP_VERSION = 'v1.5'" in code, 'Code.gs 버전이 v1.5 가 아닙니다')
         check(re.search(r'getInjectGuide\s*:\s*getInjectGuide', code) is not None, 'getInjectGuide 가 apiFunctions_ 에 없습니다')
 
+    # ---------------- 2-d. v1.5.1 최소 제약사 — 상한 안에서 요율 최대화
+    if code:
+        for name in ['recommendMinMakers_', 'evalMakerSet_', 'cmpMakerEval_', 'betterPick_',
+                     'MINMAKER_EPS_', 'MINMAKER_MAX_ITER_']:
+            check(name in code, 'Code.gs 에 %s 가 없습니다' % name)
+        check('상한1평균수수료율' in code and '요율향상' in code, 'Code.gs 에 상한 1곳 비교 요약이 없습니다')
+
     # ---------------- 2-c. v1.5 제형 구분 (경구제 / 주사·수액) — fixtures 기준
     # ---------------- 3. 자료 파일
     def load(name):
@@ -120,6 +127,19 @@ def main():
               '이엘파마(경구) 목록의 주사제 이름이 너무 많습니다: %d/%d %s' %
               (len(el_paren), len(el), [r.get('품목명') for r in el_paren[:3]]))
         check(len(el) >= 50, '이엘파마 품목이 부족합니다: %d' % len(el))
+
+        # 최소 제약사 추천이 성립하려면 경구 품목에 제약사가 있어야 하고,
+        # 같은 성분을 여러 제약사가 파는 성분이 있어야 상한 비교가 의미 있습니다.
+        no_maker = [r.get('품목명') for r in el if not str(r.get('제약사') or '').strip()]
+        check(not no_maker, '제약사가 빈 경구 품목: %s' % ', '.join(no_maker[:5]))
+        ing_makers = {}
+        for r in el:
+            key = str(r.get('성분명') or '').strip()
+            if not key:
+                continue
+            ing_makers.setdefault(key, set()).add(str(r.get('제약사') or '').strip())
+        multi = [k for k, v in ing_makers.items() if len(v) > 1]
+        check(len(multi) >= 5, '같은 성분을 여러 제약사가 파는 성분이 %d개뿐입니다' % len(multi))
 
         # 주사프로토콜 · 급여가이드 · 치과 가이드
         if '주사프로토콜' in fx:
