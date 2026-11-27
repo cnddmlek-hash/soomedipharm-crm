@@ -1741,22 +1741,26 @@
    // =========================================================================
    // 3. 메뉴 레지스트리 / 내비게이션
    // =========================================================================
+   // 사이드바/모바일 메뉴 순서 — 사용자가 정한 순서 (메뉴명 앞 숫자는 붙이지 않습니다)
+   //   ① 거래처 등록/관리 → ② 거래처 상세정보(내 거래처 상세 · 비거래처 심평원 HIRA 탭)
+   //   → ③ 월별 실적 → ④ 처방 셋팅 → ⑤ 처방전 입력 → ⑥ 약 검색 · 금기 → ⑦ 주문 · 회전일 관리
+   //   → ⑧ 거래원장 · 명세서 → ⑨ 발송이력 · 설정(MASTER 전용)
    const APP_MENUS = [
      {
-       id: 'turnover',
-       label: '주문 · 회전일 관리',
-       shortLabel: '주문',
-       icon: '📊',
-       render: renderTurnoverPage,
-       onEnter: loadTurnoverModule
+       id: 'clients',
+       label: '거래처 등록/관리',
+       shortLabel: '거래처',
+       icon: '🏥',
+       render: renderClientsPage,
+       onEnter: function () { renderActiveMenu(); }
      },
      {
-       id: 'prescription',
-       label: '처방전 입력',
-       shortLabel: '처방전',
-       icon: '💊',
-       render: renderPrescriptionPage,
-       onEnter: loadPrescriptionModule
+       id: 'clientinfo',
+       label: '거래처 상세정보',
+       shortLabel: '상세',
+       icon: '🏥',
+       render: renderClientInfoPage,
+       onEnter: function () { renderActiveMenu(); }
      },
      {
        id: 'perf',
@@ -1767,14 +1771,6 @@
        onEnter: loadPerfModule
      },
      {
-       id: 'drug',
-       label: '약 검색 · 금기',
-       shortLabel: '약검색',
-       icon: '🔎',
-       render: renderDrugPage,
-       onEnter: loadDrugModule
-     },
-     {
        id: 'guide',
        label: '처방 셋팅',
        shortLabel: '셋팅',
@@ -1783,28 +1779,28 @@
        onEnter: loadGuideModule
      },
      {
-       id: 'clients',
-       label: '거래처 등록/관리',
-       shortLabel: '거래처',
-       icon: '🏥',
-       render: renderClientsPage,
-       onEnter: function () { renderActiveMenu(); }
+       id: 'prescription',
+       label: '처방전 입력',
+       shortLabel: '처방전',
+       icon: '💊',
+       render: renderPrescriptionPage,
+       onEnter: loadPrescriptionModule
      },
      {
-       id: 'hira',
-       label: '비거래처 사전조회',
-       shortLabel: '심평원',
-       icon: '🏥',
-       render: renderHiraPage,
-       onEnter: loadHiraModule
+       id: 'drug',
+       label: '약 검색 · 금기',
+       shortLabel: '약검색',
+       icon: '🔎',
+       render: renderDrugPage,
+       onEnter: loadDrugModule
      },
      {
-       id: 'clientinfo',
-       label: '거래처 상세정보',
-       shortLabel: '상세',
-       icon: '🏥',
-       render: renderClientInfoPage,
-       onEnter: function () { renderActiveMenu(); }
+       id: 'turnover',
+       label: '주문 · 회전일 관리',
+       shortLabel: '주문',
+       icon: '📊',
+       render: renderTurnoverPage,
+       onEnter: loadTurnoverModule
      },
      {
        id: 'ledger',

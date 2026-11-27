@@ -106,7 +106,12 @@ def main():
     check('applyGuidePending' in js, '처방전으로 보내기 연결이 없습니다')
 
     # 2-c) v1.7 — 비거래처 사전조회(심평원 HIRA)
-    check("id: 'hira'" in js and 'renderHiraPage' in js, '비거래처 사전조회 메뉴가 없습니다')
+    check('renderHiraPage' in js and '비거래처 심평원(HIRA) 사전조회' in js, '비거래처 사전조회 화면이 없습니다')
+    # 메뉴 순서: 거래처 등록/관리 → 거래처 상세정보 → 월별 실적 → 처방 셋팅 → 처방전 입력 → 약 검색 → 주문 → 원장 → 설정
+    order_ids = re.findall(r"\n       id: '([a-z]+)',", js)
+    expect_order = ['clients', 'clientinfo', 'perf', 'guide', 'prescription', 'drug', 'turnover', 'ledger', 'docs']
+    check(order_ids[:len(expect_order)] == expect_order, '사이드바 메뉴 순서가 다릅니다: %s' % order_ids)
+    check(not re.search(r"label: '\s*\d+\.", js), '메뉴 이름 앞에 숫자가 붙었습니다')
     check('loadHiraModule' in js and 'hiraBase' in js, '사전조회 초기 로딩이 없습니다')
     check("runServer('getHiraPrevisitBriefing'" in js, 'getHiraPrevisitBriefing 호출이 없습니다')
     check('hiraSearch' in js and 'hiraPickDept' in js and 'hiraPickHospital' in js, '병원·진료과 선택 흐름이 없습니다')
