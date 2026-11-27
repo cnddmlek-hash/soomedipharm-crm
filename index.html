@@ -631,7 +631,70 @@
      .mobile-header { padding-top: env(safe-area-inset-top); height: calc(52px + env(safe-area-inset-top)); }
      .app-main { padding-top: calc(64px + env(safe-area-inset-top)); }
    }
- </style>
+ 
+   /* ---------------- v1.4 약 검색·가이드·생일 ---------------- */
+   .v14-birthday {
+     position: relative; margin: 0 0 12px; padding: 12px 40px 12px 14px;
+     background: #fff7ed; border: 1px solid #fed7aa; border-radius: 12px;
+   }
+   .v14-birthday .b-head { font-size: 13.5px; color: #9a3412; margin-bottom: 6px; }
+   .v14-birthday .b-head span { color: #b45309; font-weight: 700; }
+   .v14-birthday .b-body { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+   .v14-birthday .b-item {
+     background: #fff; border: 1px solid #fed7aa; border-radius: 999px;
+     padding: 5px 10px; font-size: 12.5px; cursor: pointer; color: var(--text);
+   }
+   .v14-birthday .b-item small { color: var(--muted); }
+   .v14-birthday .b-more { font-size: 12px; color: var(--muted); }
+   .v14-birthday .b-close {
+     position: absolute; top: 8px; right: 8px; border: none; background: none;
+     color: #b45309; font-size: 14px; cursor: pointer;
+   }
+   .v14-group { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; background: #fff; }
+   .v14-group .g-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 6px; }
+   .v14-sim { border-color: #bfdbfe; background: #f8fbff; }
+   .v14-sim-item {
+     display: block; width: 100%; text-align: left; background: #fff; border: 1px solid #dbeafe;
+     border-radius: 8px; padding: 7px 10px; margin-bottom: 5px; cursor: pointer; font-size: 13px; color: var(--text);
+   }
+   .v14-sim-item small { color: var(--muted); }
+   .v14-dur { margin-top: 10px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 10px 12px; }
+   .v14-dur .d-title { font-weight: 700; color: #991b1b; font-size: 13px; margin-bottom: 6px; }
+   .v14-dur .d-row { display: flex; gap: 8px; font-size: 12.5px; line-height: 1.55; padding: 3px 0; border-top: 1px dashed  #fecaca; }
+   .v14-dur .d-row:first-of-type { border-top: none; }
+   .v14-dur .d-row b { flex: 0 0 66px; color: #b91c1c; }
+   .v14-dur .d-row span { white-space: pre-wrap; }
+   .v14-text { font-size: 12.5px; line-height: 1.65; white-space: pre-wrap; color: #334155; max-height: 260px; overflow: auto; }
+   .v14-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+   .v14-chip {
+     border: 1px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 6px 12px;
+     font-size: 13px; cursor: pointer; color: var(--text);
+   }
+   .v14-chip small { color: var(--muted); font-size: 11px; }
+   .v14-chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+   .v14-chip.on small { color: #dbeafe; }
+   .v14-ing-row { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px dashed var(--border); flex-wrap: wrap; }
+   .v14-ing-check { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; }
+   .v14-ing-check input { width: auto; }
+   .v14-ing-prod { display: flex; gap: 5px; flex-wrap: wrap; }
+   .v14-prod {
+     border: 1px solid #bbf7d0; background: #f0fdf4; color: #166534; border-radius: 8px;
+     padding: 4px 8px; font-size: 12px; cursor: pointer;
+   }
+   .v14-prod span { font-weight: 700; color: #15803d; }
+   .v14-dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+   @media (max-width: 700px) { .v14-dash-grid { grid-template-columns: 1fr; } }
+   .v14-dash-box { border: 1px solid var(--border); border-radius: 10px; padding: 10px; background: #fbfdff; }
+   .v14-dash-box label { display: block; font-size: 12px; font-weight: 700; color: var(--primary); margin-bottom: 5px; }
+   .v14-dash-result { margin-top: 6px; }
+   .v14-dash-item {
+     display: flex; flex-direction: column; gap: 1px; width: 100%; text-align: left;
+     background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px;
+     margin-bottom: 4px; cursor: pointer;
+   }
+   .v14-dash-item .n { font-size: 12.5px; font-weight: 700; color: var(--text); }
+   .v14-dash-item .m { font-size: 11.5px; color: var(--muted); }
+</style>
 </head>
 <body>
  <!-- 로딩 오버레이 -->
@@ -645,7 +708,7 @@
  <div id="login-overlay" class="login-overlay">
    <div class="login-card">
      <div class="login-brand">
-       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.3</span></div>
+       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.4</span></div>
        <div class="s">담당자 아이디로 로그인해 주세요</div>
      </div>
      <div class="form-group" style="margin-bottom:10px;">
@@ -764,7 +827,7 @@
        </div>
        <div class="form-group">
          <label>담당자명 (이름)</label>
-         <input type="text" id="rg-name" autocomplete="name" placeholder="예: 김아름" />
+         <input type="text" id="rg-name" autocomplete="name" placeholder="홍길동" />
        </div>
        <div class="form-group">
          <label>비밀번호 (4자 이상)</label>
@@ -847,6 +910,18 @@
            <label>주소</label>
            <input type="text" id="c-addr" placeholder="도로명 주소" />
          </div>
+         <div class="form-group">
+           <label>원장님 성함</label>
+           <input type="text" id="c-doctor" placeholder="예: 김원장" />
+         </div>
+         <div class="form-group">
+           <label>원장님 생일 (MM-DD 또는 YYYY-MM-DD)</label>
+           <input type="text" id="c-birth" placeholder="04-08" inputmode="numeric" />
+         </div>
+         <div class="form-group span-2">
+           <label>취향 · 특이사항 (생일 알림에 함께 표시)</label>
+           <input type="text" id="c-taste" placeholder="예: 커피, 등산 / 오후 연락 선호" />
+         </div>
          <div class="form-group span-4">
            <label>메모</label>
            <textarea id="c-memo" rows="2" placeholder="특이사항, 결제조건 등"></textarea>
@@ -856,6 +931,50 @@
      <div class="modal-footer">
        <button class="btn btn-outline" onclick="closeModal('client-modal')">취소</button>
        <button class="btn btn-primary" onclick="submitClientForm()">저장하기</button>
+     </div>
+   </div>
+ </div>
+
+ <!-- v1.4 약 상세(약학정보원) 모달 -->
+ <div id="drug-modal" class="modal-backdrop">
+   <div class="modal" style="max-width:780px;">
+     <div class="modal-header">
+       <span id="dm-title">약 상세</span>
+       <button class="btn btn-outline btn-sm" onclick="closeModal('drug-modal')">✕</button>
+     </div>
+     <div class="modal-body" id="dm-body"></div>
+     <div class="modal-footer">
+       <button class="btn btn-outline" onclick="closeModal('drug-modal')">닫기</button>
+     </div>
+   </div>
+ </div>
+
+ <!-- v1.4 원장 정보(생일·취향) 입력 모달 -->
+ <div id="client-profile-modal" class="modal-backdrop">
+   <div class="modal" style="max-width:420px;">
+     <div class="modal-header">
+       <span id="cpf-title">원장 정보</span>
+       <button class="btn btn-outline btn-sm" onclick="closeModal('client-profile-modal')">✕</button>
+     </div>
+     <div class="modal-body">
+       <div class="form-group" style="margin-bottom:8px;">
+         <label>원장님 성함</label>
+         <input type="text" id="cpf-name" placeholder="예: 김원장" />
+       </div>
+       <div class="form-group" style="margin-bottom:8px;">
+         <label>생일 (MM-DD 또는 YYYY-MM-DD)</label>
+         <input type="text" id="cpf-birth" placeholder="04-08" inputmode="numeric" />
+         <small style="color:var(--muted);">생일 하루 전(D-1)에 담당자에게 메일·앱 알림이 갑니다.</small>
+       </div>
+       <div class="form-group">
+         <label>취향 · 특이사항</label>
+         <input type="text" id="cpf-taste" placeholder="예: 커피, 등산 / 오후 연락 선호" />
+       </div>
+       <div id="cpf-err" style="color:var(--danger);font-size:12px;min-height:16px;margin-top:6px;"></div>
+     </div>
+     <div class="modal-footer">
+       <button class="btn btn-outline" onclick="closeModal('client-profile-modal')">취소</button>
+       <button class="btn btn-primary" onclick="submitClientProfile()">저장</button>
      </div>
    </div>
  </div>
@@ -970,7 +1089,7 @@
    <!-- PC 사이드바 -->
    <aside class="sidebar">
      <div class="sidebar-brand">
-       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.3</span></h1>
+       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.4</span></h1>
        <div class="sub" id="brand-sub">로딩 중...</div>
      </div>
      <nav class="sidebar-nav" id="sidebar-nav"></nav>
@@ -986,7 +1105,7 @@
 
    <!-- 모바일 상단 헤더 -->
    <header class="mobile-header">
-     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.3</span></h1>
+     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.4</span></h1>
      <div style="display:flex;gap:6px;align-items:center;">
        <span id="m-user" class="ver-chip" style="display:none;" onclick="openPasswordModal()" title="내 계정 · 비밀번호 변경"></span>
        <button class="btn btn-sm" id="pw-btn-m" title="비밀번호 변경" aria-label="비밀번호 변경" style="display:none;background:rgba(255,255,255,0.16);color:#fff;" onclick="openPasswordModal()">🔑</button>
@@ -1006,7 +1125,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.3';
+   const APP_VERSION = 'v1.4';
 
    const STATE = {
      // 로그인/권한
@@ -1022,6 +1141,7 @@
      currentMonth: '',
      userEmail: '',
      userList: null,          // MASTER 설정 탭 — 사용자 목록·가입 승인 (getUsersList)
+     serverVersion: '',       // 시트 서버(Code.gs) 버전 — v1.4 함수 사용 가능 여부 판단
      // 주문/회전일 탭
      turnoverSubtab: 'dashboard',   // 'dashboard' | 'order' | 'products'
      productFilter: '',             // '' (전체) | '급여' | '비급여'
@@ -1063,6 +1183,27 @@
      rxDirty: false,
      rxReqSeq: 0,
      elpharmaCount: 0,
+     // v1.4 — 약 검색·가이드·생일
+     drugQuery: '',
+     drugScope: 'all',
+     drugResult: null,
+     drugSame: null,
+     drugDetail: null,
+     kpicOpen: false,
+     kpicQuery: '',
+     kpicResult: null,
+     thirdPartyOnly: false,
+     guideDepts: null,
+     guideDept: '',
+     guideData: null,
+     guideMode: 'maxrate',
+     guideSelected: {},
+     guideRec: null,
+     guidePending: [],
+     clientProfileResult: null,
+     profileEditCode: '',
+     birthdayStatus: null,
+     birthdayHidden: '',
      // 자동완성 인스턴스
      acInstances: []
    };
@@ -1558,6 +1699,22 @@
        onEnter: loadPerfModule
      },
      {
+       id: 'drug',
+       label: '약 검색 · 금기',
+       shortLabel: '약검색',
+       icon: '🔎',
+       render: renderDrugPage,
+       onEnter: loadDrugModule
+     },
+     {
+       id: 'guide',
+       label: '처방 가이드',
+       shortLabel: '가이드',
+       icon: '🧭',
+       render: renderGuidePage,
+       onEnter: loadGuideModule
+     },
+     {
        id: 'clients',
        label: '거래처 등록/관리',
        shortLabel: '거래처',
@@ -1641,6 +1798,7 @@
      const menu = APP_MENUS.filter(function (m) { return m.id === STATE.activeMenu; })[0];
      if (menu && !canUseMenu(menu)) { renderMasterOnlyNotice(container); return; }
      if (menu && menu.render) menu.render(container);
+     renderBirthdayBanner();
    }
 
    // =========================================================================
@@ -1658,6 +1816,7 @@
      STATE.user = data.user || null;
      STATE.isMaster = Boolean(data.isMaster);
      if (data.hiraConfigured !== undefined) STATE.hiraConfigured = Boolean(data.hiraConfigured);
+     if (data.appVersion) STATE.serverVersion = String(data.appVersion);
    }
 
    function updateUserUi() {
@@ -2120,6 +2279,15 @@
          '</h2>' +
          '<button class="btn btn-primary" onclick="openClientModal()">+ 신규 거래처 등록</button>' +
        '</div>' +
+       '<div class="card">' +
+         '<div class="card-title"><span>🎂 원장님 정보 검색 (생일·취향·특이사항)</span>' +
+           '<small style="font-weight:500;font-size:12px;color:var(--muted);">생일이 가까운 순서로 보여 줍니다</small></div>' +
+         '<div class="toolbar">' +
+           '<input type="text" id="cp-q" style="max-width:300px;" placeholder="원장님 성함 · 취향 · 생일 · 병원명" onkeydown="if(event.key===\'Enter\')loadClientProfilePanel()" />' +
+           '<button class="btn btn-primary btn-sm" onclick="loadClientProfilePanel()">🔍 찾기</button>' +
+         '</div>' +
+         '<div id="cp-result" style="margin-top:8px;"></div>' +
+       '</div>' +
        '<div class="card" id="client-card">' +
          '<div class="toolbar">' +
            '<input type="text" id="client-search" style="max-width:260px;" placeholder="거래처명, 코드, 담당자, 진료과 검색" autocomplete="off" value="' + esc(STATE.clientSearch) + '" oninput="applyClientFilter()" oncompositionend="applyClientFilter()" />' +
@@ -2181,6 +2349,7 @@
        '</div>';
 
      applyClientFilter();
+     if (!STATE.clientProfileResult) loadClientProfilePanel();
    }
 
    /**
@@ -2310,6 +2479,16 @@
        '</div>' +
 
        '<div class="cd-section">' +
+         '<h4>🎂 원장님 정보 <small style="color:var(--muted);font-weight:500;">· 생일은 D-1 담당자 알림에 쓰입니다</small></h4>' +
+         '<div class="detail-grid">' +
+           infoRow('원장님 성함', c.원장성함) +
+           infoRow('생일', c.원장생일 ? (c.원장생일 + (birthDday_(c.원장생일) !== null ? ' (D-' + birthDday_(c.원장생일) + ')' : '')) : '') +
+           infoRow('취향 · 특이사항', c.취향) +
+         '</div>' +
+         '<div style="margin-top:6px;"><button class="btn btn-outline btn-sm" onclick="openClientProfileFromDetail()">✏️ 생일·취향 입력</button></div>' +
+       '</div>' +
+
+       '<div class="cd-section">' +
          '<h4>🏥 건강보험심사평가원(HIRA) 확인</h4>' +
          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
            '<button class="btn btn-outline btn-sm" onclick="hiraOpenFromDetail()">심평원 병원·약국 찾기 열기</button>' +
@@ -2420,6 +2599,9 @@
      document.getElementById('c-active').value = c ? c.사용여부 : 'Y';
      document.getElementById('c-addr').value = c ? c.주소 : '';
      document.getElementById('c-memo').value = c ? c.메모 : '';
+     document.getElementById('c-doctor').value = c ? (c.원장성함 || '') : '';
+     document.getElementById('c-birth').value = c ? (c.원장생일 || '') : '';
+     document.getElementById('c-taste').value = c ? (c.취향 || '') : '';
      openModal('client-modal');
    }
 
@@ -2437,7 +2619,10 @@
        회전일경고기준: Number(document.getElementById('c-warn').value || 100),
        사용여부: document.getElementById('c-active').value,
        주소: document.getElementById('c-addr').value.trim(),
-       메모: document.getElementById('c-memo').value.trim()
+       메모: document.getElementById('c-memo').value.trim(),
+       원장성함: document.getElementById('c-doctor').value.trim(),
+       원장생일: document.getElementById('c-birth').value.trim(),
+       취향: document.getElementById('c-taste').value.trim()
      };
      if (!payload.거래처명) { showToast('거래처명을 입력해 주세요.'); return; }
      const res = await runServer('saveClient', [payload]);
@@ -2498,6 +2683,7 @@
      const rows = STATE.turnoverOnlyWarn ? d.rows.filter(function (r) { return r.경고여부; }) : d.rows;
 
      el.innerHTML =
+       renderDashSearchCard() +
        '<div class="kpi-grid">' +
          '<div class="kpi-card"><div class="kpi-label">당월 총 매출</div><div class="kpi-val primary">' + fmtNum(d.summary.sumSales) + '원</div></div>' +
          '<div class="kpi-card"><div class="kpi-label">당월 총 수금</div><div class="kpi-val success">' + fmtNum(d.summary.sumColl) + '원</div></div>' +
@@ -2968,7 +3154,7 @@
          '</div>' +
          (hasGubun ? '' : '<p style="margin:0 0 10px;font-size:12.5px;color:var(--muted);">ⓘ 급여구분·시장가가 아직 안 보이면 시트 서버(Code.gs)를 새 버전으로 다시 배포하면 표시됩니다.</p>') +
          '<div class="table-wrap"><table id="pm-table"><thead><tr>' +
-           '<th>보험코드</th><th>제품명</th><th>규격</th><th class="center">급여구분</th><th class="num">기준단가</th><th class="num">시장가</th><th class="num">수수료율(%)</th>' +
+           '<th>보험코드</th><th>제품명</th><th>성분</th><th>규격</th><th class="center">급여구분</th><th class="num">기준단가</th><th class="num">시장가</th><th class="num">수수료율(%)</th>' +
          '</tr></thead><tbody>' +
          (total ? STATE.products.map(function (p) {
            const market = Number(p.시장가 || 0);
@@ -2976,12 +3162,13 @@
            return '<tr data-gubun="' + esc(p.급여구분 || '') + '" data-q="' + esc(q) + '">' +
              '<td>' + esc(p.보험코드) + '</td>' +
              '<td><strong>' + esc(p.제품명) + '</strong></td>' +
+             '<td style="font-size:12px;">' + esc(p.성분명 || '-') + '</td>' +
              '<td>' + esc(p.규격) + '</td>' +
              '<td class="center">' + payTypeBadge(p.급여구분) + '</td>' +
              '<td class="num">' + fmtNum(p.기준단가) + '원</td>' +
              '<td class="num">' + (p.급여구분 === '비급여' && market ? '<strong style="color:#b45309;">' + fmtNum(market) + '원</strong>' : '<span style="color:var(--muted);">-</span>') + '</td>' +
              '<td class="num">' + p.수수료율 + '%</td></tr>';
-         }).join('') : '<tr><td colspan="7" class="center" style="padding:20px;color:var(--muted);">등록된 제품이 없습니다.</td></tr>') +
+         }).join('') : '<tr><td colspan="8" class="center" style="padding:20px;color:var(--muted);">등록된 제품이 없습니다.</td></tr>') +
          '</tbody></table></div>' +
        '</div>';
 
@@ -3469,6 +3656,7 @@
      renderRxSaved();
      renderRxResults();
      updateRxSummary();
+     if (STATE.rxClient && (STATE.guidePending || []).length) applyGuidePending();
    }
 
    function rxClientInfoStrip(c) {
@@ -3963,6 +4151,846 @@
    }
 
    // =========================================================================
+   // 8-b. v1.4 — 약 검색(약학정보원) · 동일성분 · 금기 · 처방 가이드 · 생일 알림
+   // =========================================================================
+
+   /** v1.4 서버 함수가 아직 배포되지 않았는지 → 안내 문구 */
+   function v14ErrorText_(e) {
+     if (typeof isMissingFunctionError_ === 'function' && isMissingFunctionError_(e)) return SERVER_REDEPLOY_HINT;
+     return friendlyError_(e);
+   }
+
+   /** v1.4 화면 상단 안내 (Code.gs 재배포 전) */
+   function v14NoticeHtml_() {
+     if (!STATE.serverVersion || STATE.serverVersion === 'v1.4') return '';
+     return '<div class="card" style="border-color:#fde68a;background:#fffbeb;">' +
+       '<div style="font-size:12.5px;line-height:1.6;color:#92400e;">' +
+         '⚠️ 시트 서버(Code.gs)가 <b>' + esc(STATE.serverVersion) + '</b> 로 연결되어 있어 새 기능(약 검색·가이드·생일 알림)이 아직 동작하지 않습니다.<br />' +
+         '구글 시트 → 확장 프로그램 → Apps Script 에 최신 <b>Code.gs</b>를 넣고 [배포 관리 → 수정 → 새 버전]으로 한 번만 재배포하면 바로 켜집니다.' +
+       '</div></div>';
+   }
+
+   /** 'MM-DD' 또는 'YYYY-MM-DD' → 오늘 기준 D-day (오늘 0, 지났으면 다음해 기준) */
+   function birthDday_(value, todayStr) {
+     const s = String(value || '').trim();
+     let mm = 0, dd = 0;
+     let m = s.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})$/);
+     if (m) { mm = Number(m[2]); dd = Number(m[3]); }
+     else {
+       m = s.match(/^(\d{1,2})[-./](\d{1,2})$/);
+       if (m) { mm = Number(m[1]); dd = Number(m[2]); }
+     }
+     if (!mm || !dd) return null;
+     const t = (todayStr || STATE.today || new Date().toISOString().slice(0, 10)).slice(0, 10);
+     const ty = Number(t.slice(0, 4));
+     const pad = function (n) { return (n < 10 ? '0' : '') + n; };
+     let target = ty + '-' + pad(mm) + '-' + pad(dd);
+     if (target < t) target = (ty + 1) + '-' + pad(mm) + '-' + pad(dd);
+     const a = new Date(t + 'T00:00:00'), b = new Date(target + 'T00:00:00');
+     return Math.round((b.getTime() - a.getTime()) / 86400000);
+   }
+
+   /** 생일이 D-1·당일인 내 거래처 */
+   function birthdaySoonList() {
+     const out = [];
+     (STATE.clients || []).forEach(function (c) {
+       const d = birthDday_(c.원장생일);
+       if (d === 0 || d === 1) out.push({ client: c, dday: d });
+     });
+     out.sort(function (a, b) { return a.dday - b.dday; });
+     return out;
+   }
+
+   function renderBirthdayBanner() {
+     const holder = document.getElementById('main-content');
+     if (!holder) return;
+     const old = document.getElementById('birthday-banner');
+     if (old) old.remove();
+     const list = birthdaySoonList();
+     if (!list.length) return;
+     if (STATE.birthdayHidden === (STATE.today || '')) return;
+     const div = document.createElement('div');
+     div.id = 'birthday-banner';
+     div.className = 'v14-birthday';
+     div.innerHTML =
+       '<div class="b-head">🎂 <strong>원장님 생일 알림</strong> <span>오늘/내일 ' + list.length + '곳</span></div>' +
+       '<div class="b-body">' + list.slice(0, 4).map(function (x) {
+         const c = x.client;
+         return '<button class="b-item" onclick="openClientDetail(\'' + esc(c.거래처코드) + '\')">' +
+           (x.dday === 0 ? '<span class="badge badge-danger">오늘</span>' : '<span class="badge badge-amber">내일</span>') +
+           ' ' + esc(c.거래처명) + (c.원장성함 ? ' · ' + esc(c.원장성함) : '') +
+           (c.취향 ? ' <small>' + esc(c.취향) + '</small>' : '') + '</button>';
+       }).join('') + (list.length > 4 ? '<span class="b-more">외 ' + (list.length - 4) + '곳</span>' : '') + '</div>' +
+       '<button class="b-close" onclick="STATE.birthdayHidden=STATE.today;renderBirthdayBanner()" aria-label="닫기">✕</button>';
+     holder.insertBefore(div, holder.firstChild);
+   }
+
+   // ---------------------------------------------------------------- 약 검색 화면
+   function loadDrugModule() {
+     if (!STATE.drugResult && STATE.drugQuery) searchDrugProducts(STATE.drugQuery);
+     renderActiveMenu();
+   }
+
+   function renderDrugPage(container) {
+     const scope = STATE.drugScope || 'all';
+     const scopeBtn = function (v, label, icon) {
+       return '<button class="subtab ' + (scope === v ? 'active' : '') + '" onclick="setDrugScope(\'' + v + '\')">' + icon + ' ' + label + '</button>';
+     };
+     container.innerHTML =
+       '<div class="page-header">' +
+         '<h2 class="page-title">🔎 약 검색 · 동일성분 · 금기 확인</h2>' +
+         '<span class="badge badge-blue">v1.4</span>' +
+       '</div>' +
+       '<div class="card">' +
+         '<div class="subtabs" style="margin-bottom:8px;">' + scopeBtn('all', '전체', '🔎') + scopeBtn('경구', '경구제', '💊') + scopeBtn('주사·수액', '수액·주사', '💧') + '</div>' +
+         '<div class="toolbar" style="gap:8px;">' +
+           '<input type="text" id="drug-q" style="flex:1;min-width:200px;" placeholder="제품명 · 성분명 · 보험코드 (예: 세프트리악손, 아모잘탄, 647202372)" autocomplete="off" value="' + esc(STATE.drugQuery || '') + '" oninput="onDrugInput()" />' +
+           '<button class="btn btn-primary" onclick="searchDrugProducts(document.getElementById(\'drug-q\').value)">검색</button>' +
+           '<button class="btn btn-outline" onclick="openKpicPanel()">🏥 약학정보원</button>' +
+         '</div>' +
+         '<small style="color:var(--muted);display:block;margin-top:6px;">이름이 정확하지 않아도 연관 제품을 함께 보여 줍니다. 성분이 같으면 한 줄로 묶어 수수료율까지 비교합니다.</small>' +
+       '</div>' +
+       v14NoticeHtml_() +
+       '<div id="drug-similar"></div>' +
+       '<div id="drug-result"></div>' +
+       '<div id="drug-same"></div>' +
+       '<div id="drug-thirdparty"></div>' +
+       '<div id="kpic-panel"></div>';
+     renderDrugResult();
+     renderDrugSameIngredient();
+     renderDrugThirdParty();
+     renderKpicPanel();
+     if (STATE.kpicOpen) loadKpicSearch(STATE.kpicQuery || STATE.drugQuery || '');
+   }
+
+   function setDrugScope(v) {
+     STATE.drugScope = v;
+     if (STATE.drugQuery) searchDrugProducts(STATE.drugQuery);
+     else renderActiveMenu();
+   }
+
+   let _drugTimer = null;
+   function onDrugInput() {
+     const el = document.getElementById('drug-q');
+     if (!el) return;
+     const q = el.value.trim();
+     STATE.drugQuery = q;
+     clearTimeout(_drugTimer);
+     if (q.length < 1) { STATE.drugResult = null; renderDrugResult(); return; }
+     _drugTimer = setTimeout(function () { searchDrugProducts(q); }, 320);
+   }
+
+   async function searchDrugProducts(query) {
+     const q = String(query || '').trim();
+     STATE.drugQuery = q;
+     const box = document.getElementById('drug-result');
+     if (!q) { STATE.drugResult = null; renderDrugResult(); return; }
+     if (box) box.innerHTML = '<div class="card"><span style="color:var(--muted);">🔎 "' + esc(q) + '" 찾는 중...</span></div>';
+     try {
+       const res = await runServer('searchProductsV14', [q, { scope: STATE.drugScope || 'all', limit: 100, withThirdParty: true }], { silent: true });
+       STATE.drugResult = res;
+       renderDrugResult();
+     } catch (e) {
+       if (box) box.innerHTML = '<div class="card" style="color:var(--danger);">검색에 실패했습니다: ' + esc(v14ErrorText_(e)) + '</div>';
+     }
+   }
+
+   function renderDrugResult() {
+     const el = document.getElementById('drug-result');
+     const simEl = document.getElementById('drug-similar');
+     if (!el) return;
+     const r = STATE.drugResult;
+     if (!r) {
+       el.innerHTML = '';
+       if (simEl) simEl.innerHTML = '';
+       return;
+     }
+     if (!r.total) {
+       el.innerHTML = '<div class="card"><div style="padding:8px 0;color:var(--muted);">"' + esc(r.query) + '" 로 찾은 제품이 없습니다.' +
+         (STATE.drugScope !== 'all' ? ' <button class="btn-link" onclick="setDrugScope(\'all\')">전체에서 다시 찾기</button>' : '') + '</div></div>';
+     } else {
+       el.innerHTML =
+         '<div class="card">' +
+           '<div class="card-title"><span>검색 결과 ' + fmtNum(r.total) + '건 · 성분 ' + r.groups.length + '묶음</span>' +
+             '<small style="font-weight:500;color:var(--muted);font-size:12px;">같은 성분은 한 카드로 묶었습니다</small></div>' +
+           r.groups.map(function (g) {
+             const ingLabel = g.성분한글 || g.성분명 || '성분 미등록';
+             return '<div class="v14-group">' +
+               '<div class="g-head">' +
+                 '<div><strong>' + esc(ingLabel) + '</strong>' +
+                   (g.분류 ? ' <span class="badge badge-muted">' + esc(g.분류) + '</span>' : '') +
+                   (g.key ? ' <small style="color:var(--muted);">' + esc(g.key) + '</small>' : '') +
+                 '</div>' +
+                 '<div style="display:flex;gap:4px;flex-wrap:wrap;">' +
+                   (g.key ? '<button class="btn btn-outline btn-sm" onclick="showSameIngredient(\'' + esc(g.key) + '\')">🧬 동일성분 전체</button>' : '') +
+                   (g.key ? '<button class="btn btn-outline btn-sm" onclick="openKpicForIngredient(\'' + esc(ingLabel) + '\')">🏥 금기·상세</button>' : '') +
+                 '</div>' +
+               '</div>' +
+               '<div class="table-wrap"><table><thead><tr>' +
+                 '<th>구분</th><th>제품명</th><th>규격</th><th class="num">약가</th><th class="num">수수료율</th><th class="center">약학정보원</th>' +
+               '</tr></thead><tbody>' +
+               g.items.map(function (p) {
+                 return '<tr>' +
+                   '<td>' + (p.표 === '경구' ? '<span class="badge badge-blue">경구</span>' : '<span class="badge badge-green">수액·주사</span>') + '</td>' +
+                   '<td><strong>' + esc(p.품목명) + '</strong>' + (p.제약사 ? ' <small style="color:var(--muted);">' + esc(p.제약사) + '</small>' : '') +
+                     (p.보험코드 ? '<br /><small style="color:var(--muted);">' + esc(p.보험코드) + '</small>' : '') + '</td>' +
+                   '<td>' + esc(p.규격 || '-') + '</td>' +
+                   '<td class="num">' + fmtNum(p.약가) + '원</td>' +
+                   '<td class="num"><strong style="color:var(--primary);">' + (p.수수료율 || 0) + '%</strong></td>' +
+                   '<td class="center"><button class="btn btn-outline btn-sm" onclick="openKpicSearch(\'' + esc(p.품목명) + '\')">🔎 상세</button></td>' +
+                 '</tr>';
+               }).join('') +
+               '</tbody></table></div>' +
+             '</div>';
+           }).join('') +
+         '</div>';
+     }
+     if (simEl) {
+       const sim = r.similar || [];
+       simEl.innerHTML = sim.length
+         ? '<div class="card v14-sim"><div class="card-title"><span>🔗 비슷한 이름의 제품</span><small style="font-weight:500;color:var(--muted);font-size:12px;">정확한 이름이 아니어도 찾아 드립니다</small></div>' +
+           sim.map(function (s) {
+             return '<button class="v14-sim-item" onclick="searchDrugProducts(\'' + esc(s.name) + '\')">' +
+               '<strong>' + esc(s.name) + '</strong> <span class="badge badge-muted">' + esc(s.reason) + '</span>' +
+               ' <small>' + esc(s.표) + (s.code ? ' · ' + esc(s.code) : '') + '</small></button>';
+           }).join('') + '</div>'
+         : '';
+     }
+   }
+
+   // ---------------------------------------------------------------- 동일성분 패널
+   async function showSameIngredient(key) {
+     const el = document.getElementById('drug-same');
+     if (!el) return;
+     el.innerHTML = '<div class="card"><span style="color:var(--muted);">🧬 같은 성분 제품을 모으는 중...</span></div>';
+     try {
+       const res = await runServer('getSameIngredientProducts', [key], { silent: true });
+       STATE.drugSame = res;
+       renderDrugSameIngredient();
+       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+     } catch (e) { el.innerHTML = '<div class="card" style="color:var(--danger);">불러오지 못했습니다.</div>'; }
+   }
+
+   function renderDrugSameIngredient() {
+     const el = document.getElementById('drug-same');
+     const res = STATE.drugSame;
+     if (!el || !res) return;
+     const 금기 = res.금기 || {};
+     const rows = function (list, kind) {
+       if (!list || !list.length) return '';
+       return '<div class="table-wrap"><table><thead><tr><th>제품명</th><th>제약사</th><th>규격</th><th class="num">' + (kind === 'tp' ? '단가(조건)' : '약가') + '</th><th class="num">' + (kind === 'tp' ? '할인·자료' : '수수료율') + '</th></tr></thead><tbody>' +
+         list.map(function (p) {
+           if (kind === 'tp') {
+             return '<tr><td><strong>' + esc(p.제품명) + '</strong></td><td>' + esc(p.제약사) + '</td><td>' + esc(p.규격) + '</td>' +
+               '<td class="num">' + fmtNum(p.단가) + '원<br /><small style="color:var(--muted);">' + esc(p.수량조건) + '</small></td>' +
+               '<td class="num">' + esc(p.할인율 || '-') + '</td></tr>';
+           }
+           return '<tr><td><strong>' + esc(p.품목명) + '</strong>' + (p.보험코드 ? ' <small style="color:var(--muted);">' + esc(p.보험코드) + '</small>' : '') + '</td>' +
+             '<td>' + esc(p.제약사 || '-') + '</td><td>' + esc(p.규격 || '-') + '</td>' +
+             '<td class="num">' + fmtNum(p.약가) + '원</td><td class="num"><strong>' + (p.수수료율 || 0) + '%</strong></td></tr>';
+         }).join('') + '</tbody></table></div>';
+     };
+     el.innerHTML =
+       '<div class="card">' +
+         '<div class="card-title"><span>🧬 ' + esc(res.성분한글 || res.key) + ' — 같은 성분 제품</span>' +
+           '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'drug-same\').innerHTML=\'\'">닫기</button></div>' +
+         (res.분류 ? '<div style="margin-bottom:6px;"><span class="badge badge-muted">' + esc(res.분류) + '</span></div>' : '') +
+         '<h4 style="margin:6px 0 4px;font-size:13px;">우리 제품 (' + res.items.length + ')</h4>' + (rows(res.items) || '<p style="color:var(--muted);">등록된 제품이 없습니다.</p>') +
+         (res.sameGroup && res.sameGroup.length ? '<h4 style="margin:12px 0 4px;font-size:13px;">복합제로 이 성분이 들어있는 제품 (' + res.sameGroup.length + ')</h4>' + rows(res.sameGroup) : '') +
+         '<h4 style="margin:12px 0 4px;font-size:13px;">자사·타사 단가표 (' + res.thirdParty.length + ')</h4>' + (rows(res.thirdParty, 'tp') || '<p style="color:var(--muted);">등록된 단가 자료가 없습니다.</p>') +
+         '<div class="v14-dur">' +
+           '<div class="d-title">🚫 금기·주의 요약 <small>(' + esc(res.성분한글 || res.key) + ')</small></div>' +
+           (금기.병용 ? '<div class="d-row"><b>병용금기</b><span>' + esc(금기.병용) + '</span></div>' : '') +
+           (금기.임부 ? '<div class="d-row"><b>임부금기</b><span>' + esc(금기.임부) + '</span></div>' : '') +
+           (금기.연령 ? '<div class="d-row"><b>연령금기</b><span>' + esc(금기.연령) + '</span></div>' : '') +
+           (!금기.병용 && !금기.임부 && !금기.연령 ? '<div class="d-row"><span style="color:var(--muted);">내장 요약은 없습니다. 아래 약학정보원에서 제품별 DUR을 확인하세요.</span></div>' : '') +
+           '<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">' +
+             '<button class="btn btn-outline btn-sm" onclick="openKpicForIngredient(\'' + esc(res.성분한글 || res.key) + '\')">🏥 약학정보원에서 정확한 금기 보기</button>' +
+             '<a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="https://www.health.kr/searchResult?searchWord=' + encodeURIComponent(res.성분한글 || res.key) + '">약학정보원 새 창</a>' +
+             '<a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="https://nedrug.mfds.go.kr/searchDrug?searchYn=true&itemName=' + encodeURIComponent(res.성분한글 || res.key) + '">식약처(의약품안전나라)</a>' +
+           '</div>' +
+         '</div>' +
+       '</div>';
+   }
+
+   function renderDrugThirdParty() {
+     const el = document.getElementById('drug-thirdparty');
+     const r = STATE.drugResult;
+     if (!el) return;
+     if (!r || !r.thirdParty || !r.thirdParty.length) { el.innerHTML = ''; return; }
+     const byProduct = {};
+     const order = [];
+     r.thirdParty.forEach(function (x) {
+       const k = x.제약사 + '|' + x.제품명;
+       if (!byProduct[k]) { byProduct[k] = { 제약사: x.제약사, 제품명: x.제품명, 성분명: x.성분명, 규격: x.규격, tiers: [] }; order.push(k); }
+       byProduct[k].tiers.push(x);
+     });
+     el.innerHTML =
+       '<div class="card">' +
+         '<div class="card-title"><span>💰 자사·타사 단가표 중 일치 (' + order.length + ')</span>' +
+           '<a class="btn btn-outline btn-sm" href="javascript:openThirdPartyPage()">전체 단가표</a></div>' +
+         order.slice(0, 12).map(function (k) {
+           const p = byProduct[k];
+           return '<div class="v14-group">' +
+             '<div class="g-head"><div><strong>' + esc(p.제품명) + '</strong> <small style="color:var(--muted);">' + esc(p.제약사) + ' · ' + esc(p.성분명) + '</small></div>' +
+             '<span class="badge badge-muted">' + esc(p.규격) + '</span></div>' +
+             '<div class="table-wrap"><table><thead><tr><th>수량 조건</th><th>할인율</th><th class="num">적용 단가</th><th class="num">낱개가</th></tr></thead><tbody>' +
+             p.tiers.map(function (t) {
+               return '<tr><td>' + esc(t.수량조건 || '-') + '</td><td>' + esc(t.할인율 || '-') + '</td>' +
+                 '<td class="num"><strong>' + fmtNum(t.단가) + '원</strong></td><td class="num">' + (t.낱개가 ? fmtNum(t.낱개가) + '원' : '-') + (t.비고 ? '<br /><small style="color:var(--muted);">' + esc(t.비고) + '</small>' : '') + '</td></tr>';
+             }).join('') + '</tbody></table></div>' +
+           '</div>';
+         }).join('') +
+       '</div>';
+   }
+
+   function openThirdPartyPage() {
+     STATE.drugQuery = STATE.drugQuery || '';
+     STATE.thirdPartyOnly = true;
+     renderActiveMenu();
+     setTimeout(function () {
+       const q = document.getElementById('drug-q');
+       if (q) q.focus();
+       searchDrugProducts(STATE.drugQuery || '');
+     }, 50);
+   }
+
+   // ---------------------------------------------------------------- 약학정보원
+   function openKpicPanel() {
+     STATE.kpicOpen = true;
+     const panel = document.getElementById('kpic-panel');
+     if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+     renderKpicPanel();
+     loadKpicSearch(STATE.kpicQuery || STATE.drugQuery || '');
+   }
+
+   function openKpicSearch(name) {
+     STATE.kpicOpen = true;
+     STATE.kpicQuery = name;
+     renderKpicPanel();
+     loadKpicSearch(name);
+     const panel = document.getElementById('kpic-panel');
+     if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+   }
+
+   function openKpicForIngredient(name) { openKpicSearch(name); }
+
+   function renderKpicPanel() {
+     const el = document.getElementById('kpic-panel');
+     if (!el) return;
+     if (!STATE.kpicOpen) { el.innerHTML = ''; return; }
+     el.innerHTML =
+       '<div class="card">' +
+         '<div class="card-title"><span>🏥 약학정보원 검색 · 금기(DUR)</span>' +
+           '<small style="font-weight:500;color:var(--muted);font-size:12px;">제품명·성분명으로 약학정보원 공개 데이터를 조회합니다</small></div>' +
+         '<div class="toolbar" style="gap:6px;">' +
+           '<input type="text" id="kpic-q" style="flex:1;min-width:180px;" placeholder="예: 아모잘탄, 세프트리악손" value="' + esc(STATE.kpicQuery || '') + '" onkeydown="if(event.key===\'Enter\')loadKpicSearch(this.value)" />' +
+           '<button class="btn btn-primary" onclick="loadKpicSearch(document.getElementById(\'kpic-q\').value)">조회</button>' +
+         '</div>' +
+         '<div id="kpic-result" style="margin-top:8px;"></div>' +
+       '</div>';
+     renderKpicResult();
+   }
+
+   async function loadKpicSearch(query) {
+     const q = String(query || '').trim();
+     STATE.kpicQuery = q;
+     const box = document.getElementById('kpic-result');
+     if (!q) { STATE.kpicResult = null; renderKpicResult(); return; }
+     if (box) box.innerHTML = '<span style="color:var(--muted);">약학정보원에서 "' + esc(q) + '" 찾는 중...</span>';
+     try {
+       const res = await runServer('kpicSearch', [q, 12], { silent: true });
+       STATE.kpicResult = res;
+       renderKpicResult();
+     } catch (e) {
+       if (box) box.innerHTML = '<span style="color:var(--danger);">약학정보원 조회 실패: ' + esc(v14ErrorText_(e)) + '</span>';
+     }
+   }
+
+   function renderKpicResult() {
+     const box = document.getElementById('kpic-result');
+     if (!box) return;
+     const r = STATE.kpicResult;
+     if (!r) { box.innerHTML = ''; return; }
+     if (r.error) { box.innerHTML = '<div style="color:var(--warn);font-size:12.5px;">' + esc(r.error) + '</div>'; return; }
+     if (!r.items || !r.items.length) { box.innerHTML = '<div style="color:var(--muted);font-size:12.5px;">약학정보원에서 찾지 못했습니다. 성분명으로 다시 검색해 보세요.</div>'; return; }
+     box.innerHTML = r.items.map(function (it) {
+       return '<div class="rx-hit">' +
+         '<div class="h-main">' +
+           '<div class="h-name">' + esc(it.name) + ' <span class="badge badge-muted">' + esc(it.전문일반 || '') + '</span>' +
+             (it.우리제품수 ? ' <span class="badge badge-success">우리제품 ' + it.우리제품수 + '</span>' : '') + '</div>' +
+           '<div class="h-sub">' + esc(it.maker) + ' · ' + esc(it.form) + ' · ' + esc(it.cls || '') + '<br />' +
+             '성분: ' + esc(it.성분한글 || it.성분명) + (it.보험가 ? ' · 보험가 ' + esc(it.보험가) : '') + '</div>' +
+         '</div>' +
+         '<div style="display:flex;flex-direction:column;gap:4px;">' +
+           '<button class="btn btn-primary btn-sm" onclick="openKpicDetail(\'' + esc(it.drugCode) + '\')">금기·상세</button>' +
+           '<a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="' + it.url + '">원문</a>' +
+         '</div>' +
+       '</div>';
+     }).join('');
+   }
+
+   async function openKpicDetail(drugCode) {
+     openModal('drug-modal');
+     const body = document.getElementById('dm-body');
+     document.getElementById('dm-title').textContent = '약학정보원 상세';
+     body.innerHTML = '<p style="color:var(--muted);">불러오는 중...</p>';
+     try {
+       const d = await runServer('kpicDrugDetail', [drugCode], { silent: true });
+       STATE.drugDetail = d;
+       renderKpicDetail();
+     } catch (e) {
+       body.innerHTML = '<p style="color:var(--danger);">상세를 불러오지 못했습니다: ' + esc(friendlyError_(e)) + '</p>';
+     }
+   }
+
+   function durBlock_(label, text, cls) {
+     if (!text) return '';
+     return '<div class="d-row ' + (cls || '') + '"><b>' + esc(label) + '</b><span>' + esc(text) + '</span></div>';
+   }
+
+   function renderKpicDetail() {
+     const d = STATE.drugDetail;
+     if (!d) return;
+     const body = document.getElementById('dm-body');
+     document.getElementById('dm-title').textContent = '🏥 ' + d.name;
+     body.innerHTML =
+       '<div class="detail-grid" style="margin-bottom:10px;">' +
+         '<div class="detail-item"><span class="k">제조·수입</span><span class="v">' + esc(d.maker || '-') + '</span></div>' +
+         '<div class="detail-item"><span class="k">제형·경로</span><span class="v">' + esc(d.form || '-') + ' · ' + esc(d.route || '-') + '</span></div>' +
+         '<div class="detail-item"><span class="k">보험가</span><span class="v">' + esc(d.boh || '-') + '</span></div>' +
+         '<div class="detail-item"><span class="k">포장</span><span class="v">' + esc(d.box || '-') + '</span></div>' +
+       '</div>' +
+       '<div class="cd-section"><h4>🧪 성분</h4><div style="font-size:13px;line-height:1.6;">' +
+         (d.성분들 && d.성분들.length ? d.성분들.map(function (s) { return '· ' + esc(s); }).join('<br />') : esc(d.성분명 || '-')) +
+       '</div></div>' +
+       '<div class="cd-section"><h4>🚫 금기사항 (DUR)</h4>' +
+         '<div class="v14-dur">' +
+           durBlock_('병용금기', d.금기.병용) + durBlock_('임부금기', d.금기.임부) + durBlock_('연령금기', d.금기.연령) +
+           durBlock_('노인주의', d.금기.노인) + durBlock_('용량주의', d.금기.용량) + durBlock_('투여기간', d.금기.기간) +
+           (!d.금기.병용 && !d.금기.임부 && !d.금기.연령 && !d.금기.노인 ? '<div class="d-row"><span style="color:var(--muted);">등록된 금기 정보가 없습니다.</span></div>' : '') +
+         '</div></div>' +
+       (d.우리제품 && d.우리제품.length ? '<div class="cd-section"><h4>💊 우리 동일성분 제품 (' + d.우리제품.length + ')</h4>' +
+         d.우리제품.slice(0, 8).map(function (p) {
+           return '<div class="rx-hit"><div class="h-main"><div class="h-name">' + esc(p.품목명) + '</div><div class="h-sub">' +
+             (p.표 === '경구' ? '경구' : '수액·주사') + ' · ' + esc(p.제약사 || '') + ' · 약가 ' + fmtNum(p.약가) + '원 · 수수료 ' + (p.수수료율 || 0) + '%</div></div></div>';
+         }).join('') + '</div>' : '') +
+       (d.효능 ? '<div class="cd-section"><h4>📋 효능·효과</h4><div class="v14-text">' + esc(d.효능) + '</div></div>' : '') +
+       (d.용법 ? '<div class="cd-section"><h4>💧 용법·용량</h4><div class="v14-text">' + esc(d.용법) + '</div></div>' : '') +
+       (d.주의사항 ? '<div class="cd-section"><h4>⚠️ 사용상 주의사항</h4><div class="v14-text">' + esc(d.주의사항) + '</div></div>' : '') +
+       '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">' +
+         '<a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="' + d.url + '">약학정보원 원문 열기</a>' +
+         '<a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="https://nedrug.mfds.go.kr/searchDrug?searchYn=true&itemName=' + encodeURIComponent(d.name) + '">식약처 허가사항</a>' +
+       '</div>';
+   }
+
+   // ---------------------------------------------------------------- 처방 가이드
+   async function loadGuideModule() {
+     renderActiveMenu();
+     if (!STATE.guideDepts) {
+       try {
+         const res = await runServer('getDeptGuide', [''], { silent: true });
+         STATE.guideDepts = res.depts || [];
+         renderGuideDeptChips();
+       } catch (e) {}
+     }
+     if (STATE.guideDept && !STATE.guideData) loadGuideDept(STATE.guideDept);
+   }
+
+   function renderGuidePage(container) {
+     container.innerHTML =
+       '<div class="page-header">' +
+         '<h2 class="page-title">🧭 진료과별 처방 가이드</h2>' +
+         '<span class="badge badge-amber">참고용</span>' +
+       '</div>' +
+       '<div class="card">' +
+         '<div class="card-title"><span>진료과 선택</span><small style="font-weight:500;font-size:12px;color:var(--muted);">과별 주요 성분 → 우리 제품(수수료율) 매칭</small></div>' +
+         '<div id="guide-depts" class="v14-chips"></div>' +
+       '</div>' +
+       v14NoticeHtml_() +
+       '<div id="guide-body"></div>';
+     renderGuideDeptChips();
+     renderGuideBody();
+   }
+
+   function renderGuideDeptChips() {
+     const el = document.getElementById('guide-depts');
+     if (!el) return;
+     const list = STATE.guideDepts || [];
+     if (!list.length) { el.innerHTML = '<span style="color:var(--muted);">진료과 자료를 불러오는 중...</span>'; return; }
+     el.innerHTML = list.map(function (d) {
+       return '<button class="v14-chip ' + (STATE.guideDept === d.진료과 ? 'on' : '') + '" onclick="loadGuideDept(\'' + esc(d.진료과) + '\')">' +
+         esc(d.진료과) + ' <small>' + d.성분수 + '</small></button>';
+     }).join('');
+   }
+
+   async function loadGuideDept(dept) {
+     STATE.guideDept = dept;
+     renderGuideDeptChips();
+     const body = document.getElementById('guide-body');
+     if (body) body.innerHTML = '<div class="card"><span style="color:var(--muted);">' + esc(dept) + ' 자료를 불러오는 중...</span></div>';
+     try {
+       const res = await runServer('getDeptGuide', [dept], { silent: true });
+       STATE.guideData = res;
+       STATE.guideSelected = {};
+       (res.items || []).forEach(function (it) { if (it.우리제품 && it.우리제품.length) STATE.guideSelected[it.영문키] = true; });
+       renderGuideBody();
+     } catch (e) {
+       if (body) body.innerHTML = '<div class="card" style="color:var(--danger);">가이드를 불러오지 못했습니다.</div>';
+     }
+   }
+
+   function renderGuideBody() {
+     const el = document.getElementById('guide-body');
+     if (!el) return;
+     const d = STATE.guideData;
+     if (!d || !d.items) { el.innerHTML = ''; return; }
+     const groups = {};
+     const order = [];
+     d.items.forEach(function (it) {
+       if (!groups[it.질환군]) { groups[it.질환군] = []; order.push(it.질환군); }
+       groups[it.질환군].push(it);
+     });
+     el.innerHTML =
+       '<div class="card">' +
+         '<div class="card-title"><span>' + esc(d.dept) + ' — 질환군별 주요 성분</span>' +
+           '<small style="font-weight:500;font-size:12px;color:var(--muted);">성분별 우리 제품은 수수료율 높은 순</small></div>' +
+         '<div class="toolbar" style="gap:6px;flex-wrap:wrap;">' +
+           '<select id="guide-mode" style="max-width:230px;" onchange="STATE.guideMode=this.value">' +
+             '<option value="maxrate">① 요율 최우선 (제약사 무관 최고 요율)</option>' +
+             '<option value="minmaker">② 최소 제약사로 높은 요율</option>' +
+             '<option value="perIngredient">③ 성분별 요율 집중</option>' +
+           '</select>' +
+           '<button class="btn btn-primary btn-sm" onclick="runGuideRecommend()">🎯 추천 세팅 보기</button>' +
+           '<button class="btn btn-outline btn-sm" onclick="toggleGuideAll(true)">전체 선택</button>' +
+           '<button class="btn btn-outline btn-sm" onclick="toggleGuideAll(false)">선택 해제</button>' +
+         '</div>' +
+         order.map(function (g) {
+           return '<div class="v14-group">' +
+             '<div class="g-head"><div><strong>' + esc(g) + '</strong> <small style="color:var(--muted);">' + groups[g].length + '성분</small></div></div>' +
+             groups[g].map(function (it) {
+               const has = it.우리제품 && it.우리제품.length;
+               return '<div class="v14-ing-row">' +
+                 '<label class="v14-ing-check"><input type="checkbox" style="width:auto;" ' + (has && STATE.guideSelected[it.영문키] ? 'checked' : '') + (has ? '' : ' disabled') +
+                   ' onchange="STATE.guideSelected[\'' + esc(it.영문키) + '\']=this.checked" />' +
+                   '<span><strong>' + esc(it.성분명) + '</strong>' + (it.대표제품예 ? ' <small style="color:var(--muted);">' + esc(it.대표제품예) + '</small>' : '') + '</span></label>' +
+                 '<div class="v14-ing-prod">' +
+                   (has ? it.우리제품.slice(0, 3).map(function (p) {
+                     return '<button class="v14-prod" onclick="guideAddItem(\'' + esc(p.보험코드) + '\')" title="처방전 입력에 담기">' +
+                       esc(p.품목명) + ' <span>' + (p.수수료율 || 0) + '%</span></button>';
+                   }).join('') : '<span style="color:var(--muted);font-size:12px;">' + esc(it.비고 || '우리 제품 없음') + '</span>') +
+                 '</div>' +
+               '</div>';
+             }).join('') +
+           '</div>';
+         }).join('') +
+       '</div>' +
+       '<div id="guide-recommend"></div>';
+     renderGuideRecommend();
+   }
+
+   function toggleGuideAll(on) {
+     const d = STATE.guideData;
+     if (!d) return;
+     STATE.guideSelected = {};
+     (d.items || []).forEach(function (it) {
+       if (it.우리제품 && it.우리제품.length) STATE.guideSelected[it.영문키] = on;
+     });
+     renderGuideBody();
+   }
+
+   async function runGuideRecommend() {
+     const d = STATE.guideData;
+     if (!d) return;
+     const keys = Object.keys(STATE.guideSelected || {}).filter(function (k) { return STATE.guideSelected[k]; });
+     if (!keys.length) { showToast('성분을 1개 이상 선택해 주세요.'); return; }
+     const mode = STATE.guideMode || document.getElementById('guide-mode').value || 'maxrate';
+     try {
+       const res = await runServer('recommendRegimen', [{ mode: mode, ingredients: keys, dept: d.dept }], { silent: true });
+       STATE.guideRec = res;
+       renderGuideRecommend();
+       const box = document.getElementById('guide-recommend');
+       if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+     } catch (e) { showToast('추천 계산에 실패했습니다: ' + friendlyError_(e)); }
+   }
+
+   function renderGuideRecommend() {
+     const el = document.getElementById('guide-recommend');
+     if (!el) return;
+     const r = STATE.guideRec;
+     if (!r) { el.innerHTML = ''; return; }
+     const modeLabel = { maxrate: '요율 최우선', minmaker: '최소 제약사', perIngredient: '성분별 요율 집중' }[r.mode] || r.mode;
+     el.innerHTML =
+       '<div class="card">' +
+         '<div class="card-title"><span>🎯 추천 세팅 — ' + esc(modeLabel) + '</span>' +
+           '<button class="btn btn-accent btn-sm" onclick="guideSendToRx()">💊 처방전 입력으로 보내기</button></div>' +
+         '<div class="kpi-grid" style="margin-bottom:10px;">' +
+           '<div class="kpi-card"><div class="kpi-label">추천 품목</div><div class="kpi-val">' + r.summary.추천품목수 + '개</div></div>' +
+           '<div class="kpi-card"><div class="kpi-label">제약사 수</div><div class="kpi-val primary">' + r.summary.제약사수 + '곳</div></div>' +
+           '<div class="kpi-card"><div class="kpi-label">평균 수수료율</div><div class="kpi-val success">' + r.summary.평균수수료율 + '%</div></div>' +
+           '<div class="kpi-card"><div class="kpi-label">선택 성분</div><div class="kpi-val">' + r.summary.성분수 + '개</div></div>' +
+         '</div>' +
+         '<div class="table-wrap"><table><thead><tr><th>성분</th><th>추천 품목</th><th>제약사</th><th class="num">약가</th><th class="num">수수료율</th><th class="center">담기</th></tr></thead><tbody>' +
+         r.picks.map(function (p) {
+           return '<tr><td>' + esc(p.성분) + '</td><td><strong>' + esc(p.품목명) + '</strong> <small style="color:var(--muted);">' + esc(p.규격 || '') + '</small></td>' +
+             '<td>' + esc(p.제약사 || '-') + '</td><td class="num">' + fmtNum(p.약가) + '원</td>' +
+             '<td class="num"><strong style="color:var(--primary);">' + (p.수수료율 || 0) + '%</strong></td>' +
+             '<td class="center"><button class="btn btn-outline btn-sm" onclick="guideAddItem(\'' + esc(p.보험코드) + '\')">＋</button></td></tr>';
+         }).join('') + '</tbody></table></div>' +
+       '</div>';
+   }
+
+   /** 가이드/추천에서 품목을 처방전 입력으로 넘김 */
+   function guideAddItem(code) {
+     const c = String(code || '').trim();
+     if (!c) return;
+     STATE.guidePending = STATE.guidePending || [];
+     if (STATE.guidePending.indexOf(c) === -1) STATE.guidePending.push(c);
+     showToast('처방전 입력 목록에 담았습니다 (' + STATE.guidePending.length + '개). [처방전] 화면에서 병원을 고르면 함께 표시됩니다.');
+   }
+
+   function guideSendToRx() {
+     const r = STATE.guideRec;
+     if (!r || !r.picks.length) { showToast('먼저 추천 세팅을 만들어 주세요.'); return; }
+     STATE.guidePending = r.picks.map(function (p) { return p.보험코드; });
+     switchMenu('prescription');
+     showToast(r.picks.length + '개 품목을 처방전 입력으로 보냈습니다.');
+   }
+
+   /** 처방전 화면이 열릴 때 가이드에서 담은 품목을 목록에 추가 */
+   function applyGuidePending() {
+     const list = STATE.guidePending || [];
+     if (!list.length) return;
+     const products = STATE.products || [];
+     let added = 0;
+     list.forEach(function (code) {
+       if (STATE.rxRows.some(function (r) { return r.보험코드 === code; })) return;
+       const p = products.filter(function (x) { return String(x.보험코드) === String(code); })[0];
+       if (!p) return;
+       const ing = (p.성분명 || '');
+       STATE.rxRows.push({
+         보험코드: p.보험코드, 품목명: p.제품명, 규격: p.규격 || '', 제약사: '자사',
+         약가: Number(p.기준단가 || 0), 수수료율: Number(p.수수료율 || 0),
+         수량: '', 지난수량: 0, 지난월: '', saved: false, 성분: ing
+       });
+       added++;
+     });
+     STATE.guidePending = [];
+     if (added) {
+       STATE.rxDirty = true;
+       renderRxRows();
+       updateRxSummary();
+       showToast(added + '개 품목을 가이드에서 가져왔습니다. 개수를 입력하세요.');
+     }
+   }
+
+   // ---------------------------------------------------------------- 거래처 원장 정보
+   async function loadClientProfilePanel() {
+     const q = (document.getElementById('cp-q') || {}).value || '';
+     const box = document.getElementById('cp-result');
+     if (!box) return;
+     box.innerHTML = '<span style="color:var(--muted);font-size:12.5px;">찾는 중...</span>';
+     try {
+       const res = await runServer('searchClientsProfile', [q], { silent: true });
+       STATE.clientProfileResult = res;
+       renderClientProfileResult();
+     } catch (e) {
+       box.innerHTML = '<span style="color:var(--danger);font-size:12.5px;">불러오지 못했습니다.</span>';
+     }
+   }
+
+   function renderClientProfileResult() {
+     const box = document.getElementById('cp-result');
+     if (!box) return;
+     const res = STATE.clientProfileResult;
+     if (!res) { box.innerHTML = ''; return; }
+     if (!res.items.length) { box.innerHTML = '<span style="color:var(--muted);font-size:12.5px;">조건에 맞는 거래처가 없습니다.</span>'; return; }
+     box.innerHTML =
+       '<div class="table-wrap"><table><thead><tr><th>거래처</th><th>진료과</th><th>원장님</th><th>생일</th><th>취향·특이사항</th><th class="center">관리</th></tr></thead><tbody>' +
+       res.items.slice(0, 40).map(function (c) {
+         const d = c.생일까지;
+         const badge = d === null ? '<span style="color:var(--muted);">-</span>' :
+           (d === 0 ? '<span class="badge badge-danger">오늘</span>' : (d <= 7 ? '<span class="badge badge-amber">D-' + d + '</span>' : '<span style="color:var(--muted);">D-' + d + '</span>'));
+         return '<tr>' +
+           '<td><strong>' + esc(c.거래처명) + '</strong> <small style="color:var(--muted);">' + esc(c.거래처코드) + '</small></td>' +
+           '<td>' + esc(c.진료과 || '-') + '</td>' +
+           '<td>' + esc(c.원장성함 || '-') + '</td>' +
+           '<td>' + esc(c.원장생일 || '-') + ' ' + badge + '</td>' +
+           '<td style="font-size:12px;">' + esc(c.취향 || c.메모 || '-') + '</td>' +
+           '<td class="center"><button class="btn btn-outline btn-sm" onclick="openClientProfileEdit(\'' + esc(c.거래처코드) + '\')">생일·취향 입력</button></td>' +
+         '</tr>';
+       }).join('') + '</tbody></table></div>' +
+       (res.total > 40 ? '<small style="color:var(--muted);">전체 ' + res.total + '곳 중 40곳 표시</small>' : '');
+   }
+
+   function openClientProfileEdit(code) {
+     const c = findClient(code);
+     if (!c) return;
+     STATE.profileEditCode = code;
+     document.getElementById('cpf-title').textContent = '원장 정보 — ' + c.거래처명;
+     document.getElementById('cpf-name').value = c.원장성함 || '';
+     document.getElementById('cpf-birth').value = c.원장생일 || '';
+     document.getElementById('cpf-taste').value = c.취향 || '';
+     document.getElementById('cpf-err').textContent = '';
+     openModal('client-profile-modal');
+   }
+
+   function openClientProfileFromDetail() {
+     const d = STATE.detailData;
+     if (!d) return;
+     closeModal('client-detail-modal');
+     openClientProfileEdit(d.client.거래처코드);
+   }
+
+   async function submitClientProfile() {
+     const code = STATE.profileEditCode;
+     const name = document.getElementById('cpf-name').value.trim();
+     const birth = document.getElementById('cpf-birth').value.trim();
+     const taste = document.getElementById('cpf-taste').value.trim();
+     const errEl = document.getElementById('cpf-err');
+     if (birth && !/^(\d{4}[-./])?\d{1,2}[-./]\d{1,2}$/.test(birth)) {
+       errEl.textContent = '생일은 04-08 또는 1991-04-08 형식으로 입력해 주세요.';
+       return;
+     }
+     try {
+       const res = await runServer('saveClientProfile', [{ 거래처코드: code, 원장성함: name, 원장생일: birth, 취향: taste }]);
+       STATE.clients = res.clients;
+       closeModal('client-profile-modal');
+       showToast('원장 정보를 저장했습니다.');
+       renderActiveMenu();
+       renderBirthdayBanner();
+     } catch (e) {
+       errEl.textContent = friendlyError_(e);
+     }
+   }
+
+   // ---------------------------------------------------------------- 생일 알림 설정(MASTER)
+   async function loadBirthdaySettings() {
+     const box = document.getElementById('birthday-settings');
+     if (!box) return;
+     try {
+       const res = await runServer('getBirthdayTriggerStatus', [], { silent: true, masterOnly: true });
+       STATE.birthdayStatus = res;
+       renderBirthdaySettings();
+     } catch (e) {
+       box.innerHTML = '<span style="color:var(--muted);font-size:12.5px;">생일 알림 상태를 불러오지 못했습니다(Code.gs v1.4 재배포 필요).</span>';
+     }
+   }
+
+   function renderBirthdaySettings() {
+     const box = document.getElementById('birthday-settings');
+     if (!box) return;
+     const st = STATE.birthdayStatus;
+     if (!st) { box.innerHTML = ''; return; }
+     const users = (STATE.userList && STATE.userList.users) || [];
+     box.innerHTML =
+       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">' +
+         (st.installed
+           ? '<span class="badge badge-success">자동 알림 켜짐 (매일 오전 8시)</span><button class="btn btn-outline btn-sm" onclick="toggleBirthdayTrigger(false)">끄기</button>'
+           : '<span class="badge badge-muted">자동 알림 꺼짐</span><button class="btn btn-primary btn-sm" onclick="toggleBirthdayTrigger(true)">알림 켜기</button>') +
+         '<button class="btn btn-outline btn-sm" onclick="sendBirthdayTest()">✉️ 테스트 메일 보내기</button>' +
+         '<span style="color:var(--muted);font-size:12px;">메일은 각 담당자 이메일로 갑니다</span>' +
+       '</div>' +
+       '<div class="table-wrap"><table><thead><tr><th>아이디</th><th>담당자</th><th>권한</th><th>알림 받을 이메일</th><th class="center">저장</th></tr></thead><tbody>' +
+       (users.length ? users.map(function (u) {
+         return '<tr><td>' + esc(u.아이디) + '</td><td>' + esc(u.담당자명) + '</td><td>' + esc(u.권한) + '</td>' +
+           '<td><input type="email" id="ue-' + esc(u.아이디) + '" style="min-width:180px;" placeholder="example@clinic.kr" value="' + esc(u.이메일 || (st.emails && st.emails[u.담당자명]) || '') + '" /></td>' +
+           '<td class="center"><button class="btn btn-outline btn-sm" onclick="saveUserEmailUi(\'' + esc(u.아이디) + '\')">저장</button></td></tr>';
+       }).join('') : '<tr><td colspan="5" class="center" style="color:var(--muted);">사용자 목록을 불러오면 여기에 표시됩니다.</td></tr>') +
+       '</tbody></table></div>';
+   }
+
+   async function toggleBirthdayTrigger(on) {
+     try {
+       const res = await runServer(on ? 'installBirthdayTrigger' : 'removeBirthdayTrigger', []);
+       STATE.birthdayStatus = on ? res : await runServer('getBirthdayTriggerStatus', [], { silent: true });
+       renderBirthdaySettings();
+       showToast(on ? '생일 알림을 켰습니다. 매일 오전 8시에 메일이 갑니다.' : '생일 알림을 껐습니다.');
+     } catch (e) { showToast(friendlyError_(e)); }
+   }
+
+   async function sendBirthdayTest() {
+     try {
+       const res = await runServer('sendBirthdayTestMail', []);
+       showToast('테스트 메일을 보냈습니다 → ' + res.to);
+     } catch (e) { showToast(friendlyError_(e)); }
+   }
+
+   async function saveUserEmailUi(userId) {
+     const el = document.getElementById('ue-' + userId);
+     const mail = el ? el.value.trim() : '';
+     try {
+       const res = await runServer('saveUserEmail', [userId, mail]);
+       if (STATE.userList) STATE.userList.users = res.users;
+       showToast(mail ? '이메일을 저장했습니다.' : '이메일을 비웠습니다.');
+       renderBirthdaySettings();
+     } catch (e) { showToast(friendlyError_(e)); }
+   }
+
+   // ---------------------------------------------------------------- 대시보드 상단 검색
+   function renderDashSearchCard() {
+     return '<div class="card v14-dash">' +
+       '<div class="card-title"><span>🔎 바로 검색</span><small style="font-weight:500;font-size:12px;color:var(--muted);">경구제(이엘파마) · 수액·주사(제품마스터)</small></div>' +
+       '<div class="v14-dash-grid">' +
+         '<div class="v14-dash-box">' +
+           '<label>💊 경구제 검색</label>' +
+           '<input type="text" id="dash-oral" placeholder="예: 아모잘탄, 아토르바틴" autocomplete="off" oninput="onDashSearch(\'경구\', this.value)" />' +
+           '<div id="dash-oral-result" class="v14-dash-result"></div>' +
+         '</div>' +
+         '<div class="v14-dash-box">' +
+           '<label>💧 수액·주사 검색</label>' +
+           '<input type="text" id="dash-inj" placeholder="예: 세프트리악손, 리도카인" autocomplete="off" oninput="onDashSearch(\'주사·수액\', this.value)" />' +
+           '<div id="dash-inj-result" class="v14-dash-result"></div>' +
+         '</div>' +
+       '</div>' +
+       '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">' +
+         '<button class="btn btn-outline btn-sm" onclick="switchMenu(\'drug\')">🔎 약 검색 · 금기 화면 열기</button>' +
+         '<button class="btn btn-outline btn-sm" onclick="switchMenu(\'guide\')">🧭 진료과 처방 가이드</button>' +
+       '</div>' +
+     '</div>';
+   }
+
+   const _dashTimers = {};
+   function onDashSearch(scope, value) {
+     const q = String(value || '').trim();
+     const key = scope === '경구' ? 'dash-oral-result' : 'dash-inj-result';
+     clearTimeout(_dashTimers[key]);
+     const box = document.getElementById(key);
+     if (!box) return;
+     if (q.length < 1) { box.innerHTML = ''; return; }
+     _dashTimers[key] = setTimeout(async function () {
+       box.innerHTML = '<span style="color:var(--muted);font-size:12px;">찾는 중...</span>';
+       try {
+         const res = await runServer('searchProductsV14', [q, { scope: scope, limit: 8, withThirdParty: false }], { silent: true });
+         if (!res.items.length) {
+           const sim = (res.similar || []).slice(0, 3);
+           box.innerHTML = '<div style="color:var(--muted);font-size:12px;">일치하는 제품이 없습니다.' +
+             (sim.length ? '<br />비슷한 이름: ' + sim.map(function (s) {
+               return '<button class="btn-link" onclick="jumpDrug(\'' + esc(s.name) + '\',\'' + esc(scope) + '\')">' + esc(s.name) + '</button>';
+             }).join(', ') : '') + '</div>';
+           return;
+         }
+         box.innerHTML = res.items.slice(0, 6).map(function (p) {
+           return '<button class="v14-dash-item" onclick="jumpDrug(\'' + esc(p.품목명) + '\',\'' + esc(scope) + '\')">' +
+             '<span class="n">' + esc(p.품목명) + '</span>' +
+             '<span class="m">' + esc(p.제약사 || '') + ' · ' + fmtNum(p.약가) + '원 · ' + (p.수수료율 || 0) + '%</span></button>';
+         }).join('') + (res.total > 6 ? '<div style="font-size:12px;color:var(--muted);">외 ' + (res.total - 6) + '건 — <button class="btn-link" onclick="jumpDrug(\'' + esc(q) + '\',\'' + esc(scope) + '\')">전체 보기</button></div>' : '');
+       } catch (e) {
+         box.innerHTML = '<span style="color:var(--danger);font-size:12px;">검색 실패</span>';
+       }
+     }, 320);
+   }
+
+   function jumpDrug(query, scope) {
+     STATE.drugQuery = query || '';
+     STATE.drugScope = scope || 'all';
+     STATE.drugResult = null;
+     switchMenu('drug');
+     searchDrugProducts(STATE.drugQuery);
+   }
+
+
+   // =========================================================================
    // 7. MODULE 3: 거래원장 & 거래명세서 조회
    // =========================================================================
    function jumpToLedger(clientCode) {
@@ -4358,6 +5386,10 @@
              : '<small style="color:var(--warn);font-weight:700;">설정 저장은 MASTER 권한만 가능합니다.</small>') +
          '</div>' +
        '</div>' +
+       '<div class="card">' +
+         '<div class="card-title"><span>🎂 원장님 생일 D-1 알림</span><small style="font-weight:500;font-size:12px;color:var(--muted);">매일 오전 8시 담당자 메일로 발송</small></div>' +
+         '<div id="birthday-settings"><span style="color:var(--muted);font-size:12.5px;">불러오는 중...</span></div>' +
+       '</div>' +
        usersSectionHtml_() +
        '<div class="card">' +
          '<div class="card-title"><span>📨 최근 이메일 발송이력 (최신 50건)</span><button class="btn btn-outline btn-sm" onclick="loadMailLogsModule()">새로고침</button></div>' +
@@ -4383,6 +5415,12 @@
          '</div>' +
        '</div>' +
        '<p style="text-align:center;color:var(--muted);font-size:12px;">수메디팜 미니 CRM ' + APP_VERSION + ' · Google Sheets 실시간 연동</p>';
+     afterDocsSettingsRender_();
+   }
+
+   function afterDocsSettingsRender_() {
+     const box = document.getElementById('birthday-settings');
+     if (box) loadBirthdaySettings();
    }
 
    async function saveAppSettings() {
