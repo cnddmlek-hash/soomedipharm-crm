@@ -195,6 +195,13 @@ def main():
     check(bool(ap) and 'rxGuideCodes' in ap.group(1), 'applyGuidePending 이 유지목록을 쓰지 않습니다')
     check(bool(ap) and 'if (!STATE.rxClient) return 0' in ap.group(1), '병원 미선택 시 보류 처리가 없습니다')
 
+    # 4-c) 처방전 ↔ 처방 셋팅 병원 연결 (v1.7 UX)
+    check('rxOpenGuideFromRx' in js and '🎯 처방 셋팅에서 가져오기' in js, '처방전 화면에서 처방 셋팅으로 가는 버튼이 없습니다')
+    check('rxApplyGuideRecNow' in js and '품목 바로 담기' in js, '추천을 현재 병원에 바로 담는 버튼이 없습니다')
+    check('guideHospitalBarHtml_' in js and 'guideSetHospital' in js, '처방 셋팅의 담을 병원 선택기가 없습니다')
+    check('guideRxTargetBadge_' in js and '담을 병원' in js, '처방 셋팅의 담을 병원 배지가 없습니다')
+    check('rxOpenFromGuide' in js, '처방 셋팅 → 처방전 이동 버튼이 없습니다')
+
     # 5) 순수 함수 실행 (QuickJS)
     try:
         import quickjs
@@ -223,7 +230,9 @@ def main():
     # 6) 가이드 → 처방전 연결 실행 검사 (이엘파마 경구 품목이 STATE.products 에 없어도 유지되는지)
     try:
         import quickjs
-        names = ['guideCacheProduct_', 'guideFindProduct_', 'guideAddItem', 'guideSendToRx', 'applyGuidePending']
+        names = ['guideCacheProduct_', 'guideFindProduct_', 'guideAddItem', 'guideSendToRx', 'applyGuidePending',
+                 'guideRxTargetBadge_', 'guideHospitalBarHtml_', 'guideSetHospital', 'rxOpenFromGuide',
+                 'rxApplyGuideRecNow', 'rxOpenGuideFromRx']
         blocks = [extract_fn(js, n) for n in names]
         if any(b is None for b in blocks):
             check(False, '가이드→처방전 함수를 추출하지 못했습니다: %s' % [n for n, b in zip(names, blocks) if b is None])
@@ -237,9 +246,20 @@ def main():
               ] },
               guideData: null, guideProductCache: {}, guidePending: [], rxGuideCodes: [],
               rxRows: [], rxClient: '', rxFrequent: [], products: [],
-              rxDirty: false, rxMonth: '2026-11'
+              rxDirty: false, rxMonth: '2026-11', clients: [],
+              guideDept: '', guideTab: 'oral'
             };
-            var __toasts = [], __menus = [], __renders = 0, __sums = 0;
+            STATE.clients = [
+              { 거래처코드: 'S001', 거래처명: '수아의원', 사용여부: 'Y' },
+              { 거래처코드: 'S002', 거래처명: '장편한내과의원', 사용여부: 'Y' }
+            ];
+            var __toasts = [], __menus = [], __renders = 0, __sums = 0, __menus2 = 0;
+            function findClient(code) {
+              code = String(code || '');
+              for (var i = 0; i < STATE.clients.length; i++) if (STATE.clients[i].거래처코드 === code) return STATE.clients[i];
+              return null;
+            }
+            function renderActiveMenu() { __menus2++; }
             function showToast(m) { __toasts.push(String(m)); }
             function switchMenu(id) { __menus.push(String(id)); }
             function renderRxRows() { __renders++; }
@@ -272,6 +292,26 @@ def main():
             hold = ctx.eval("[STATE.rxRows.length, STATE.guidePending.join(',')].join('|')")
             hold = hold.decode() if isinstance(hold, bytes) else hold
             check(hold == '0|E100', '병원 미선택 시 품목이 사라짐: %s' % hold)
+
+            # (D) 처방전에서 병원을 고른 채 처방 셋팅으로 → 담을 병원 배지/선택기, 추천 한 번에 담기
+            ctx.eval("STATE.rxClient = 'S001'; STATE.guidePending = []; STATE.rxGuideCodes = []; STATE.rxRows = [];")
+            badge = ctx.eval('guideRxTargetBadge_()')
+            badge = badge.decode() if isinstance(badge, bytes) else badge
+            check('수아의원' in badge, '처방 셋팅 배지에 병원명이 없습니다: %s' % badge)
+            bar = ctx.eval('guideHospitalBarHtml_()')
+            bar = bar.decode() if isinstance(bar, bytes) else bar
+            check('수아의원' in bar and 'selected' in bar, '병원 선택기에서 현재 병원이 선택돼 있지 않습니다')
+            ctx.eval("rxApplyGuideRecNow();")
+            got3 = ctx.eval("[STATE.rxRows.length, (STATE.rxRows[0]||{}).보험코드].join('|')")
+            got3 = got3.decode() if isinstance(got3, bytes) else got3
+            check(got3 == '2|E100', '추천 바로 담기가 현재 병원에 안 들어감: %s' % got3)
+            ctx.eval("STATE.rxClient = ''; rxOpenGuideFromRx();")
+            no_client_toast = ctx.eval('__toasts[__toasts.length - 1]')
+            no_client_toast = no_client_toast.decode() if isinstance(no_client_toast, bytes) else no_client_toast
+            check('병원을 선택' in no_client_toast, '병원 없이 셋팅 이동 시 안내가 없습니다: %s' % no_client_toast)
+            ctx.eval("guideSetHospital('S002');")
+            check(ctx.eval('STATE.rxClient').decode() if isinstance(ctx.eval('STATE.rxClient'), bytes) else ctx.eval('STATE.rxClient') == 'S002',
+                  '처방 셋팅에서 병원 선택이 처방전 선택으로 이어지지 않습니다')
     except ImportError:
         pass
 
