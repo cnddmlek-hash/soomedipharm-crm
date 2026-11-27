@@ -62,6 +62,11 @@ def main():
     check("form: '경구'" in js, '경구 추천에 form:경구 가 없습니다')
     check('guideOralOnlyRec_' in js, '경구 전용 안전장치가 없습니다')
     check('guideFindProduct_' in js and 'guideCacheProduct_' in js, '가이드 품목 캐시가 없습니다')
+    check('setGuideMaxMakers' in js and 'guideMaxMakers' in js, '최소 제약사 개수 선택이 없습니다')
+    check('injCautionsHtml_' in js and 'renderInjectProtocols' in js and 'renderInjectCards' in js, '주사 프로토콜·배합금기 화면이 없습니다')
+    check('injWarnHtml_' in js and 'toggleInjPick' in js, '배합금기 자동 경고가 없습니다')
+    check('loadCoverageNotes' in js and 'renderCoverageCard' in js, '급여·삭감 가이드 카드가 없습니다')
+    check('onInjectProtoQuery' in js, '프로토콜 검색이 없습니다')
     check('pendingOrderProduct' in js, '주문 등록 자동 채우기가 없습니다')
     check('serverAtLeast_' in js and 'versionNum_' in js, '서버 버전 비교가 없습니다')
     check('id="rg-name" autocomplete="name" placeholder="홍길동"' in html, '회원가입 이름 예시가 홍길동이 아닙니다')
@@ -94,7 +99,7 @@ def main():
         missing = sorted(u for u in used if u not in api)
         check(not missing, 'Code.gs 에 없는 서버 함수 호출: %s' % ', '.join(missing))
         check('v1.5' in code, 'Code.gs 버전이 v1.5 가 아닙니다')
-        for name in ['getInjectGuide', 'getDeptGuide', 'recommendRegimen', 'looksParenteral_', 'dosageFormOf_']:
+        for name in ['getInjectGuide', 'getInjectProtocols', 'getCoverageNotes', 'getDeptGuide', 'recommendRegimen', 'looksParenteral_', 'dosageFormOf_']:
             check(name in code, 'Code.gs 에 %s 가 없습니다' % name)
     else:
         print('(Code.gs 없음 — 서버 함수 대조 생략)')

@@ -1208,6 +1208,11 @@
      injCat: '',                  // '' | 카테고리명
      injQuery: '',
      injLimit: 20,
+     guideMaxMakers: 3,          // 최소 제약사 모드 — 사용자가 고르는 제약사 상한(1~10)
+     injSelected: {},            // 주사제 셋팅에서 담은 품목(보험코드)
+     injProto: null,             // 주사 프로토콜·버합금기 자료
+     coverage: null,             // 심평원 급여·삭감 가이드
+     coverageCat: '',
      pendingOrderProduct: null,   // 주문(매출) 화면에 자동으로 채울 품목
      clientProfileResult: null,
      profileEditCode: '',
@@ -4624,6 +4629,8 @@
        } catch (e) {}
      }
      if (STATE.guideTab === 'inj' && !STATE.injData) loadInjectGuide();
+     if (STATE.guideTab === 'inj' && !STATE.injProto) loadInjectProtocols();
+     if (STATE.guideTab !== 'inj' && !STATE.coverage) loadCoverageNotes();
      if (STATE.guideDept && !STATE.guideData) loadGuideDept(STATE.guideDept);
    }
 
@@ -4656,8 +4663,11 @@
      if (inj) {
        renderInjectBody();
        renderInjectRecommend();
+       if (!STATE.injProto) loadInjectProtocols();
+       else renderInjectProtocols();
        return;
      }
+     loadCoverageNotes();
      renderGuideDeptChips();
      renderGuideBody();
    }
@@ -4671,7 +4681,59 @@
            '💊 이 탭은 <b>경구제(원외처방)</b> 전용입니다. 주사·수액 품목은 추천하지 않습니다 — 원내 주사는 <b>💉 주사제 셋팅</b> 탭에서 보세요.' +
          '</div>' +
        '</div>' +
+       '<div id="guide-coverage"></div>' +
        '<div id="guide-body"></div>';
+   }
+
+   // ---------------------------------------------------------------- 급여·삭감 가이드 (v1.5)
+   async function loadCoverageNotes() {
+     if (STATE.coverage) { renderCoverageCard(); return; }
+     try {
+       const res = await runServer('getCoverageNotes', [''], { silent: true });
+       STATE.coverage = res || null;
+       renderCoverageCard();
+     } catch (e) {
+       const el = document.getElementById('guide-coverage');
+       if (el) el.innerHTML = '<div class="card" style="color:var(--danger);font-size:12.5px;">' + esc(v14ErrorText_(e)) + '</div>';
+     }
+   }
+
+   function setCoverageCat(c) {
+     STATE.coverageCat = c || '';
+     renderCoverageCard();
+   }
+
+   function renderCoverageCard() {
+     const el = document.getElementById('guide-coverage');
+     if (!el) return;
+     const d = STATE.coverage;
+     if (!d || !d.items || !d.items.length) { el.innerHTML = ''; return; }
+     const cats = d.categories || [];
+     const cur = STATE.coverageCat || '';
+     const rows = d.items.filter(function (x) { return !cur || x.구분 === cur; });
+     el.innerHTML =
+       '<div class="card" style="border-color:#fecaca;background:#fffafa;">' +
+         '<div class="card-title"><span>🩺 심평원 급여·삭감 주의 가이드</span>' +
+           '<small style="font-weight:500;font-size:12px;color:var(--muted);">요약·참고용 — 청구 전 기준 원문 확인</small></div>' +
+         '<div class="v14-chips" style="margin-bottom:8px;">' +
+           '<button class="v14-chip ' + (!cur ? 'on' : '') + '" onclick="setCoverageCat(\'\')">전체 <small>' + d.items.length + '</small></button>' +
+           cats.map(function (c) {
+             return '<button class="v14-chip ' + (cur === c.구분 ? 'on' : '') + '" onclick="setCoverageCat(\'' + esc(c.구분) + '\')">' +
+               esc(c.구분) + ' <small>' + c.개수 + '</small></button>';
+           }).join('') +
+         '</div>' +
+         '<div class="table-wrap"><table><thead><tr><th>구분</th><th>항목</th><th>내용</th><th>근거</th></tr></thead><tbody>' +
+           rows.map(function (x) {
+             return '<tr>' +
+               '<td><span class="badge badge-danger">' + esc(x.구분) + '</span></td>' +
+               '<td><strong>' + esc(x.항목) + '</strong></td>' +
+               '<td style="font-size:12.5px;line-height:1.55;">' + esc(x.내용) + '</td>' +
+               '<td style="font-size:11.5px;color:var(--muted);">' + esc(x.근거) + '</td>' +
+             '</tr>';
+           }).join('') +
+         '</tbody></table></div>' +
+         '<div style="font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.6;">상병·수치·기간 등 세부 조건은 급여기준 원문과 다를 수 있습니다. 금액·삭감 판단은 심평원 기준을 확인하세요.</div>' +
+       '</div>';
    }
 
    /** 💉 주사제 셋팅(원내 주사·수액) 화면 틀 */
@@ -4680,7 +4742,15 @@
      const payChip = function (v, label) {
        return '<button class="v14-chip ' + (pay === v ? 'on' : '') + '" onclick="setInjectPay(\'' + v + '\')">' + label + '</button>';
      };
-     return '<div class="card">' +
+     return injCautionsHtml_() +
+       '<div class="card">' +
+         '<div class="card-title"><span>💉 수액·주사 프로토콜</span><small style="font-weight:500;font-size:12px;color:var(--muted);">증상·목적별 조합 · 참고제품은 예시, 실제 추천은 우리 제품</small></div>' +
+         '<div class="toolbar" style="gap:6px;flex-wrap:wrap;">' +
+           '<input type="text" id="inj-proto-q" style="max-width:220px;" placeholder="증상·성분 검색 (예: 숙취, 백옥, 면역)" autocomplete="off" value="' + esc(STATE.injProtoQuery || '') + '" oninput="onInjectProtoQuery(this.value)" />' +
+         '</div>' +
+       '</div>' +
+       '<div id="inj-protocol"></div>' +
+       '<div class="card">' +
          '<div class="card-title"><span>세팅 기준</span><small style="font-weight:500;font-size:12px;color:var(--muted);">제품마스터(주사·수액) 전용 · 경구제 제외</small></div>' +
          '<div class="v14-chips" style="margin-bottom:10px;">' +
            payChip('', '전체') + payChip('급여', '급여') + payChip('비급여', '비급여') +
@@ -4700,11 +4770,138 @@
            '<button class="btn btn-primary btn-sm" onclick="runInjectRecommend(true)">🎯 추천 세팅 보기</button>' +
          '</div>' +
          '<div style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6;">' +
-           '💉 <b>원내 주사·수액</b>은 처방전(원외)이 아니라 병원에서 바로 쓰는 품목입니다. 그래서 추천 품목은 <b>[🛒 매출 등록]</b>으로 바로 주문(매출)/수금 화면에 보낼 수 있습니다.' +
+           '💉 <b>원내 주사·수액</b>은 병원에서 바로 쓰는 품목입니다. 추천 품목은 <b>[🛒 매출 등록]</b>으로 주문(매출) 화면에 보낼 수 있습니다.' +
          '</div>' +
        '</div>' +
        '<div id="inj-recommend"></div>' +
-       '<div id="inj-body"></div>';
+       '<div id="inj-body"></div>' +
+       '<div id="inj-cards"></div>';
+   }
+
+   // ---------------------------------------------------------------- 주사 프로토콜·배합금기
+   async function loadInjectProtocols() {
+     if (STATE.injProto) { renderInjectProtocols(); return; }
+     try {
+       const res = await runServer('getInjectProtocols', [STATE.injProtoQuery || ''], { silent: true });
+       STATE.injProto = res || null;
+       renderInjectProtocols();
+       const c = document.getElementById('inj-cautions');
+       if (c && STATE.injProto) c.outerHTML = injCautionsHtml_();
+     } catch (e) {
+       const box = document.getElementById('inj-protocol');
+       if (box) box.innerHTML = '<div class="card" style="color:var(--danger);font-size:12.5px;">' + esc(v14ErrorText_(e)) + '</div>';
+     }
+   }
+
+   let _injProtoTimer = null;
+   function onInjectProtoQuery(v) {
+     STATE.injProtoQuery = v || '';
+     clearTimeout(_injProtoTimer);
+     _injProtoTimer = setTimeout(function () { STATE.injProto = null; loadInjectProtocols(); }, 350);
+   }
+
+   /** ⚠️ 배합금기·혼합주의 요약 박스 (맨 위 고정) */
+   function injCautionsHtml_() {
+     const d = STATE.injProto;
+     if (!d || !d.cautions || !d.cautions.length) {
+       return '<div class="card" id="inj-cautions"><span style="color:var(--muted);font-size:12.5px;">배합주의 자료를 불러오는 중...</span></div>';
+     }
+     return '<div class="card" id="inj-cautions" style="border-color:#fecaca;background:#fffafa;">' +
+       '<div class="card-title"><span>⚠️ 수액 믹스 절대 금지 · 배합주의</span>' +
+         '<small style="font-weight:500;font-size:12px;color:#b91c1c;">인계·설명 전 반드시 확인</small></div>' +
+       '<div style="display:grid;grid-template-columns:1fr;gap:8px;">' +
+         d.cautions.map(function (c) {
+           return '<div style="border:1px solid #fecaca;border-radius:10px;padding:8px 10px;background:#fff;">' +
+             '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">' +
+               '<strong style="font-size:13px;color:#991b1b;">⛔ ' + esc(c.케이스) + '</strong>' +
+               '<span style="font-size:11px;color:var(--muted);">' + esc(c.출처 || '') + '</span></div>' +
+             '<div style="font-size:12.5px;color:#334155;margin-top:3px;line-height:1.55;">' + esc(c.주의 || c.기대효과 || '') + '</div>' +
+           '</div>';
+         }).join('') +
+       '</div>' +
+       '<div style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.6;">출처: 첨부 자료(비치라이트·안티옥시 프로토콜 PDF / 비급여 주사제·수액 PPT) 및 실무 기준 정리. 「실무 기준」은 허가사항과 별개의 혼합·투여 권장사항입니다.</div>' +
+     '</div>';
+   }
+
+   /** 증상·목적별 프로토콜 카드 */
+   function renderInjectProtocols() {
+     const el = document.getElementById('inj-protocol');
+     if (!el) return;
+     const d = STATE.injProto;
+     if (!d) { el.innerHTML = ''; return; }
+     if (!d.protocols.length) { el.innerHTML = '<div class="card"><p style="color:var(--muted);font-size:12.5px;">조건에 맞는 프로토콜이 없습니다.</p></div>'; return; }
+     const groups = {};
+     const order = [];
+     d.protocols.forEach(function (r) {
+       if (!groups[r.분류]) { groups[r.분류] = []; order.push(r.분류); }
+       groups[r.분류].push(r);
+     });
+     const icon = { '수액 기본': '💧', '통증·해열': '🌡️', '피로·숙취·항산화': '⚡', '백옥·미용': '✨', '면역·항암': '🛡️', '영양·회복': '🥗', '태반·갱년기': '🌸', '시술 후': '🩹' };
+     el.innerHTML =
+       '<div class="card">' +
+         '<div class="card-title"><span>📋 증상·목적별 프로토콜 (' + d.protocols.length + ')</span>' +
+           '<small style="font-weight:500;font-size:12px;color:var(--muted);">성분·믹스·용법·주의를 쉬운 말로</small></div>' +
+         order.map(function (g) {
+           return '<div class="v14-group">' +
+             '<div class="g-head"><div><strong>' + (icon[g] || '💉') + ' ' + esc(g) + '</strong> <small style="color:var(--muted);">' + groups[g].length + '개</small></div></div>' +
+             groups[g].map(function (r) {
+               return '<div style="border-bottom:1px dashed var(--border);padding:8px 0;">' +
+                 '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">' +
+                   '<strong style="font-size:13.5px;">' + esc(r.케이스) + '</strong>' +
+                   '<small style="color:var(--muted);">참고제품(예시): ' + esc(r.참고제품 || '-') + '</small></div>' +
+                 '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">' +
+                   (r.성분 ? '<span class="badge badge-blue">성분 ' + esc(r.성분) + '</span>' : '') +
+                   (r.수액 ? '<span class="badge badge-muted">수액·믹스 ' + esc(r.수액) + '</span>' : '') +
+                   (r.용법 ? '<span class="badge badge-muted">용법 ' + esc(r.용법) + '</span>' : '') +
+                   (r.추천 ? '<span class="badge badge-green">프로토콜 ' + esc(r.추천) + '</span>' : '') +
+                 '</div>' +
+                 (r.기대효과 ? '<div style="font-size:12.5px;color:#334155;margin-top:4px;line-height:1.55;">' + esc(r.기대효과) + '</div>' : '') +
+                 (r.주의 ? '<div style="font-size:12px;color:#b91c1c;margin-top:3px;line-height:1.55;">⚠️ ' + esc(r.주의) + '</div>' : '') +
+                 '<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:5px;">' +
+                   '<small style="color:var(--muted);font-size:11.5px;">우리 제품:</small>' +
+                   ((r.우리제품 && r.우리제품.length) ? r.우리제품.map(function (p) {
+                     return '<button class="v14-prod" onclick="injectSendToOrder(\'' + esc(p.보험코드) + '\')" title="매출 등록으로 보내기">' +
+                       esc(p.품목명) + ' <span>' + (p.수수료율 || 0) + '%</span></button>';
+                   }).join('') : '<small style="color:var(--muted);font-size:11.5px;">동일 성분 제품 없음(참고제품만)</small>') +
+                   (r.출처 ? ' <small style="color:var(--muted);font-size:11px;">· ' + esc(r.출처) + '</small>' : '') +
+                 '</div>' +
+               '</div>';
+             }).join('') +
+           '</div>';
+         }).join('') +
+         '<div style="font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.6;">참고제품(예시)는 첨부 자료에 나온 제품명입니다. 실제 영업 추천은 같은 성분의 <b>우리 제품마스터</b> 품목(규격·단가·수수료율)을 쓰세요.</div>' +
+       '</div>';
+     renderInjectCards();
+   }
+
+   /** 제품 카드(허가사항·추천 대상) — 검색 결과에 따라 표시 */
+   function renderInjectCards() {
+     const el = document.getElementById('inj-cards');
+     if (!el) return;
+     const d = STATE.injProto;
+     if (!d || !d.cards || !d.cards.length) { el.innerHTML = ''; return; }
+     el.innerHTML =
+       '<div class="card">' +
+         '<div class="card-title"><span>💊 참고제품 카드 (' + d.cards.length + ')</span>' +
+           '<small style="font-weight:500;font-size:12px;color:var(--muted);">허가사항·추천 대상 요약</small></div>' +
+         d.cards.map(function (r) {
+           return '<div class="v14-group">' +
+             '<div class="g-head"><div><strong>' + esc(r.케이스) + '</strong> <small style="color:var(--muted);">' + esc(r.참고제품 || '') + '</small></div>' +
+               '<small style="color:var(--muted);font-size:11px;">' + esc(r.출처 || '') + '</small></div>' +
+             '<div style="font-size:12.5px;color:#334155;line-height:1.6;">' +
+               (r.기대효과 ? '<div>' + esc(r.기대효과) + '</div>' : '') +
+               (r.추천 ? '<div>추천: ' + esc(r.추천) + '</div>' : '') +
+               (r.주의 ? '<div style="color:#b91c1c;">주의: ' + esc(r.주의) + '</div>' : '') +
+             '</div>' +
+             '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;">' +
+               ((r.우리제품 && r.우리제품.length) ? r.우리제품.map(function (p) {
+                 return '<button class="v14-prod" onclick="injectSendToOrder(\'' + esc(p.보험코드) + '\')">' +
+                   esc(p.품목명) + ' <span>' + (p.수수료율 || 0) + '%</span></button>';
+               }).join('') : '<small style="color:var(--muted);font-size:11.5px;">동일 성분 우리 제품 없음</small>') +
+             '</div>' +
+           '</div>';
+         }).join('') +
+       '</div>';
    }
 
    function setInjectPay(v) {
@@ -4741,6 +4938,7 @@
        STATE.injData = res || null;
        renderInjectBody();
        renderInjectRecommend();
+       if (!STATE.injProto) loadInjectProtocols();
      } catch (e) {
        const box = document.getElementById('inj-body');
        if (box) box.innerHTML = '<div class="card" style="color:var(--danger);">' + esc(v14ErrorText_(e)) + '</div>';
@@ -4781,18 +4979,102 @@
            '<div class="kpi-card"><div class="kpi-label">수수료 금액 합(1개씩)</div><div class="kpi-val">' + fmtNum(Math.round(s.수수료액합계 || 0)) + '원</div></div>' +
          '</div>' +
          '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">후보 ' + (s.후보수 || 0) + '품목 · 급여 ' + (s.급여수 || 0) + ' / 비급여 ' + (s.비급여수 || 0) + ' · 평균 약가 ' + fmtNum(s.평균약가 || 0) + '원 · 수수료액 = 약가 × 수수료율</div>' +
+         '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">' +
+           '<button class="btn btn-outline btn-sm" onclick="toggleInjAll(true)">전체 선택</button>' +
+           '<button class="btn btn-outline btn-sm" onclick="toggleInjAll(false)">선택 해제</button>' +
+           '<small style="align-self:center;color:var(--muted);">체크한 품목끼리 배합금기가 있으면 아래에 바로 경고합니다.</small>' +
+         '</div>' +
          injectPickTable_(d.picks, true) +
+         injWarnHtml_() +
        '</div>';
+   }
+
+   /** 체크한 품목 — 주사 프로토콜 배합금기 자동 경고 */
+   function injPickedProducts_() {
+     const d = STATE.injData || {};
+     const all = (d.picks || []).concat((d.items || []).reduce(function (acc, g) { return acc.concat(g.제품 || []); }, []));
+     const seen = {};
+     const out = [];
+     all.forEach(function (p) {
+       const c = String(p.보험코드 || p.품목명);
+       if (!STATE.injSelected[c]) return;
+       if (seen[c]) return;
+       seen[c] = 1;
+       out.push(p);
+     });
+     return out;
+   }
+
+   function injWarnHtml_() {
+     const d = STATE.injProto;
+     const picked = injPickedProducts_();
+     if (!picked.length) {
+       return '<div style="margin-top:8px;font-size:12px;color:var(--muted);">선택한 품목 없음 — 품목을 체크하면 배합·중복 경고를 바로 확인할 수 있습니다.</div>';
+     }
+     const keys = {};
+     picked.forEach(function (p) { String(p.성분키 || '').split('+').forEach(function (k) { if (k) keys[k] = 1; }); });
+     const rateSum = picked.reduce(function (a, p) { return a + (Number(p.수수료액) || (Number(p.약가) * (Number(p.수수료율) || 0) / 100)); }, 0);
+     let html = '<div style="margin-top:10px;border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:#f8fbff;">' +
+       '<div style="font-size:12.5px;"><strong>선택 ' + picked.length + '품목</strong> · 예상 수수료 합(1개씩) ' + fmtNum(Math.round(rateSum)) + '원</div>' +
+       '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px;">' + picked.map(function (p) {
+         return '<span class="badge badge-blue">' + esc(p.품목명) + '</span>';
+       }).join('') + '</div>';
+     const rules = (d && d.rules) || [];
+     const hits = [];
+     rules.forEach(function (r) {
+       const hasA = (r.keys || []).some(function (k) { return keys[k]; });
+       if (!hasA) return;
+       if ((r.with || []).length) {
+         const hasB = r.with.some(function (k) { return keys[k]; });
+         const sameIngredientInternal = r.keys.some(function (k) { return r.with.indexOf(k) !== -1; }) &&
+           r.keys.every(function (k) { return keys[k] || r.with.indexOf(k) !== -1; });
+         if (!hasB) return;
+         if (sameIngredientInternal) return;
+       }
+       hits.push(r);
+     });
+     if (hits.length) {
+       html += '<div style="margin-top:8px;border-top:1px dashed #fecaca;padding-top:8px;">' +
+         '<div style="font-size:12.5px;font-weight:700;color:#b91c1c;">⚠️ 선택한 조합에 배합·혼합 주의 ' + hits.length + '건</div>' +
+         hits.map(function (r) {
+           return '<div style="font-size:12px;color:#991b1b;margin-top:4px;line-height:1.55;">⛔ <strong>' + esc(r.케이스) + '</strong> — ' + esc(r.주의 || '') +
+             (r.출처 ? ' <small style="color:var(--muted);">(' + esc(r.출처) + ')</small>' : '') + '</div>';
+         }).join('') +
+         '<div style="font-size:11.5px;color:var(--muted);margin-top:5px;">「실무 기준」 항목은 허가사항과 별개의 혼합·투여 권장사항입니다. 실제 조제·투여 전 허가사항을 확인하세요.</div></div>';
+     } else {
+       html += '<div style="margin-top:6px;font-size:12px;color:#15803d;">✓ 등록된 배합금기 규칙과 겹치는 조합이 없습니다. (수용성 성분 간 혼합도 허가사항 확인 권장)</div>';
+     }
+     return html + '</div>';
+   }
+
+   function toggleInjPick(code, on) {
+     const c = String(code || '').trim();
+     if (!c) return;
+     STATE.injSelected = STATE.injSelected || {};
+     if (on) STATE.injSelected[c] = true; else delete STATE.injSelected[c];
+     renderInjectRecommend();
+   }
+
+   function toggleInjAll(on) {
+     STATE.injSelected = {};
+     if (on) {
+       ((STATE.injData && STATE.injData.picks) || []).forEach(function (p) { STATE.injSelected[p.보험코드] = true; });
+     }
+     renderInjectRecommend();
    }
 
    /** 주사·수액 품목 표 (추천/목록 공용) */
    function injectPickTable_(picks, withSend) {
      return '<div class="table-wrap"><table><thead><tr>' +
+       (withSend ? '<th class="center">선택</th>' : '') +
        '<th>카테고리</th><th>성분</th><th>품목</th><th class="center">급여</th><th class="num">약가</th><th class="num">수수료율</th><th class="num">수수료액</th>' +
        (withSend ? '<th class="center">담기</th>' : '') +
      '</tr></thead><tbody>' +
        picks.map(function (p) {
+         const code = esc(p.보험코드);
          return '<tr>' +
+           (withSend ? '<td class="center"><input type="checkbox" style="width:auto;" ' + (STATE.injSelected[p.보험코드] ? 'checked' : '') +
+             ' onchange="toggleInjPick(\'' + code + '\', this.checked)" /></td>' : '') +
            '<td><span class="badge badge-muted">' + esc(p.카테고리 || '기타') + '</span></td>' +
            '<td>' + esc(p.성분 || '-') + '</td>' +
            '<td><strong>' + esc(p.품목명) + '</strong> <small style="color:var(--muted);">' + esc(p.규격 || '') + (p.보험코드 ? ' · ' + esc(p.보험코드) : '') + '</small></td>' +
@@ -4800,7 +5082,7 @@
            '<td class="num">' + fmtNum(p.약가) + '원</td>' +
            '<td class="num"><strong style="color:var(--primary);">' + (p.수수료율 || 0) + '%</strong></td>' +
            '<td class="num">' + fmtNum(Math.round(p.수수료액 || 0)) + '원</td>' +
-           (withSend ? '<td class="center"><button class="btn btn-outline btn-sm" onclick="injectSendToOrder(\'' + esc(p.보험코드) + '\')">🛒 매출 등록</button></td>' : '') +
+           (withSend ? '<td class="center"><button class="btn btn-outline btn-sm" onclick="injectSendToOrder(\'' + code + '\')">🛒 매출 등록</button></td>' : '') +
          '</tr>';
        }).join('') +
      '</tbody></table></div>';
@@ -4972,11 +5254,19 @@
          (d.stats ? '<div style="font-size:12px;color:var(--muted);margin:-2px 0 8px;">경구제 매칭 ' + (d.stats.매칭성분 || 0) + ' / ' + (d.stats.성분수 || 0) + '성분 ' +
            '(이엘파마 경구 ' + (d.stats.경구품목 || 0) + '품목 기준 · 주사·수액 ' + (d.stats.주사품목 || 0) + '품목은 제외)</div>' : '') +
          '<div class="toolbar" style="gap:6px;flex-wrap:wrap;">' +
-           '<select id="guide-mode" style="max-width:230px;" onchange="STATE.guideMode=this.value">' +
+           '<select id="guide-mode" style="max-width:230px;" onchange="onGuideModeChange(this.value)">' +
              '<option value="maxrate">① 요율 최우선 (제약사 무관 최고 요율)</option>' +
              '<option value="minmaker">② 최소 제약사로 높은 요율</option>' +
              '<option value="perIngredient">③ 성분별 요율 집중</option>' +
            '</select>' +
+           '<span id="guide-maker-wrap" style="display:flex;align-items:center;gap:4px;' + (STATE.guideMode === 'minmaker' ? '' : 'display:none;') + '">' +
+             '<span style="font-size:12px;color:var(--muted);">제약사 최대</span>' +
+             '<select id="guide-makers" style="max-width:90px;" onchange="setGuideMaxMakers(this.value)">' +
+               [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(function (n) {
+                 return '<option value="' + n + '"' + (Number(STATE.guideMaxMakers) === n ? ' selected' : '') + '>' + n + '곳</option>';
+               }).join('') +
+             '</select>' +
+           '</span>' +
            '<button class="btn btn-primary btn-sm" onclick="runGuideRecommend()">🎯 추천 세팅 보기</button>' +
            '<button class="btn btn-outline btn-sm" onclick="toggleGuideAll(true)">전체 선택</button>' +
            '<button class="btn btn-outline btn-sm" onclick="toggleGuideAll(false)">선택 해제</button>' +
@@ -4987,9 +5277,12 @@
              groups[g].map(function (it) {
                const has = it.우리제품 && it.우리제품.length;
                return '<div class="v14-ing-row">' +
-                 '<label class="v14-ing-check"><input type="checkbox" style="width:auto;" ' + (has && STATE.guideSelected[it.영문키] ? 'checked' : '') + (has ? '' : ' disabled') +
-                   ' onchange="STATE.guideSelected[\'' + esc(it.영문키) + '\']=this.checked" />' +
-                   '<span><strong>' + esc(it.성분명) + '</strong>' + (it.대표제품예 ? ' <small style="color:var(--muted);">' + esc(it.대표제품예) + '</small>' : '') + '</span></label>' +
+                 '<div style="flex:1;min-width:220px;">' +
+                   '<label class="v14-ing-check"><input type="checkbox" style="width:auto;" ' + (has && STATE.guideSelected[it.영문키] ? 'checked' : '') + (has ? '' : ' disabled') +
+                     ' onchange="STATE.guideSelected[\'' + esc(it.영문키) + '\']=this.checked" />' +
+                     '<span><strong>' + esc(it.성분명) + '</strong>' + (it.대표제품예 ? ' <small style="color:var(--muted);">' + esc(it.대표제품예) + '</small>' : '') + '</span></label>' +
+                   (it.처방포인트 ? '<div style="font-size:11.5px;color:#64748b;margin:2px 0 0 24px;line-height:1.5;">· ' + esc(it.처방포인트) + '</div>' : '') +
+                 '</div>' +
                  '<div class="v14-ing-prod">' +
                    (has ? it.우리제품.slice(0, 3).map(function (p) {
                      return '<button class="v14-prod" onclick="guideAddItem(\'' + esc(p.보험코드) + '\')" title="처방전 입력에 담기">' +
@@ -5005,6 +5298,17 @@
        '</div>' +
        '<div id="guide-recommend"></div>';
      renderGuideRecommend();
+   }
+
+   function onGuideModeChange(v) {
+     STATE.guideMode = v || 'maxrate';
+     const wrap = document.getElementById('guide-maker-wrap');
+     if (wrap) wrap.style.display = (STATE.guideMode === 'minmaker') ? 'flex' : 'none';
+   }
+
+   function setGuideMaxMakers(v) {
+     const n = Math.max(1, Math.min(10, parseInt(v, 10) || 3));
+     STATE.guideMaxMakers = n;
    }
 
    function toggleGuideAll(on) {
@@ -5024,7 +5328,7 @@
      if (!keys.length) { showToast('성분을 1개 이상 선택해 주세요.'); return; }
      const mode = STATE.guideMode || document.getElementById('guide-mode').value || 'maxrate';
      try {
-       const res = await runServer('recommendRegimen', [{ mode: mode, ingredients: keys, dept: d.dept, form: '경구' }], { silent: true });
+       const res = await runServer('recommendRegimen', [{ mode: mode, ingredients: keys, dept: d.dept, form: '경구', maxMakers: STATE.guideMaxMakers || 3 }], { silent: true });
        STATE.guideRec = guideOralOnlyRec_(res);
        ((STATE.guideRec.picks) || []).forEach(guideCacheProduct_);
        renderGuideRecommend();
@@ -5064,10 +5368,11 @@
            '<button class="btn btn-accent btn-sm" onclick="guideSendToRx()">💊 처방전 입력으로 보내기</button></div>' +
          '<div class="kpi-grid" style="margin-bottom:10px;">' +
            '<div class="kpi-card"><div class="kpi-label">추천 품목</div><div class="kpi-val">' + r.summary.추천품목수 + '개</div></div>' +
-           '<div class="kpi-card"><div class="kpi-label">제약사 수</div><div class="kpi-val primary">' + r.summary.제약사수 + '곳</div></div>' +
+           '<div class="kpi-card"><div class="kpi-label">제약사 수' + (r.mode === 'minmaker' ? ' (상한 ' + (r.maxMakers || 3) + ')' : '') + '</div><div class="kpi-val primary">' + r.summary.제약사수 + '곳</div></div>' +
            '<div class="kpi-card"><div class="kpi-label">평균 수수료율</div><div class="kpi-val success">' + r.summary.평균수수료율 + '%</div></div>' +
-           '<div class="kpi-card"><div class="kpi-label">선택 성분</div><div class="kpi-val">' + r.summary.성분수 + '개</div></div>' +
+           '<div class="kpi-card"><div class="kpi-label">선택 성분' + (r.summary.미포함성분 ? ' (미포함 ' + r.summary.미포함성분 + ')' : '') + '</div><div class="kpi-val">' + r.summary.성분수 + '개</div></div>' +
          '</div>' +
+         (r.mode === 'minmaker' && r.summary.미포함성분 ? '<div style="font-size:12px;color:#b45309;margin:-2px 0 8px;">제약사 상한 ' + (r.maxMakers || 3) + '곳을 넘어 추천되지 않은 성분 ' + r.summary.미포함성분 + '개 — 상한을 올리거나 다른 필터를 써보세요.</div>' : '') +
          '<div class="table-wrap"><table><thead><tr><th>성분</th><th>추천 품목</th><th>제약사</th><th class="num">약가</th><th class="num">수수료율</th><th class="center">담기</th></tr></thead><tbody>' +
          r.picks.map(function (p) {
            return '<tr><td>' + esc(p.성분) + '</td><td><strong>' + esc(p.품목명) + '</strong> <small style="color:var(--muted);">' + esc(p.규격 || '') + '</small></td>' +

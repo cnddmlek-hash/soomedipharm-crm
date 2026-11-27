@@ -72,6 +72,11 @@ def main():
         check(heads.get('사용자', [])[-1] == '이메일', '사용자 이메일 열이 없습니다')
         for tab in V14_TABS:
             check(tab in heads and len(heads[tab]) >= 6, '%s 탭 머리글이 없습니다' % tab)
+        check(heads.get('진료과성분', [])[-1] == '처방포인트', '진료과성분 처방포인트 열이 없습니다')
+        check(heads.get('주사프로토콜', [])[:7] == ['구분', '분류', '케이스', '참고제품(예시)', '성분', '성분키', '상대성분키'],
+              '주사프로토콜 머리글이 다릅니다: %s' % heads.get('주사프로토콜'))
+        check(heads.get('주사프로토콜', [])[-2:] == ['출처', '중요'], '주사프로토콜 출처·중요 열이 없습니다')
+        check(heads.get('급여가이드') == ['구분', '항목', '내용', '근거', '중요'], '급여가이드 머리글이 다릅니다')
 
     # ---------------- 2-b. v1.5 제형 구분 (경구제 / 주사·수액)
     if code:
@@ -115,6 +120,42 @@ def main():
               '이엘파마(경구) 목록의 주사제 이름이 너무 많습니다: %d/%d %s' %
               (len(el_paren), len(el), [r.get('품목명') for r in el_paren[:3]]))
         check(len(el) >= 50, '이엘파마 품목이 부족합니다: %d' % len(el))
+
+        # 주사프로토콜 · 급여가이드 · 치과 가이드
+        if '주사프로토콜' in fx:
+            pr = tab_rows('주사프로토콜')
+            cautions = [r for r in pr if r.get('구분') == '주의']
+            protos = [r for r in pr if r.get('구분') == '프로토콜']
+            cards = [r for r in pr if r.get('구분') == '제품']
+            check(len(cautions) >= 10, '배합금기 주의 항목이 부족합니다: %d' % len(cautions))
+            check(len(protos) >= 25, '프로토콜이 부족합니다: %d' % len(protos))
+            check(len(cards) >= 12, '제품 카드가 부족합니다: %d' % len(cards))
+            bare = [r.get('케이스') for r in cautions if not str(r.get('성분키') or '').strip()]
+            check(not bare, '배합금기 규칙에 성분키가 없는 행: %s' % bare[:3])
+            check(any('acetaminophen' in str(r.get('상대성분키') or '') for r in cautions),
+                  'NAC+아세트아미노펜 배합금기 규칙이 없습니다')
+            check(all(str(r.get('출처') or '').strip() for r in pr), '출처 없는 프로토콜 행이 있습니다')
+            check(any('참고' in str(r.get('참고제품(예시)') or '') for r in protos),
+                  '참고제품(예시) 표기가 없습니다')
+        else:
+            check(False, '주사프로토콜 탭이 fixtures 에 없습니다')
+
+        if '급여가이드' in fx:
+            cov = tab_rows('급여가이드')
+            groups = {r.get('구분') for r in cov}
+            check(len(groups) >= 6, '급여가이드 구분이 부족합니다: %s' % groups)
+            check(all(str(r.get('근거') or '').strip() for r in cov), '근거 없는 급여가이드 항목이 있습니다')
+            check(any('HbA1c' in str(r.get('내용') or '') for r in cov), '당뇨 1·2·3제 기준이 없습니다')
+        else:
+            check(False, '급여가이드 탭이 fixtures 에 없습니다')
+
+        dg_fx = fx['진료과성분']
+        check(dg_fx[0][-1] == '처방포인트', '진료과성분 처방포인트 열이 없습니다(fixtures)')
+        dental = [r for r in tab_rows('진료과성분') if r.get('진료과') == '치과']
+        check(len(dental) >= 18, '치과 가이드 행이 부족합니다: %d' % len(dental))
+        check(len({r.get('질환군') for r in dental}) >= 6, '치과 케이스가 부족합니다')
+        check(all(str(r.get('처방포인트') or '').strip() for r in dental), '치과 처방포인트가 빈 행이 있습니다')
+        check(any('amoxicillin' in str(r.get('영문키') or '') for r in dental), '치과 아목시실린 행이 없습니다')
 
     def load(name):
         p = os.path.join(d, name)

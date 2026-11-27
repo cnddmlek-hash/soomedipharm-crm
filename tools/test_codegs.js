@@ -129,6 +129,17 @@ function oralProductsFor_(key) {
     return p.성분키 === key || String(p.성분키 || '').split('+').indexOf(key) !== -1;
   });
 }
+t('가이드: 치과 — 케이스별 성분·처방포인트', function () {
+  var res = getDeptGuide('치과', TOKEN);
+  ok(res.items.length >= 15, '치과 성분이 부족: ' + res.items.length);
+  var groups = {};
+  res.items.forEach(function (i) { groups[i.질환군] = 1; });
+  ok(Object.keys(groups).length >= 6, '치과 케이스가 부족: ' + Object.keys(groups).length);
+  ok(res.items.every(function (i) { return i.처방포인트; }), '처방포인트 없는 행 있음');
+  ok(res.items.every(function (i) { return (i.우리제품 || []).every(function (p) { return p.표 === '경구'; }); }), '치과에 주사제 섞임');
+  ok(res.items.some(function (i) { return i.영문키 === 'amoxicillin'; }), '아목시실린 없음');
+});
+
 t('가이드: 진료과 목록', function () {
   var res = getDeptGuide('', TOKEN);
   ok(res.depts.length >= 8, '진료과가 너무 적음');
@@ -184,6 +195,19 @@ t('추천: 경구제 전용 — 주사·수액이 섞이지 않음', function ()
     res.picks.forEach(function (x) { eq(x.표, '경구', mode + ' 추천에 주사·수액 섞임: ' + x.품목명); });
   });
 });
+t('추천: 최소 제약사 상한을 사용자가 정함(1~10)', function () {
+  var keys = readProductRows_().filter(function (p) { return p.표 === '경구' && p.성분키; })
+    .map(function (p) { return p.성분키; })
+    .filter(function (k, i, a) { return a.indexOf(k) === i; }).slice(0, 8);
+  [1, 2, 3, 5].forEach(function (n) {
+    var res = recommendRegimen({ mode: 'minmaker', ingredients: keys, maxMakers: n }, TOKEN);
+    ok(res.summary.제약사수 <= n, n + '개 상한 초과: ' + res.summary.제약사수);
+    eq(res.maxMakers, n, 'maxMakers 응답 오류');
+    ok(res.summary.미포함성분 >= 0, '미포함성분 없음');
+  });
+  eq(recommendRegimen({ mode: 'minmaker', ingredients: keys, maxMakers: 1 }, TOKEN).summary.제약사수, 1, '1개 상한 오류');
+});
+
 t('추천: 최소 제약사 모드는 제약사 수를 줄임', function () {
   var keys = readProductRows_().filter(function (p) { return p.표 === '경구' && p.성분키; }).slice(0, 40)
     .map(function (p) { return p.성분키; })
@@ -304,6 +328,57 @@ t('주사 셋팅: limit 적용 · 빈 결과', function () {
 });
 t('주사 셋팅: 권한 없는 토큰 거부', function () {
   throwsMatch(function () { getInjectGuide({}, 'bad-token'); }, '로그인');
+});
+
+// ------------------------------------------------------------------ 5-d. 주사 프로토콜 · 배합금기 · 급여가이드
+t('프로토콜: 목록·카테고리·케이스', function () {
+  var res = getInjectProtocols('', TOKEN);
+  ok(res.cautions.length >= 10, '배합주의가 너무 적음: ' + res.cautions.length);
+  ok(res.protocols.length >= 20, '프로토콜이 너무 적음: ' + res.protocols.length);
+  ok(res.cards.length >= 10, '제품 카드가 너무 적음: ' + res.cards.length);
+  ok(res.categories.length >= 5, '분류가 너무 적음');
+  ok(res.protocols[0].기대효과 || res.protocols[0].수액, '프로토콜 내용 없음');
+});
+t('프로토콜: 배합금기 규칙(NAC·글루타치온)', function () {
+  var res = getInjectProtocols('', TOKEN);
+  var nac = res.rules.filter(function (r) { return r.keys.indexOf('acetylcysteine') !== -1; })[0];
+  ok(nac, 'NAC 규칙 없음');
+  ok(nac.with.indexOf('acetaminophen') !== -1, 'NAC+아세트아미노펜 상대성분 없음');
+  ok(nac.중요, 'NAC 규칙 중요 표시 없음');
+  var gsh = res.rules.filter(function (r) { return r.keys.indexOf('glutathione') !== -1 && r.with.length; })[0];
+  ok(gsh, '글루타치온 배합금기 규칙 없음');
+  ok(gsh.with.some(function (k) { return /selenium|trace|amino/.test(k); }), '글루타치온 상대성분 이상: ' + gsh.with.join(','));
+});
+t('프로토콜: 참고제품은 예시로만, 우리 제품은 성분 매칭', function () {
+  var res = getInjectProtocols('글루타치온', TOKEN);
+  ok(res.protocols.length > 0, '글루타치온 프로토콜 없음');
+  var hit = res.protocols.filter(function (p) { return p.우리제품 && p.우리제품.length; })[0];
+  ok(hit, '글루타치온 성분 매칭 제품 없음');
+  ok(hit.우리제품[0].보험코드 && hit.우리제품[0].품목명, '제품 필드 없음');
+  ok(hit.참고제품.indexOf('참고') !== -1, '참고제품 표기 없음');
+});
+t('프로토콜: 검색어 필터', function () {
+  var res = getInjectProtocols('신데렐라', TOKEN);
+  ok(res.protocols.length > 0, '신데렐라 프로토콜 없음');
+  res.protocols.forEach(function (p) { ok(p.케이스.indexOf('신데렐라') !== -1, '검색 필터 안 됨'); });
+  var none = getInjectProtocols('없는케이스zzz', TOKEN);
+  eq(none.protocols.length + none.cautions.length + none.cards.length, 0);
+});
+t('프로토콜: 권한 없는 토큰 거부', function () {
+  throwsMatch(function () { getInjectProtocols('', 'bad-token'); }, '로그인');
+});
+t('급여가이드: 분류·항목·근거', function () {
+  var res = getCoverageNotes('', TOKEN);
+  ok(res.categories.length >= 6, '급여가이드 분류가 적음: ' + res.categories.length);
+  ok(res.items.length >= 20, '급여가이드 항목이 적음');
+  ok(res.items.every(function (x) { return x.근거; }), '근거 없는 항목 있음');
+  var dm = getCoverageNotes('당뇨병용제', TOKEN);
+  ok(dm.items.length >= 6, '당뇨 항목 부족');
+  ok(dm.items.every(function (x) { return x.구분 === '당뇨병용제'; }), '분류 필터 안 됨');
+  ok(dm.items.some(function (x) { return x.내용.indexOf('HbA1c') !== -1; }), '당뇨 내용 없음');
+});
+t('급여가이드: 권한 없는 토큰 거부', function () {
+  throwsMatch(function () { getCoverageNotes('', 'bad-token'); }, '로그인');
 });
 
 // ------------------------------------------------------------------ 6. 약학정보원 연계
