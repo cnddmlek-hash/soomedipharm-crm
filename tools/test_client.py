@@ -70,17 +70,22 @@ def main():
     except ImportError:
         print('(esprima 없음 — 문법 검사 생략: pip install esprima)')
 
-    # 2) v1.6 요소
-    check("const APP_VERSION = 'v1.10'" in js, 'APP_VERSION 이 v1.10 이 아닙니다')
+    # 2) v1.11 요소
+    check("const APP_VERSION = 'v1.11'" in js, 'APP_VERSION 이 v1.11 이 아닙니다')
     check('id: \'drug\'' in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
     check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
-    check('guideTabBar_' in js and 'switchGuideTab' in js, '경구제/주사제 탭이 없습니다')
-    check("'💊 경구제 셋팅 (원외처방)'" in js or '경구제 셋팅 (원외처방)' in js, '경구제 셋팅 탭이 없습니다')
-    check('주사제 셋팅 (원내 주사·수액)' in js, '주사제 셋팅 탭이 없습니다')
+    # v1.11 — 🧭 처방 셋팅은 경구제 전용 · 💉 주사제 셋팅은 💉 주사제 주문 메뉴 안 탭
+    check('guideTabBar_' not in js and 'switchGuideTab' not in js and 'guideTab:' not in js,
+          '처방 셋팅에 경구제/주사제 2탭 전환이 남아 있습니다')
+    check('orderTabBar_' in js and 'switchOrderTab' in js and "orderTab: 'entry'" in js,
+          '주사제 주문 메뉴의 두 탭(주문(매출) 등록 / 주사제 셋팅)이 없습니다')
+    check('💳 주문(매출) 등록' in js, '주문(매출) 등록 탭 이름이 없습니다')
+    check('주사제 셋팅 (프로토콜·배합금기)' in js, '주사제 셋팅 탭 이름이 없습니다')
     check('renderInjectPanelHtml_' in js and 'renderInjectBody' in js, '주사제 셋팅 화면이 없습니다')
     check('runInjectRecommend' in js and 'loadInjectGuide' in js, '주사제 셋팅 조회가 없습니다')
     check('injectSendToOrder' in js and 'copyInjectSet' in js, '주사제 → 매출/세팅 연결이 없습니다')
-    check('경구제 전용' in js and '주사제 전용' in js, '제형 전용 배지가 없습니다')
+    check('경구제(원외처방) 전용' in js and '💉 주사제 셋팅' in js, '제형 전용 배지가 없습니다')
+    check('function openInjectSetting' in js, '경구 화면 → 주사제 셋팅 탭 이동 함수가 없습니다')
     check("form: '경구'" in js, '경구 추천에 form:경구 가 없습니다')
     check('guideOralOnlyRec_' in js, '경구 전용 안전장치가 없습니다')
     check('guideRateLiftHtml_' in js and '상한1평균수수료율' in js and '요율향상' in js, '최소 제약사 요율 향상 안내가 없습니다')
@@ -300,7 +305,7 @@ def main():
               guideData: null, guideProductCache: {}, guidePending: [], rxGuideCodes: [],
               rxRows: [], rxClient: '', rxFrequent: [], products: [],
               rxDirty: false, rxMonth: '2026-11', clients: [],
-              guideDept: '', guideTab: 'oral'
+              guideDept: ''
             };
             STATE.clients = [
               { 거래처코드: 'S001', 거래처명: '수아의원', 사용여부: 'Y' },
@@ -810,6 +815,89 @@ def main():
             check('아다셀주' not in col_html, '수금 화면에 매출 건이 섞여 나옵니다')
     except ImportError:
         print('(quickjs 없음 — 화면 렌더 실행 검사 생략: pip install quickjs)')
+
+    # 10-g) v1.11 — 💉 주사제 셋팅을 💉 주사제 주문 메뉴 안 탭으로 이동, 🧭 처방 셋팅은 경구제 전용
+    rp = re.search(r'function renderOrderPage\(container\)\s*\{(.*?)\n   \}', js, re.S)
+    check(bool(rp), 'renderOrderPage 를 찾지 못했습니다')
+    if rp:
+        rp_body = rp.group(1)
+        check('orderTabBar_()' in rp_body, '주사제 주문 화면에 탭 바가 없습니다')
+        check("STATE.orderTab === 'inject' ? 'inject' : 'entry'" in rp_body, '주사제 주문 탭 상태 처리가 없습니다')
+        check('renderInjectPanelHtml_()' in rp_body, '주사제 주문 주사제 셋팅 탭이 주사제 셋팅 화면을 그리지 않습니다')
+        check('renderOrderEntry(body)' in rp_body, '주사제 주문 매출 등록 탭이 폼을 그리지 않습니다')
+    gp = re.search(r'function renderGuidePage\(container\)\s*\{(.*?)\n   \}', js, re.S)
+    check(bool(gp), 'renderGuidePage 를 찾지 못했습니다')
+    if gp:
+        gp_body = gp.group(1)
+        check('renderInjectPanelHtml_' not in gp_body and 'inj' not in re.findall(r"renderInject\w+", gp_body),
+              '처방 셋팅 화면에 주사제 셋팅이 남아 있습니다')
+        check('renderGuideOralHtml_()' in gp_body, '처방 셋팅 화면이 경구제 전용 화면을 그리지 않습니다')
+        check('guideHospitalBarHtml_()' in gp_body, '처방 셋팅 담을 병원 줄이 없습니다')
+    lm = re.search(r'async function loadGuideModule\(\)\s*\{(.*?)\n   \}', js, re.S)
+    if lm:
+        check('loadInject' not in lm.group(1), '처방 셋팅 진입에서 주사제 자료를 불러오고 있습니다')
+        check('loadCoverageNotes' in lm.group(1), '처방 셋팅이 급여·삭감 가이드를 불러오지 않습니다')
+    om = re.search(r'async function loadOrderModule\(\)\s*\{(.*?)\n   \}', js, re.S)
+    if om:
+        check('injData' in om.group(1) and 'injProto' in om.group(1), '주사제 주문 진입에서 주사제 셋팅 자료를 불러오지 않습니다')
+
+    # 두 탭을 실제로 그려 보기 (quickjs)
+    try:
+        import quickjs
+        ctx = quickjs.Context()
+        ctx.eval('''
+          var STATE = { orderTab: 'entry', orderClientCode: '', injPay: '', injMode: 'maxrate',
+                        injLimit: 20, injCat: '', injQuery: '', injProtoQuery: '', injData: null,
+                        injProto: null, injSelected: {}, clients: [], guideDept: '', coverage: null };
+          var document = { getElementById: function () { return null; } };
+          function esc(s) { return String(s == null ? '' : s); }
+          function fmtNum(n) { return String(Math.round(Number(n || 0))); }
+          function payTypeBadge() { return ''; }
+          function findClient() { return null; }
+          function loadInjectGuide() {} function loadInjectProtocols() {}
+          function loadCoverageNotes() {} function renderGuideDeptChips() {} function renderGuideBody() {}
+          function v14NoticeHtml_() { return ''; }
+          function renderActiveMenu() {}
+        ''')
+        names = ['orderTabBar_', 'orderInjectStripHtml_', 'injCautionsHtml_', 'renderInjectPanelHtml_',
+                 'renderInjectBody', 'renderInjectRecommend', 'renderInjectProtocols', 'renderInjectCards',
+                 'renderOrderPage', 'renderGuidePage', 'renderGuideOralHtml_', 'guideHospitalBarHtml_']
+        blocks = [extract_fn(js, n) for n in names]
+        missing = [n for n, b in zip(names, blocks) if b is None]
+        check(not missing, '탭 렌더 함수를 추출하지 못했습니다: %s' % missing)
+        if not missing:
+            for b in blocks:
+                ctx.eval(b)
+
+            def qh2(v):
+                return v.decode() if isinstance(v, bytes) else v
+
+            ctx.eval('var __c = { innerHTML: "" }; renderOrderPage(__c);')
+            entry_html = qh2(ctx.eval('__c.innerHTML'))
+            check('💳 주문(매출) 등록' in entry_html and '💉 주사제 셋팅 (프로토콜·배합금기)' in entry_html,
+                  '주사제 주문 화면에 두 탭 버튼이 없습니다')
+            check('id="turnover-body"' in entry_html, '주문(매출) 등록 탭이 폼 자리를 그리지 않습니다')
+            check('inj-protocol' not in entry_html, '주문(매출) 등록 탭에 주사제 셋팅이 섞여 있습니다')
+            check('subtab active" onclick="switchOrderTab(\'entry\')' in entry_html,
+                  '주문(매출) 등록 탭이 기본 선택이 아닙니다')
+
+            ctx.eval("STATE.orderTab = 'inject'; renderOrderPage(__c);")
+            inj_html = qh2(ctx.eval('__c.innerHTML'))
+            for need in ['inj-cautions', 'inj-protocol', 'inj-recommend', 'inj-body', 'inj-cards']:
+                check(need in inj_html, '주사제 셋팅 탭에 %s 가 없습니다' % need)
+            check('id="turnover-body"' not in inj_html, '주사제 셋팅 탭에 매출 등록 폼이 남아 있습니다')
+            check('subtab active" onclick="switchOrderTab(\'inject\')' in inj_html,
+                  '주사제 셋팅 탭이 선택 상태로 그려지지 않습니다')
+
+            ctx.eval("STATE.orderTab = 'entry'; var __g = { innerHTML: '' }; renderGuidePage(__g);")
+            guide_html = qh2(ctx.eval('__g.innerHTML'))
+            check('진료과 선택' in guide_html and '경구제(원외처방) 전용' in guide_html,
+                  '처방 셋팅이 경구제 전용 화면이 아닙니다')
+            check('inj-protocol' not in guide_html and 'inj-cautions' not in guide_html,
+                  '처방 셋팅 화면에 주사제 셋팅이 섞여 있습니다')
+            check('switchGuideTab' not in guide_html and '2탭' not in guide_html, '처방 셋팅에 탭 전환 바가 남아 있습니다')
+    except ImportError:
+        print('(quickjs 없음 — 주사제 주문 두 탭 실행 검사 생략: pip install quickjs)')
 
     # 10-a) 접기·펼치기
     check('function toggleInjCautions' in js and 'injCautionsOpen' in js, '배합금기 접기/펼치기가 없습니다')

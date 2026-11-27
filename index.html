@@ -1174,7 +1174,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.10';
+   const APP_VERSION = 'v1.11';
 
    const STATE = {
      // 로그인/권한
@@ -1193,6 +1193,7 @@
      serverVersion: '',       // 시트 서버(Code.gs) 버전 — v1.4 함수 사용 가능 여부 판단
      // 주문/회전일 탭
      turnoverSubtab: 'dashboard',   // 'dashboard' | 'products'  (v1.10: 주사제 주문 'order' · 수금 등록 'collection' 두 메뉴)
+     orderTab: 'entry',           // 주사제 주문 메뉴 두 탭 — 'entry' 주문(매출) 등록 | 'inject' 주사제 셋팅 (v1.11)
      productFilter: '',             // '' (전체) | '급여' | '비급여'
      productQuery: '',
      turnoverData: null,
@@ -1255,7 +1256,6 @@
      guideSelected: {},
      guideRec: null,
      guidePending: [],
-     guideTab: 'oral',            // 'oral' 경구제 셋팅 | 'inj' 주사제 셋팅 (v1.5)
      guideProductCache: {},       // 가이드에서 받은 품목(경구·주사) — 처방전/주문으로 넘길 때 사용
      injData: null,               // 주사제 셋팅 응답 (목록·카테고리·추천)
      injMode: 'maxrate',          // 'maxrate' | 'margin' | 'category'
@@ -3229,7 +3229,6 @@
      const d = STATE.hira;
      const matched = (d && d.briefing && d.briefing.matchedDepts) || [];
      if (!matched.length) { showToast('진료과가 연결되지 않아 처방 셋팅으로 넘길 수 없습니다.'); return; }
-     STATE.guideTab = 'oral';
      STATE.guideDept = matched[0].진료과;
      STATE.guideData = null;
      switchMenu('guide');
@@ -3414,29 +3413,83 @@
    }
 
    // ------------------------------------------------ 💉 주사제 주문(매출) · 💰 수금 등록(수금) — v1.10 완전 분리
-   /** 💉 주사제 주문 — 매출 전용 입력 + 최근 등록 매출 내역 */
+   //    v1.11 — 💉 주사제 주문 메뉴 안에 '💳 주문(매출) 등록' + '💉 주사제 셋팅(프로토콜·배합금기)' 두 탭
+   /** 주사제 주문 메뉴 두 탭 (v1.11) */
+   function orderTabBar_() {
+     const t = STATE.orderTab === 'inject' ? 'inject' : 'entry';
+     return '<div class="subtabs">' +
+       '<button class="subtab ' + (t === 'entry' ? 'active' : '') + '" onclick="switchOrderTab(\'entry\')">💳 주문(매출) 등록</button>' +
+       '<button class="subtab ' + (t === 'inject' ? 'active' : '') + '" onclick="switchOrderTab(\'inject\')">💉 주사제 셋팅 (프로토콜·배합금기)</button>' +
+     '</div>';
+   }
+
+   /** 탭 전환 — 주사제 셋팅 탭은 자료가 없을 때만 서버에서 받아 옵니다 */
+   function switchOrderTab(tab) {
+     STATE.orderTab = tab === 'inject' ? 'inject' : 'entry';
+     renderActiveMenu();
+     if (STATE.orderTab === 'inject') {
+       if (!STATE.injData) loadInjectGuide();
+       if (!STATE.injProto) loadInjectProtocols();
+     }
+   }
+
+   /** 다른 화면에서 💉 주사제 셋팅 탭으로 바로 이동 (경구제 셋팅의 '주사·수액 N개 보기' 등) */
+   function openInjectSetting() {
+     STATE.orderTab = 'inject';
+     switchMenu('order');
+   }
+
+   /** 💉 주사제 주문 — 매출 전용 입력 + 최근 등록 매출 내역 / 주사제 셋팅 두 탭 */
    function renderOrderPage(container) {
+     const tab = STATE.orderTab === 'inject' ? 'inject' : 'entry';
+     STATE.orderTab = tab;
      container.innerHTML =
        '<div class="page-header">' +
          '<h2 class="page-title">💉 주사제 주문</h2>' +
-         '<span class="badge badge-blue">매출 전용</span>' +
+         '<span class="badge badge-blue">' + (tab === 'inject' ? '💉 주사제 셋팅' : '매출 전용') + '</span>' +
          '<span class="badge badge-amber">직납 기준</span>' +
        '</div>' +
-       '<div id="turnover-body"></div>';
+       orderTabBar_() +
+       (tab === 'inject'
+         ? orderInjectStripHtml_() + renderInjectPanelHtml_()
+         : '<div id="turnover-body"></div>');
+     if (tab === 'inject') {
+       renderInjectBody();
+       renderInjectRecommend();
+       if (STATE.injProto) renderInjectProtocols();
+       return;
+     }
      const body = document.getElementById('turnover-body');
      if (body) renderOrderEntry(body);
+   }
+
+   /** 💉 주사제 셋팅 탭 안내 띠 — 체크한 품목은 같은 메뉴의 주문(매출) 등록 탭으로 채워집니다 */
+   function orderInjectStripHtml_() {
+     const c = STATE.orderClientCode ? findClient(STATE.orderClientCode) : null;
+     return '<div class="card" style="padding:10px 12px;border-color:#bfdbfe;background:#f8fbff;">' +
+       '<div class="toolbar" style="gap:8px;flex-wrap:wrap;align-items:center;">' +
+         '<span style="font-size:12.5px;font-weight:700;color:var(--primary);">💉 주사제 셋팅</span>' +
+         '<span style="font-size:12px;color:var(--muted);">프로토콜·배합금기를 확인하고, 체크한 품목은 <b>[🛒 매출 등록]</b>으로 <b>💳 주문(매출) 등록</b> 탭에 채워집니다.</span>' +
+         (c ? '<span class="badge badge-success">최근 매출 거래처 ' + esc(c.거래처명) + '</span>' : '') +
+       '</div>' +
+     '</div>';
    }
 
    /** 메뉴 진입 — 폼은 바로 보여 주고, 최근 등록 매출만 나중에 채운다 */
    async function loadOrderModule() {
      renderActiveMenu();
+     if (STATE.orderTab === 'inject') {
+       if (!STATE.injData) loadInjectGuide();
+       if (!STATE.injProto) loadInjectProtocols();
+       return;
+     }
      try {
        const rows = await runServer('getRecentTransactions', [200]);
        if (rows) STATE.recentTxs = rows;
      } catch (e) {
        /* 최근 내역은 카드의 [↻ 새로고침]으로 다시 부를 수 있습니다 */
      }
-     if (STATE.activeMenu !== 'order') return;
+     if (STATE.activeMenu !== 'order' || STATE.orderTab === 'inject') return;
      renderRecentTxBox_('매출');
    }
 
@@ -5026,7 +5079,6 @@
    /** 🎯 처방전 → 처방 셋팅 (지금 고른 병원을 그대로 유지) */
    function rxOpenGuideFromRx() {
      if (!STATE.rxClient) { showToast('먼저 병원을 선택해 주세요. 병원을 고르면 그 병원으로 담깁니다.'); return; }
-     STATE.guideTab = 'oral';
      switchMenu('guide');
      const c = findClient(STATE.rxClient);
      showToast((c ? c.거래처명 : STATE.rxClient) + ' 에 담을 품목을 처방 셋팅에서 골라 주세요.');
@@ -6035,7 +6087,8 @@
        '</div>';
    }
 
-   // ---------------------------------------------------------------- 처방 셋팅 (v1.5: 경구제 / 주사제 탭 분리)
+   // ---------------------------------------------------------------- 처방 셋팅 (v1.5: 경구제 / 주사제 탭 분리 → v1.11: 경구제 전용)
+   //    v1.11 — 💉 주사제 셋팅은 💉 주사제 주문 메뉴 안의 탭으로 옮겼습니다. 이 메뉴는 💊 경구제(원외처방) 전용입니다.
    async function loadGuideModule() {
      renderActiveMenu();
      if (!STATE.guideDepts) {
@@ -6045,46 +6098,21 @@
          renderGuideDeptChips();
        } catch (e) {}
      }
-     if (STATE.guideTab === 'inj' && !STATE.injData) loadInjectGuide();
-     if (STATE.guideTab === 'inj' && !STATE.injProto) loadInjectProtocols();
-     if (STATE.guideTab !== 'inj' && !STATE.coverage) loadCoverageNotes();
+     if (!STATE.coverage) loadCoverageNotes();
      if (STATE.guideDept && !STATE.guideData) loadGuideDept(STATE.guideDept);
    }
 
-   /** 경구제(원외처방) / 주사제(원내 주사·수액) 두 탭 */
-   function guideTabBar_() {
-     const t = STATE.guideTab === 'inj' ? 'inj' : 'oral';
-     return '<div class="subtabs">' +
-       '<button class="subtab ' + (t === 'oral' ? 'active' : '') + '" onclick="switchGuideTab(\'oral\')">💊 경구제 셋팅 (원외처방)</button>' +
-       '<button class="subtab ' + (t === 'inj' ? 'active' : '') + '" onclick="switchGuideTab(\'inj\')">💉 주사제 셋팅 (원내 주사·수액)</button>' +
-     '</div>';
-   }
-
-   function switchGuideTab(tab) {
-     STATE.guideTab = tab === 'inj' ? 'inj' : 'oral';
-     renderActiveMenu();
-     if (STATE.guideTab === 'inj' && !STATE.injData) loadInjectGuide();
-   }
-
+   /** 🧭 처방 셋팅 — 💊 경구제(원외처방) 전용 화면 (v1.11) */
    function renderGuidePage(container) {
-     const inj = STATE.guideTab === 'inj';
      container.innerHTML =
        '<div class="page-header">' +
          '<h2 class="page-title">🧭 처방 셋팅 추천</h2>' +
-         '<span class="badge badge-blue">' + (inj ? '💉 주사제 전용' : '💊 경구제 전용') + '</span>' +
+         '<span class="badge badge-blue">💊 경구제(원외처방) 전용</span>' +
          '<span class="badge badge-amber">참고용</span>' +
        '</div>' +
-       guideTabBar_() +
        guideHospitalBarHtml_() +
        v14NoticeHtml_() +
-       (inj ? renderInjectPanelHtml_() : renderGuideOralHtml_());
-     if (inj) {
-       renderInjectBody();
-       renderInjectRecommend();
-       if (!STATE.injProto) loadInjectProtocols();
-       else renderInjectProtocols();
-       return;
-     }
+       renderGuideOralHtml_();
      loadCoverageNotes();
      renderGuideDeptChips();
      renderGuideBody();
@@ -6131,7 +6159,7 @@
          '<div class="card-title"><span>진료과 선택</span><small style="font-weight:500;font-size:12px;color:var(--muted);">과별 주요 성분 → 우리 <b>경구제</b>만(수수료율 순) 매칭</small></div>' +
          '<div id="guide-depts" class="v14-chips"></div>' +
          '<div style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6;">' +
-           '💊 이 탭은 <b>경구제(원외처방)</b> 전용입니다. 주사·수액 품목은 추천하지 않습니다 — 원내 주사는 <b>💉 주사제 셋팅</b> 탭에서 보세요.' +
+           '💊 이 화면은 <b>경구제(원외처방)</b> 전용입니다. 주사·수액 품목은 추천하지 않습니다 — 원내 주사는 <b>💉 주사제 주문</b> 메뉴의 <b>💉 주사제 셋팅</b> 탭에서 보세요.' +
          '</div>' +
        '</div>' +
        '<div id="guide-coverage"></div>' +
@@ -6242,7 +6270,7 @@
            '<button class="btn btn-primary btn-sm" onclick="runInjectRecommend(true)">🎯 추천 세팅 보기</button>' +
          '</div>' +
          '<div style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6;">' +
-           '💉 <b>원내 주사·수액</b>은 병원에서 바로 쓰는 품목입니다. 추천 품목은 <b>[🛒 매출 등록]</b>으로 주문(매출) 화면에 보낼 수 있습니다.' +
+           '💉 <b>원내 주사·수액</b>은 병원에서 바로 쓰는 품목입니다. 추천·검색 품목은 <b>[🛒 매출 등록]</b>을 누르면 같은 메뉴의 <b>💳 주문(매출) 등록</b> 탭으로 채워집니다.' +
          '</div>' +
        '</div>' +
        '<div id="inj-recommend"></div>' +
@@ -6695,8 +6723,9 @@
        급여구분: p.급여구분 || '', 시장가: Number(p.약가 || 0)
      };
      STATE.pendingOrderProduct = row;
+     STATE.orderTab = 'entry';        // v1.11 — 같은 메뉴의 '💳 주문(매출) 등록' 탭으로 채워 넣기
      switchMenu('order');
-     showToast(p.품목명 + ' — 매출 등록란에 채웠습니다. 거래처·수량을 확인하세요.');
+     showToast(p.품목명 + ' — 주문(매출) 등록 탭에 채웠습니다. 거래처·수량을 확인하세요.');
    }
 
    /** 추천 세팅을 글자로 복사 (메모·영업자료용) */
@@ -6819,7 +6848,7 @@
                        esc(p.품목명) + ' <span>' + (p.수수료율 || 0) + '%</span></button>';
                    }).join('') + (it.경구제수 > 3 ? '<span style="font-size:11.5px;color:var(--muted);align-self:center;">외 ' + (it.경구제수 - 3) + '</span>' : '')
                      : '<span style="color:var(--muted);font-size:12px;">경구제 없음' +
-                       (it.주사제수 ? ' <button class="btn-link" style="font-size:12px;" onclick="switchGuideTab(\'inj\')">💉 주사·수액 ' + it.주사제수 + '개 보기</button>' : '') + '</span>') +
+                       (it.주사제수 ? ' <button class="btn-link" style="font-size:12px;" onclick="openInjectSetting()">💉 주사·수액 ' + it.주사제수 + '개 보기</button>' : '') + '</span>') +
                  '</div>' +
                '</div>';
              }).join('') +
