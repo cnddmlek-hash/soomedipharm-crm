@@ -53,6 +53,8 @@ def main():
                     help='약학정보원 검색 fixture (여러 개면 쉼표로 구분). 기본: fixtures/kpic_search*.json')
     ap.add_argument('--kpic-detail', default=None,
                     help='약학정보원 상세 fixture (여러 개면 쉼표로 구분). 기본: fixtures/kpic_detail*.json')
+    ap.add_argument('--hira', default=os.path.join(HERE, 'fixtures', 'hira.json'),
+                    help='심평원(HIRA) 공개 API 모의 응답 fixture')
     ap.add_argument('--codegs', default=None)
     ap.add_argument('--verbose', action='store_true')
     args = ap.parse_args()
@@ -82,6 +84,10 @@ def main():
     ctx = quickjs.Context()
     ctx.eval('var __FIXTURES_JSON = ' + json.dumps(fixtures) + ';')
     ctx.eval('var __KPIC_JSON = ' + json.dumps(json.dumps(kpic)) + ';')
+    hira = '{}'
+    if args.hira and os.path.exists(args.hira):
+        hira = read(args.hira)
+    ctx.eval('var __HIRA_JSON = ' + json.dumps(hira) + ';')
 
     # 모의 환경 → 실제 Code.gs → 테스트 순서로 같은 전역에서 실행
     for path in [os.path.join(HERE, 'mock_apps_script.js'), codegs_path, os.path.join(HERE, 'test_codegs.js')]:

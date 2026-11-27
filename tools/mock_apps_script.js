@@ -9,6 +9,7 @@ var __TRIGGERS = [];
 var __PROPS = {};
 var __CACHE = {};
 var __KPIC = JSON.parse(__KPIC_JSON || '{}');
+var __HIRA_JSON = (typeof __HIRA_JSON === 'undefined') ? '{}' : __HIRA_JSON;
 var __UI_ALERTS = [];
 
 // v1.4에서 추가된 열이 테스트 데이터에 없으면 헤더에 붙여 줍니다.
@@ -209,8 +210,170 @@ var UrlFetchApp = {
     var u = String(url);
     if (u.indexOf('api/searchDrug') !== -1) body = JSON.stringify(__kpicSearchResponse_(u));
     else if (u.indexOf('ajax_result_drug2') !== -1) body = JSON.stringify(__kpicDetailResponse_(u));
+    else if (u.indexOf('/B551182/') !== -1) {
+      var hira = __hiraResponse_(u);
+      return { getResponseCode: function () { return hira.code; }, getContentText: function () { return hira.body; } };
+    }
     else return { getResponseCode: function () { return 404; }, getContentText: function () { return ''; } };
     return { getResponseCode: function () { return 200; }, getContentText: function () { return body; } };
+  }
+};
+
+/* --------------------------------------------------------------------------
+   심평원(HIRA) 공공데이터포털 모의 응답
+   · fixtures/hira.json 의 병원·진료과목·비급여·평가 자료를 실제 API 응답 모양으로 돌려줍니다.
+   · ServiceKey 가 fixture key 와 다르면 실제처럼 403 + OpenAPI_ServiceResponse 를 냅니다.
+   -------------------------------------------------------------------------- */
+var __HIRA = JSON.parse(__HIRA_JSON || '{}');
+var __HIRA_CALLS = [];
+
+function __hiraParam_(url, name) {
+  var m = new RegExp('[?&]' + name + '=([^&]*)').exec(String(url));
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
+function __hiraJson_(items, total) {
+  return JSON.stringify({
+    response: {
+      header: { resultCode: items.length ? '00' : '03', resultMsg: items.length ? 'NORMAL SERVICE.' : 'NODATA_ERROR' },
+      body: { numOfRows: items.length, pageNo: 1, totalCount: total === undefined ? items.length : total, items: { item: items } }
+    }
+  });
+}
+
+function __hiraXmlEscape_(s) {
+  return String(s === undefined || s === null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function __hiraXml_(items, total) {
+  var rows = items.map(function (it) {
+    var inner = Object.keys(it).map(function (k) {
+      return '<' + k + '>' + __hiraXmlEscape_(it[k]) + '</' + k + '>';
+    }).join('');
+    return '<item>' + inner + '</item>';
+  }).join('');
+  return '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<response><header><resultCode>' + (items.length ? '00' : '03') + '</resultCode>' +
+    '<resultMsg>' + (items.length ? 'NORMAL SERVICE.' : 'NODATA_ERROR') + '</resultMsg></header>' +
+    '<body><numOfRows>' + items.length + '</numOfRows><pageNo>1</pageNo>' +
+    '<totalCount>' + (total === undefined ? items.length : total) + '</totalCount>' +
+    '<items>' + rows + '</items></body></response>';
+}
+
+function __hiraErrorBody_(xml) {
+  if (xml) {
+    return '<?xml version="1.0" encoding="UTF-8"?><OpenAPI_ServiceResponse>' +
+      '<cmmMsgHeader><errMsg>SERVICE_KEY_IS_NOT_REGISTERED_ERROR</errMsg>' +
+      '<returnAuthMsg>등록되지 않은 서비스키</returnAuthMsg>' +
+      '<returnReasonCode>30</returnReasonCode></cmmMsgHeader></OpenAPI_ServiceResponse>';
+  }
+  return JSON.stringify({
+    OpenAPI_ServiceResponse: {
+      cmmMsgHeader: {
+        errMsg: 'SERVICE_KEY_IS_NOT_REGISTERED_ERROR',
+        returnAuthMsg: '등록되지 않은 서비스키',
+        returnReasonCode: '30'
+      }
+    }
+  });
+}
+
+function __hiraResponse_(url) {
+  var u = String(url);
+  var key = __hiraParam_(u, 'ServiceKey');
+  var wantJson = __hiraParam_(u, '_type') === 'json';
+  var isNonPay = u.indexOf('getNonPaymentItemHospDtlList') !== -1;
+  __HIRA_CALLS.push(u);
+
+  if (__HIRA.key && key !== __HIRA.key) {
+    return { code: 403, body: __hiraErrorBody_(!wantJson || isNonPay) };
+  }
+
+  var ykiho = __hiraParam_(u, 'ykiho');
+  var yadmNm = __hiraParam_(u, 'yadmNm');
+
+  if (u.indexOf('getHospBasisList') !== -1) {
+    var all = (__HIRA.hospitals || []);
+    var hit = all.filter(function (h) { return !yadmNm || String(h.yadmNm).indexOf(yadmNm) !== -1; });
+    return { code: 200, body: wantJson ? __hiraJson_(hit, hit.length) : __hiraXml_(hit, hit.length) };
+  }
+  if (u.indexOf('getDgsbjtInfo2.8') !== -1) {
+    var dg = ((__HIRA.dgsbjt || {})[ykiho]) || [];
+    return { code: 200, body: wantJson ? __hiraJson_(dg, dg.length) : __hiraXml_(dg, dg.length) };
+  }
+  if (u.indexOf('getSpcSbjtSdrInfo2.8') !== -1) {
+    var sd = ((__HIRA.sdr || {})[ykiho]) || [];
+    return { code: 200, body: wantJson ? __hiraJson_(sd, sd.length) : __hiraXml_(sd, sd.length) };
+  }
+  if (isNonPay) {
+    var np = ((__HIRA.nonpay || {})[ykiho]) || [];
+    return { code: 200, body: __hiraXml_(np, np.length) };   // 이 서비스는 XML 만 응답
+  }
+  if (u.indexOf('getHospAsmInfo1') !== -1) {
+    var asm = ((__HIRA.asm || {})[ykiho]) || [];
+    return { code: 200, body: wantJson ? __hiraJson_(asm, asm.length) : __hiraXml_(asm, asm.length) };
+  }
+  return { code: 404, body: '' };
+}
+
+/* --------------------------------------------------------------------------
+   XmlService 모의 구현 — parseHiraXml_ 이 쓰는 만큼만 지원
+   -------------------------------------------------------------------------- */
+function __XmlEl_(name, children, text) {
+  this._name = name;
+  this._children = children || [];
+  this._text = text || '';
+}
+__XmlEl_.prototype.getName = function () { return this._name; };
+__XmlEl_.prototype.getText = function () { return this._text; };
+__XmlEl_.prototype.getChild = function (name) {
+  for (var i = 0; i < this._children.length; i++) {
+    if (this._children[i]._name === name) return this._children[i];
+  }
+  return null;
+};
+__XmlEl_.prototype.getChildren = function (name) {
+  if (name === undefined) return this._children.slice();
+  return this._children.filter(function (c) { return c._name === name; });
+};
+
+function __parseXml_(source) {
+  var s = String(source || '').replace(/<\?[\s\S]*?\?>/g, '').replace(/<!--[\s\S]*?-->/g, '');
+  var i = 0;
+  function parseEl() {
+    var m = /^<([A-Za-z0-9_:.\-]+)[^>]*>/.exec(s.slice(i));
+    if (!m) return null;
+    i += m[0].length;
+    var name = m[1];
+    var children = [];
+    var text = '';
+    while (i < s.length) {
+      if (s.slice(i, i + 2) === '</') {
+        var end = s.indexOf('>', i);
+        i = end === -1 ? s.length : end + 1;
+        return new __XmlEl_(name, children, text.trim());
+      }
+      if (s[i] === '<') {
+        var child = parseEl();
+        if (!child) break;
+        children.push(child);
+        continue;
+      }
+      var next = s.indexOf('<', i);
+      text += (next === -1) ? s.slice(i) : s.slice(i, next);
+      i = next === -1 ? s.length : next;
+    }
+    return new __XmlEl_(name, children, text.trim());
+  }
+  while (i < s.length && s[i] !== '<') i++;
+  return parseEl();
+}
+
+var XmlService = {
+  parse: function (source) {
+    var root = __parseXml_(source);
+    return { getRootElement: function () { return root; } };
   }
 };
 

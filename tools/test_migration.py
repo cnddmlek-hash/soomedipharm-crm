@@ -91,8 +91,24 @@ def main():
         for name in ['looksParenteral_', 'dosageFormOf_', 'productsOfForm_', 'productIndexByIngredient_',
                      'injectCategoryOf_', 'injectPicks_', 'getInjectGuide']:
             check(name in code, 'Code.gs 에 %s 가 없습니다' % name)
-        check("const APP_VERSION = 'v1.6'" in code, 'Code.gs 버전이 v1.6 이 아닙니다')
+        check("const APP_VERSION = 'v1.7'" in code, 'Code.gs 버전이 v1.7 이 아닙니다')
         check(re.search(r'getInjectGuide\s*:\s*getInjectGuide', code) is not None, 'getInjectGuide 가 apiFunctions_ 에 없습니다')
+
+    # ---------------- 2-f. v1.7 거래처코드 Sxxx 채번 · 심평원 연동
+    if code:
+        check('function nextClientCode_' in code, 'nextClientCode_ 가 없습니다')
+        check(re.search(r"return 'S' \+ \(next <= 999", code) is not None, 'Sxxx/S1000 채번 규칙이 다릅니다')
+        check('nextClientCode_(allRaw' in code, 'saveClient 가 nextClientCode_ 를 쓰지 않습니다')
+        sc = re.search(r'function saveClient\(payload, token\)\s*\{(.*?)\n\}', code, re.S)
+        check(bool(sc), 'saveClient 를 찾지 못했습니다')
+        if sc:
+            check('/^C(' not in sc.group(1) and "C0001" not in sc.group(1), 'saveClient 에 옛 C0001 채번이 남아 있습니다')
+        for name in ['getHiraPrevisitBriefing', 'checkHiraApi', 'hiraCall_', 'hiraSearchHospitals_',
+                     'hiraHospitalExtras_', 'hiraMapDeptsToGuide_', 'buildHiraBriefing_', 'hiraNonPayTagsOf_']:
+            check(name in code, 'Code.gs 에 %s 가 없습니다' % name)
+        check('apis.data.go.kr/B551182' in code, '심평원 API 주소가 없습니다')
+        check(re.search(r'getHiraPrevisitBriefing\s*:\s*getHiraPrevisitBriefing', code) is not None,
+              'getHiraPrevisitBriefing 이 apiFunctions_ 에 없습니다')
 
     # ---------------- 2-d. v1.5.1 최소 제약사 — 상한 안에서 요율 최대화
     if code:
@@ -126,6 +142,31 @@ def main():
             check(tiers.get('STAFF', []).count('2단계') >= 1, '기존 STAFF 가 2단계가 아닙니다: %s' % tiers.get('STAFF'))
         else:
             check(False, 'fixtures 사용자 탭에 요율등급 열이 없습니다')
+
+    # ---------------- 3-a. v1.7 거래처코드 Sxxx · 심평원 fixture
+    if isinstance(fx, dict) and '거래처' in fx:
+        g = fx['거래처']
+        if g and '거래처코드' in g[0]:
+            ci = g[0].index('거래처코드')
+            codes = [str(r[ci]).strip() if len(r) > ci else '' for r in g[1:]]
+            bad = [c for c in codes if not re.fullmatch(r'S\d{3,}', c)]
+            check(not bad, 'Sxxx 형식이 아닌 거래처코드: %s' % bad[:5])
+            check(len(set(codes)) == len(codes), '거래처코드 중복')
+            check(codes == sorted(codes, key=lambda x: int(x[1:])), '거래처코드가 행 순서대로가 아닙니다')
+    hira_path = os.path.join(d, 'hira.json')
+    if os.path.exists(hira_path):
+        hf = json.load(open(hira_path, encoding='utf-8'))
+        hosp = hf.get('hospitals') or []
+        check(len(hosp) >= 4, 'hira fixture 병원이 부족합니다: %d' % len(hosp))
+        yk = {h.get('ykiho') for h in hosp}
+        check(len(yk) == len(hosp) and all(yk), 'hira fixture 요양기호 누락/중복')
+        for key in ('dgsbjt', 'asm', 'nonpay'):
+            for y in (hf.get(key) or {}):
+                check(y in yk, 'hira fixture %s 의 요양기호가 병원목록에 없습니다: %s' % (key, y))
+        check(any('글루타치온' in str(x.get('npayKorNm') or '') for x in (hf.get('nonpay') or {}).get('YKI_HOSP_DONGNAE', [])),
+              'hira fixture 에 백옥주사(글루타치온) 비급여 항목이 없습니다')
+        check(any(x.get('asmGrd09') for x in (hf.get('asm') or {}).get('YKI_INT_DONGNAE', [])),
+              'hira fixture 에 약품목수 평가등급이 없습니다')
 
     if isinstance(fx, dict) and '제품마스터' in fx and '이엘파마품목' in fx:
         def tab_rows(tab):

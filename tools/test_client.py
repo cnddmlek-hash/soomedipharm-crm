@@ -49,7 +49,7 @@ def main():
         print('(esprima 없음 — 문법 검사 생략: pip install esprima)')
 
     # 2) v1.6 요소
-    check("const APP_VERSION = 'v1.6'" in js, 'APP_VERSION 이 v1.6 이 아닙니다')
+    check("const APP_VERSION = 'v1.7'" in js, 'APP_VERSION 이 v1.7 이 아닙니다')
     check('id: \'drug\'' in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
     check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
     check('guideTabBar_' in js and 'switchGuideTab' in js, '경구제/주사제 탭이 없습니다')
@@ -83,6 +83,22 @@ def main():
     check('saveClientProfile' in js and 'submitClientProfile' in js, '원장 정보 저장이 없습니다')
     check('loadBirthdaySettings' in js and 'installBirthdayTrigger' in js, '생일 알림 설정이 없습니다')
     check('applyGuidePending' in js, '처방전으로 보내기 연결이 없습니다')
+
+    # 2-c) v1.7 — 비거래처 사전조회(심평원 HIRA)
+    check("id: 'hira'" in js and 'renderHiraPage' in js, '비거래처 사전조회 메뉴가 없습니다')
+    check('loadHiraModule' in js and 'hiraBase' in js, '사전조회 초기 로딩이 없습니다')
+    check("runServer('getHiraPrevisitBriefing'" in js, 'getHiraPrevisitBriefing 호출이 없습니다')
+    check('hiraSearch' in js and 'hiraPickDept' in js and 'hiraPickHospital' in js, '병원·진료과 선택 흐름이 없습니다')
+    check('hiraKeyGuideHtml_' in js and 'HIRA_API_KEY' in js, 'HIRA_API_KEY 안내가 없습니다')
+    check("runServer('checkHiraApi'" in js and 'hiraCheckApi' in js, '심평원 연동 점검이 없습니다')
+    check('hiraRegisterClient' in js and 'openClientModal' in js, '거래처 등록 연결이 없습니다')
+    check('hiraClientMatch_' in js, '이미 등록된 거래처 판별이 없습니다')
+    check('hiraOpenGuide' in js and 'hiraCopyBriefing' in js, '처방 셋팅·복사 연결이 없습니다')
+    check('방문 전 영업 브리핑' in js, '브리핑 카드 제목이 없습니다')
+    check('TOP 30' in js and 'hiraToggleMore' in js, 'TOP 30 펼치기가 없습니다')
+    check('고요율 추천 품목' in js and '비급여·주사 타깃' in js, '추천·주사 타깃 섹션이 없습니다')
+    check('예상 추천' in js or '공개하지 않습니다' in js, '예상 추천 고지가 없습니다')
+    check('심평원 신고' in js and '평가등급' in js, '진료과목·평가등급 표시가 없습니다')
 
     # 2-b) 요율등급 3단계 (v1.6) — MASTER 전용 화면 요소
     check('RATE_TIER_CHOICES' in js, '요율등급 선택지가 없습니다')
@@ -119,7 +135,19 @@ def main():
         used = set(re.findall(r"runServer\('([A-Za-z_$][\w$]*)'", js))
         missing = sorted(u for u in used if u not in api)
         check(not missing, 'Code.gs 에 없는 서버 함수 호출: %s' % ', '.join(missing))
-        check('v1.6' in code, 'Code.gs 버전이 v1.6 이 아닙니다')
+        check('v1.7' in code, 'Code.gs 버전이 v1.7 이 아닙니다')
+        check(re.search(r'getHiraPrevisitBriefing\s*:\s*getHiraPrevisitBriefing', code) is not None,
+              'Code.gs apiFunctions_ 에 getHiraPrevisitBriefing 이 없습니다')
+        check(re.search(r'checkHiraApi\s*:\s*checkHiraApi', code) is not None,
+              'Code.gs apiFunctions_ 에 checkHiraApi 가 없습니다')
+        for name in ['nextClientCode_', 'hiraCall_', 'hiraHospitalExtras_', 'buildHiraBriefing_',
+                     'hiraMapDeptsToGuide_', 'hiraNonPayTagsOf_', 'hiraAuthMessage_', 'HIRA_SERVICES_']:
+            check(name in code, 'Code.gs 에 %s 가 없습니다' % name)
+        check('/hospInfoServicev2/getHospBasisList' in code, '병원정보서비스 엔드포인트가 없습니다')
+        check('/MadmDtlInfoService2.8/getDgsbjtInfo2.8' in code, '진료과목정보 엔드포인트가 없습니다')
+        check('/nonPaymentDamtInfoService/getNonPaymentItemHospDtlList' in code, '비급여 엔드포인트가 없습니다')
+        check('/hospAsmInfoService1/getHospAsmInfo1' in code, '병원평가 엔드포인트가 없습니다')
+        check("'S' + (next <= 999" in code, '거래처코드 Sxxx 채번 규칙이 없습니다')
         check(re.search(r'updateUserTier\s*:\s*updateUserTier', code) is not None,
               'Code.gs apiFunctions_ 에 updateUserTier 가 없습니다')
         for name in ['rateCutPercent_', 'applyRateCut_', 'normalizeTier_', 'productsForUser_', 'setUserTierCell_']:

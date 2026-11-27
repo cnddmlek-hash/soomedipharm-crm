@@ -932,6 +932,164 @@ t('요율등급: 처방 저장은 원본 요율 · STAFF 조회는 차감', func
   }
 });
 
+
+// ------------------------------------------------------------------ 11. v1.7 — 거래처코드 Sxxx 채번
+t('채번: S001 형식으로 이어짐 (3자리·999 초과는 S1000)', function () {
+  eq(nextClientCode_([]), 'S001');
+  eq(nextClientCode_(['S001', 'S009', 'S010']), 'S011');
+  eq(nextClientCode_(['S999']), 'S1000');
+  eq(nextClientCode_(['S1000', 'S002']), 'S1001');
+});
+t('채번: 옛 휴온스 코드·구 C코드는 건너뛰고 S 코드만 봄', function () {
+  eq(nextClientCode_(['1095167', 'C0003', '9008881']), 'S001');
+  eq(nextClientCode_(['1095167', 'S093']), 'S094');
+});
+t('거래처 저장: 신규 등록이 Sxxx 코드로 채번되고 시트에 남음', function () {
+  var before = getClients(true, TOKEN).map(function (c) { return c.거래처코드; });
+  var res = saveClient({ 거래처명: '테스트신규내과의원', 유통구분: '의원', 진료과: '내과' }, TOKEN);
+  ok(res && res.success, '저장 실패');
+  ok(/^S\d{3,}$/.test(res.code), 'Sxxx 형식이 아님: ' + res.code);
+  eq(res.code, nextClientCode_(before), '채번이 기존 최대번호 다음이 아님');
+  var saved = res.clients.filter(function (c) { return c.거래처코드 === res.code; })[0];
+  ok(saved && saved.거래처명 === '테스트신규내과의원', '새 거래처가 목록에 없음');
+});
+
+// ------------------------------------------------------------------ 12. v1.7 — 심평원(HIRA) 비거래처 사전조회
+function setHiraKey_(key) {
+  saveSettings({ HIRA_API_KEY: key }, TOKEN);
+  return String(getSettingsMap_()['HIRA_API_KEY'] || '');
+}
+
+t('HIRA 미설정: 안내·진료과 목록만 있고 먹통이 되지 않음', function () {
+  setHiraKey_('');
+  var r = getHiraPrevisitBriefing({ name: '테스트소아청소년과의원01' }, TOKEN);
+  ok(r && r.configured === false, 'configured=false 여야 함');
+  eq(r.mode, 'offline');
+  ok(r.apiGuide && r.apiGuide.steps.length === 3, '키 발급 3단계 안내가 없음');
+  ok(r.apiGuide.title.indexOf('HIRA_API_KEY') !== -1, '안내 제목에 HIRA_API_KEY 표기가 없음');
+  ok(r.deptOptions.length >= 10, '진료과 목록이 부족함: ' + r.deptOptions.length);
+  ok(r.warnings.join(' ').indexOf('HIRA_API_KEY') !== -1, '키 안내 문구가 없음');
+});
+t('HIRA 미설정: 이미 등록된 거래처면 중복 등록 방지 정보를 줌', function () {
+  var r = getHiraPrevisitBriefing({ name: '테스트소아청소년과의원01' }, TOKEN);
+  ok(r.registration && r.registration.exists, '등록된 거래처로 잡히지 않음');
+  ok(/^S\d{3,}$/.test(r.registration.거래처코드), '거래처코드가 Sxxx 가 아님: ' + r.registration.거래처코드);
+});
+t('HIRA 미설정: 진료과만 골라도 다처방 TOP 30 · 추천 브리핑이 나옴', function () {
+  setHiraKey_('');
+  var r = getHiraPrevisitBriefing({ dept: '내과' }, TOKEN);
+  eq(r.mode, 'offline');
+  ok(r.briefing, '브리핑이 없음');
+  eq(r.briefing.matchedDepts[0].진료과, '내과');
+  eq(r.briefing.topIngredients.top10.length, 10);
+  ok(r.briefing.topIngredients.all.length <= 30, 'TOP 30 을 넘음');
+  ok(r.briefing.topIngredients.all.length >= 10, '성분이 너무 적음');
+  ok(r.briefing.basis.indexOf('공개하지 않습니다') !== -1, '예상 추천 고지 문구가 없음');
+  var first = r.briefing.topIngredients.top10[0];
+  ok(first.성분명 && first.질환군, '성분·질환군(병명)이 없음');
+  ok(Array.isArray(first.우리제품) && first.우리제품.length >= 1, '우리 제품 매칭이 없음');
+  ok(r.briefing.injectTargets.length >= 1, '진료과 기반 주사 타깃이 없음');
+});
+t('HIRA 진료과 매핑: 분과·일반의도 우리 가이드 과로 붙음', function () {
+  var m = hiraMapDeptsToGuide_(['소화기내과', '일반의', '이비인후과', '비뇨기과']);
+  var names = m.map(function (x) { return x.진료과; });
+  ok(names.indexOf('내과') !== -1, '소화기내과 → 내과 실패');
+  ok(names.indexOf('가정의학과') !== -1, '일반의 → 가정의학과 실패');
+  ok(names.indexOf('이비인후과') !== -1, '이비인후과 실패');
+  ok(names.indexOf('비뇨의학과') !== -1, '비뇨기과 → 비뇨의학과 실패');
+});
+
+t('HIRA 키 설정: 병원명+지역으로 검색되고 진료과목·평가등급이 붙음', function () {
+  setHiraKey_('TEST_HIRA_KEY');
+  var r = getHiraPrevisitBriefing({ name: '부산동래한내과', region: '부산 동래구' }, TOKEN);
+  eq(r.configured, true);
+  eq(r.mode, 'live');
+  eq(r.hospitals.length, 1, '지역 필터 결과 건수');
+  ok(r.hospital && r.hospital.요양기관명 === '부산동래한내과의원', '병원 선택 오류');
+  eq(r.hospital.종별, '의원');
+  eq(r.hospital.전문의수, 2);
+  eq(r.hira.진료과목[0].과목, '내과');
+  eq(r.hira.평가.length, 4, '평가등급 4종이 아님');
+  ok(r.briefing && r.briefing.topIngredients.top10.length === 10, '진료과목 → 브리핑 연결 실패');
+});
+t('HIRA 검색: 지역을 안 넣으면 다른 지역 동명 병원도 함께 보임', function () {
+  var r = getHiraPrevisitBriefing({ name: '부산동래한내과' }, TOKEN);
+  eq(r.hospitals.length, 3, '전체 후보 건수');
+  var r2 = getHiraPrevisitBriefing({ name: '부산동래한내과', region: '대전' }, TOKEN);
+  eq(r2.hospitals.length, 3, '지역 미스면 전체를 보여 줘야 함');
+  ok(r2.warnings.join(' ').indexOf('대전') !== -1, '지역 미스 안내가 없음');
+});
+t('HIRA 병원급: 비급여 항목·가격과 주사 타깃·평가등급 연결', function () {
+  var r = getHiraPrevisitBriefing({ name: '부산동래한병원' }, TOKEN);
+  eq(r.mode, 'live');
+  eq(r.hira.비급여.length, 4, '비급여 건수');
+  var first = r.hira.비급여.filter(function (x) { return x.항목.indexOf('글루타치온') !== -1; })[0];
+  ok(first && first.금액 === 30000, '비급여 금액 파싱 오류');
+  ok(r.briefing, '브리핑 없음');
+  var tags = r.briefing.nonPayMatched.map(function (x) { return x.tag; }).join(' ');
+  ok(tags.indexOf('백옥') !== -1, '백옥주사 태그가 안 붙음: ' + tags);
+  ok(tags.indexOf('도수') !== -1, '도수치료 태그가 안 붙음: ' + tags);
+  var tgt = r.briefing.injectTargets[0];
+  ok(tgt && tgt.케이스, '주사 타깃이 없음');
+  ok(tgt.우리제품.length >= 1, '주사 타깃에 우리 제품이 없음');
+  ok(r.briefing.grades.length === 4, '평가등급이 브리핑에 없음');
+});
+t('HIRA: 잘못된 인증키는 예외 없이 안내 문구로 돌려줌', function () {
+  setHiraKey_('BAD_KEY');
+  var r = getHiraPrevisitBriefing({ name: '서울의료원' }, TOKEN);
+  ok(r && r.configured === true, 'configured 는 true');
+  eq(r.mode, 'offline');
+  ok(!r.hospital, '병원이 잡히면 안 됨');
+  ok(r.warnings.join(' ').indexOf('인증키') !== -1, '인증키 안내가 없음: ' + r.warnings.join(' | '));
+});
+t('HIRA: XML 응답도 해석 (비급여 서비스는 XML 만 응답)', function () {
+  setHiraKey_('TEST_HIRA_KEY');
+  var res = hiraCall_(HIRA_SERVICES_.HOSP, { yadmNm: '부산동래한병원' }, { xml: true, noCache: true });
+  ok(res.ok, 'XML 호출 실패: ' + res.message);
+  eq(res.items.length, 1);
+  eq(res.totalCount, 1);
+  eq(res.items[0].ykiho, 'YKI_HOSP_DONGNAE');
+});
+t('HIRA: 연동 점검은 4개 서비스를 실제로 확인', function () {
+  var r = checkHiraApi(TOKEN);
+  ok(r.configured, '키 미설정으로 나옴');
+  eq(r.services.length, 4, '점검 항목 수');
+  ok(r.ok, '연동 점검이 실패로 나옴: ' + JSON.stringify(r.services));
+});
+t('HIRA: 같은 병원을 다시 보면 캐시를 써서 호출을 아끼고, 응답은 같음', function () {
+  setHiraKey_('TEST_HIRA_KEY');
+  var a = getHiraPrevisitBriefing({ name: '부산동래한내과', region: '부산 동래구' }, TOKEN);
+  var calls1 = __HIRA_CALLS.length;
+  var b = getHiraPrevisitBriefing({ name: '부산동래한내과', region: '부산 동래구' }, TOKEN);
+  var calls2 = __HIRA_CALLS.length;
+  eq(calls2, calls1, '캐시가 안 먹혀 API 를 다시 부름');
+  eq(a.hospital.요양기관명, b.hospital.요양기관명);
+  eq(a.hira.평가.length, b.hira.평가.length);
+});
+t('HIRA: STAFF 에게는 차감된 요율만 (등급·원본요율 비노출)', function () {
+  setHiraKey_('');
+  var m = getHiraPrevisitBriefing({ dept: '내과' }, TOKEN);
+  var s = getHiraPrevisitBriefing({ dept: '내과' }, STAFF_TOKEN);
+  ok(m.briefing.highRatePicks.length >= 5, 'MASTER 추천 품목 부족');
+  eq(s.briefing.highRatePicks.length, m.briefing.highRatePicks.length);
+  var md = {};
+  m.briefing.highRatePicks.forEach(function (p) { md[p.보험코드] = p.수수료율; });
+  var checked = 0;
+  s.briefing.highRatePicks.forEach(function (p) {
+    if (md[p.보험코드] === undefined) return;
+    eq(p.수수료율, Math.max(0, md[p.보험코드] - 2), 'STAFF 요율 차감 오류 (' + p.품목명 + ')');
+    checked++;
+  });
+  ok(checked >= 5, '비교한 품목이 부족함');
+  var txt = JSON.stringify(s);
+  ['요율등급', '요율차감', '원본요율'].forEach(function (k) {
+    ok(txt.indexOf(k) === -1, 'STAFF 응답에 ' + k + ' 가 들어 있음');
+  });
+});
+t('HIRA: 로그인 토큰이 없으면 거부', function () {
+  throwsMatch(function () { getHiraPrevisitBriefing({ name: '부산동래한병원' }, ''); }, '로그인');
+});
+
 // ------------------------------------------------------------------ 결과
 var PASSED = RESULTS.filter(function (r) { return r.ok; }).length;
 var FAILED = RESULTS.length - PASSED;

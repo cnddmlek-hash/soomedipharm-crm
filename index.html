@@ -1100,7 +1100,7 @@
    <!-- PC 사이드바 -->
    <aside class="sidebar">
      <div class="sidebar-brand">
-       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.5</span></h1>
+       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.7</span></h1>
        <div class="sub" id="brand-sub">로딩 중...</div>
      </div>
      <nav class="sidebar-nav" id="sidebar-nav"></nav>
@@ -1116,7 +1116,7 @@
 
    <!-- 모바일 상단 헤더 -->
    <header class="mobile-header">
-     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.5</span></h1>
+     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.7</span></h1>
      <div style="display:flex;gap:6px;align-items:center;">
        <span id="m-user" class="ver-chip" style="display:none;" onclick="openPasswordModal()" title="내 계정 · 비밀번호 변경"></span>
        <button class="btn btn-sm" id="pw-btn-m" title="비밀번호 변경" aria-label="비밀번호 변경" style="display:none;background:rgba(255,255,255,0.16);color:#fff;" onclick="openPasswordModal()">🔑</button>
@@ -1136,7 +1136,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.6';
+   const APP_VERSION = 'v1.7';
 
    const STATE = {
      // 로그인/권한
@@ -1231,6 +1231,13 @@
      profileEditCode: '',
      birthdayStatus: null,
      birthdayHidden: '',
+     // v1.7 — 비거래처 사전조회(HIRA)
+     hiraBase: null,              // 진료과 목록·키 안내·연동 상태 (getHiraPrevisitBriefing [{}])
+     hira: null,                  // 마지막 조회 결과 (병원·심평원 자료·브리핑)
+     hiraDept: '',                // 고른 진료과
+     hiraName: '',                // 마지막 검색 병원명
+     hiraRegion: '',              // 마지막 검색 지역
+     hiraMore: false,             // TOP 30 펼침
      // 자동완성 인스턴스
      acInstances: []
    };
@@ -1317,7 +1324,8 @@
    // 응답만 못 받았을 때(GET 1회 재시도)에도 안전한 읽기 전용 서버 함수
    const READONLY_FNS = ['login', 'logout', 'getBootstrapData', 'verifyPin', 'getClients', 'getProducts',
      'getRecentTransactions', 'getTurnoverDashboard', 'getLedgerData', 'getClientDetail',
-     'getRecentOrdersByClient', 'getHiraHospitalInfo', 'getMailLogs', 'getHiraKeyStatus',
+     'getRecentOrdersByClient', 'getHiraHospitalInfo', 'getHiraPrevisitBriefing', 'checkHiraApi',
+    'getMailLogs', 'getHiraKeyStatus',
      'getMonthlyPerformance', 'searchElpharmaProducts', 'getFrequentElpharmaProducts',
      'getPrescriptionQuickItems', 'getPrescriptions'];
 
@@ -1771,6 +1779,14 @@
        icon: '🏥',
        render: renderClientsPage,
        onEnter: function () { renderActiveMenu(); }
+     },
+     {
+       id: 'hira',
+       label: '비거래처 사전조회',
+       shortLabel: '심평원',
+       icon: '🏥',
+       render: renderHiraPage,
+       onEnter: loadHiraModule
      },
      {
        id: 'ledger',
@@ -2689,6 +2705,479 @@
      STATE.clients = res.clients;
      showToast(flag === 'N' ? '거래처가 비활성화되었습니다.' : '거래처가 복구되었습니다.');
      renderActiveMenu();
+   }
+
+   // =========================================================================
+   // 7-b. v1.7 — 🏥 비거래처 사전조회 (심평원 HIRA)
+   //   · 병원명(+지역)으로 심평원 공개 API 를 조회하고, 진료과를 우리 진료과성분
+   //     (다처방 TOP 30)·주사프로토콜·제품마스터와 연결해 '방문 전 브리핑'을 만든다.
+   //   · 병원별 실제 처방전·상병은 심평원이 공개하지 않으므로 화면에 항상 '예상'으로 표기한다.
+   // =========================================================================
+
+   /** 자주 가는 지역 칩 */
+   const HIRA_REGION_CHIPS = ['부산 동래구', '부산 서구', '부산 연제구', '부산 해운대구', '부산 부산진구'];
+
+   async function loadHiraModule() {
+     if (STATE.hiraBase) { renderActiveMenu(); return; }
+     try {
+       const res = await runServer('getHiraPrevisitBriefing', [{}], { silent: true });
+       STATE.hiraBase = res || null;
+     } catch (e) {
+       STATE.hiraBase = { configured: STATE.hiraConfigured, deptOptions: [], apiGuide: null, warnings: [v14ErrorText_(e)] };
+     }
+     renderActiveMenu();
+   }
+
+   function renderHiraPage(container) {
+     const base = STATE.hiraBase || {};
+     const apiGuide = base.apiGuide || {};
+     const depts = base.deptOptions || [];
+     const q = (STATE.hira && STATE.hira.query) || {};
+     const name = q.name || STATE.hiraName || '';
+     const region = q.region || STATE.hiraRegion || '';
+     const outdated = STATE.serverVersion && !serverAtLeast_('v1.7');
+
+     container.innerHTML =
+       '<div class="page-header">' +
+         '<h2 class="page-title">🏥 비거래처 사전조회 <small style="font-size:12px;color:var(--muted);font-weight:500;">심평원(HIRA) 공개자료 + 우리 다처방</small></h2>' +
+         '<span class="badge ' + (base.configured ? 'badge-success' : 'badge-muted') + '">' + (base.configured ? '심평원 실시간 조회 켜짐' : '오프라인 브리핑 모드') + '</span>' +
+       '</div>' +
+       (outdated
+         ? '<div class="card" style="border-color:#fde68a;background:#fffbeb;"><div style="font-size:12.5px;line-height:1.6;color:#92400e;">' +
+             '⚠️ 시트 서버(Code.gs)가 <b>' + esc(STATE.serverVersion) + '</b> 라서 <b>비거래처 사전조회</b>는 아직 동작하지 않습니다. 구글 시트 Apps Script 에 최신 <b>Code.gs</b>를 넣고 [배포 관리 → 수정 → 새 버전]으로 재배포해 주세요.' +
+           '</div></div>'
+         : '') +
+       '<div class="card">' +
+         '<div class="card-title"><span>🔍 병원 검색</span><small style="font-weight:500;font-size:12px;color:var(--muted);">방문 전에 갈 병원 이름을 넣고 지역으로 좁혀 보세요</small></div>' +
+         '<div class="toolbar" style="gap:6px;flex-wrap:wrap;">' +
+           '<input type="text" id="hira-name" style="max-width:240px;" placeholder="병원명 (예: 장편한내과의원)" autocomplete="off" value="' + esc(name) + '" onkeydown="if(event.key===\'Enter\')hiraSearch()" />' +
+           '<input type="text" id="hira-region" style="max-width:170px;" placeholder="지역 (예: 부산 동래구)" autocomplete="off" value="' + esc(region) + '" onkeydown="if(event.key===\'Enter\')hiraSearch()" />' +
+           '<button class="btn btn-primary btn-sm" onclick="hiraSearch()">🔍 조회</button>' +
+           (STATE.hira ? '<button class="btn btn-outline btn-sm" onclick="hiraReset()">지우기</button>' : '') +
+         '</div>' +
+         '<div class="v14-chips" style="margin-top:8px;">' +
+           HIRA_REGION_CHIPS.map(function (r) {
+             return '<button class="v14-chip ' + (region === r ? 'on' : '') + '" onclick="hiraSetRegion(\'' + esc(r) + '\')">' + esc(r) + '</button>';
+           }).join('') +
+         '</div>' +
+         '<div style="font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6;">' +
+           '💡 병원명 없이 <b>진료과</b>만 골라도 우리 자료(과별 다처방 TOP 30 · 주사 프로토콜)로 예상 브리핑을 볼 수 있습니다.' +
+         '</div>' +
+         hiraKeyGuideHtml_(base, apiGuide) +
+       '</div>' +
+       (depts.length
+         ? '<div class="card"><div class="card-title"><span>🩺 진료과로 바로 보기</span><small style="font-weight:500;font-size:12px;color:var(--muted);">심평원 진료과목과 자동으로 연결됩니다</small></div>' +
+             '<div class="v14-chips">' +
+               depts.map(function (d) {
+                 const on = STATE.hiraDept === d.진료과 || (STATE.hira && STATE.hira.query && STATE.hira.query.dept === d.진료과);
+                 return '<button class="v14-chip ' + (on ? 'on' : '') + '" onclick="hiraPickDept(\'' + esc(d.진료과) + '\')">' +
+                   esc(d.진료과) + ' <small>' + d.성분수 + '성분</small></button>';
+               }).join('') +
+             '</div>' +
+           '</div>'
+         : '') +
+       '<div id="hira-body"></div>';
+
+     renderHiraBody();
+   }
+
+   /** HIRA_API_KEY 안내 (없을 때 3단계, 있을 때 연동 점검 버튼) */
+   function hiraKeyGuideHtml_(base, guide) {
+     if (base.configured) {
+       return '<div style="margin-top:10px;padding:9px 11px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:10px;font-size:12px;line-height:1.6;color:#166534;">' +
+         '✅ 설정에 <b>HIRA_API_KEY</b> 가 등록되어 있어 심평원 실시간 조회가 켜져 있습니다. ' +
+         '<button class="btn btn-outline btn-sm" style="margin-left:6px;" onclick="hiraCheckApi()">연동 점검</button>' +
+         '<span id="hira-check-result" style="display:block;margin-top:4px;"></span>' +
+       '</div>';
+     }
+     const steps = (guide && guide.steps) || [
+       'data.go.kr 로그인 → 심평원 4개 서비스 [활용신청] (자동 승인·무료)',
+       '마이페이지 → 인증키(일반 인증키 Encoding) 복사',
+       '이 앱 [✉️ 발송이력 · 설정] 탭 → HIRA_API_KEY 에 붙여넣고 저장 (마스터 전용)'
+     ];
+     return '<div style="margin-top:10px;padding:10px 12px;border:1px solid #fde68a;background:#fffbeb;border-radius:10px;font-size:12px;line-height:1.65;color:#92400e;">' +
+       '🔑 <b>공공데이터포털 인증키(HIRA_API_KEY)를 설정에 넣으면 심평원 실시간 조회가 켜집니다.</b>' +
+       '<ol style="margin:6px 0 0;padding-left:18px;">' +
+         steps.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('') +
+       '</ol>' +
+       '<div style="margin-top:6px;">키가 없어도 <b>진료과만 고르면</b> 우리 자료로 예상 브리핑이 나옵니다. ' +
+       '<a href="' + esc((guide && guide.url) || 'https://www.data.go.kr') + '" target="_blank" rel="noopener" style="color:#b45309;font-weight:700;">data.go.kr 열기 ↗</a></div>' +
+     '</div>';
+   }
+
+   function hiraSetRegion(r) {
+     STATE.hiraRegion = r;
+     const el = document.getElementById('hira-region');
+     if (el) el.value = r;
+     const chips = document.querySelectorAll('.v14-chip');
+     for (let i = 0; i < chips.length; i++) {
+       const t = chips[i].textContent.trim();
+       if (HIRA_REGION_CHIPS.indexOf(t) !== -1) chips[i].classList.toggle('on', t === r);
+     }
+   }
+
+   function hiraQueryInputs_() {
+     const n = document.getElementById('hira-name');
+     const r = document.getElementById('hira-region');
+     return {
+       name: String((n && n.value) || STATE.hiraName || '').trim(),
+       region: String((r && r.value) || STATE.hiraRegion || '').trim()
+     };
+   }
+
+   function hiraSearch() {
+     const q = hiraQueryInputs_();
+     STATE.hiraName = q.name;
+     STATE.hiraRegion = q.region;
+     if (!q.name) { showToast('병원명을 한 글자 이상 입력해 주세요. (진료과만 볼 때는 아래 진료과 칩을 누르세요)'); return; }
+     hiraRun_( { name: q.name, region: q.region } );
+   }
+
+   function hiraPickDept(dept) {
+     const cur = STATE.hira || {};
+     const q = cur.query || {};
+     STATE.hiraDept = dept;
+     hiraRun_({
+       name: q.name || STATE.hiraName || '',
+       region: q.region || STATE.hiraRegion || '',
+       dept: dept,
+       hospital: cur.hospital || null
+     });
+   }
+
+   function hiraPickHospital(ykiho) {
+     const cur = STATE.hira;
+     if (!cur || !cur.hospitals) return;
+     const h = cur.hospitals.filter(function (x) { return x.요양기호 === ykiho; })[0];
+     if (!h) return;
+     hiraRun_({ name: h.요양기관명, region: (cur.query || {}).region || '', dept: (cur.query || {}).dept || '', hospital: h });
+   }
+
+   function hiraReset() {
+     STATE.hira = null;
+     STATE.hiraDept = '';
+     STATE.hiraMore = false;
+     STATE.hiraName = '';
+     STATE.hiraRegion = '';
+     renderActiveMenu();
+   }
+
+   async function hiraRun_(payload) {
+     const body = document.getElementById('hira-body');
+     if (body) body.innerHTML = '<div class="card" style="color:var(--muted);font-size:13px;line-height:1.7;">🩺 ' +
+       (payload.hospital ? '병원 상세자료를 ' : payload.name ? '심평원에서 "' + esc(payload.name) + '" 을(를) ' : '') + '불러오는 중...</div>';
+     try {
+       const res = await runServer('getHiraPrevisitBriefing', [payload], { silent: true });
+       STATE.hira = res;
+       STATE.hiraMore = false;
+       if (res && res.query) {
+         STATE.hiraName = res.query.name || '';
+         STATE.hiraRegion = res.query.region || '';
+       }
+       renderActiveMenu();
+     } catch (e) {
+       if (body) body.innerHTML = '<div class="card" style="color:var(--danger);font-size:12.5px;">' + esc(v14ErrorText_(e)) + '</div>';
+     }
+   }
+
+   async function hiraCheckApi() {
+     const box = document.getElementById('hira-check-result');
+     if (box) box.innerHTML = '<span style="color:var(--muted);">점검 중...</span>';
+     try {
+       const r = await runServer('checkHiraApi', []);
+       if (!box) return;
+       box.innerHTML = (r.services || []).map(function (s) {
+         return '<span style="display:block;">' + (s.ok ? '✅' : '❌') + ' ' + esc(s.이름) + (s.ok ? '' : ' — ' + esc(s.메시지 || s.코드)) + '</span>';
+       }).join('') +
+         '<span style="display:block;margin-top:4px;font-weight:700;color:' + (r.ok ? '#166534' : '#b91c1c') + ';">' + esc(r.message) + '</span>';
+     } catch (e) {
+       if (box) box.innerHTML = '<span style="color:var(--danger);">' + esc(v14ErrorText_(e)) + '</span>';
+     }
+   }
+
+   /** 내 거래처 목록에서 같은 이름 찾기 (방금 등록한 경우도 즉시 반영) */
+   function hiraClientMatch_() {
+     const cur = STATE.hira;
+     const raw = (cur && ((cur.hospital && cur.hospital.요양기관명) || (cur.query && cur.query.name))) || '';
+     const n = String(raw).replace(/\s+/g, '').trim();
+     if (!n) return null;
+     const list = STATE.clients || [];
+     for (let i = 0; i < list.length; i++) {
+       const c = list[i];
+       const cn = String(c.거래처명 || '').replace(/\s+/g, '');
+       if (!cn) continue;
+       if (cn === n || (n.length >= 4 && (cn.indexOf(n) !== -1 || n.indexOf(cn) !== -1))) return c;
+     }
+     return null;
+   }
+
+   function renderHiraBody() {
+     const el = document.getElementById('hira-body');
+     if (!el) return;
+     const d = STATE.hira;
+     if (!d) { el.innerHTML = ''; return; }
+
+     const warn = (d.warnings || []).filter(Boolean);
+     const warnHtml = warn.length
+       ? '<div class="card" style="border-color:#fde68a;background:#fffbeb;"><div style="font-size:12px;line-height:1.6;color:#92400e;">' +
+           warn.map(function (w) { return '· ' + esc(w); }).join('<br />') + '</div></div>'
+       : '';
+
+     const hospitals = d.hospitals || [];
+     const listHtml = hospitals.length > 1
+       ? '<div class="card"><div class="card-title"><span>🏥 검색 결과 ' + hospitals.length + '곳</span>' +
+           '<small style="font-weight:500;font-size:12px;color:var(--muted);">방문할 병원을 고르면 상세 브리핑이 나옵니다</small></div>' +
+           '<div class="table-wrap"><table><thead><tr><th>병원명</th><th>종별</th><th>주소</th><th>전화</th><th class="center">선택</th></tr></thead><tbody>' +
+           hospitals.map(function (h) {
+             const on = d.hospital && d.hospital.요양기호 === h.요양기호;
+             return '<tr' + (on ? ' style="background:#eff6ff;"' : '') + '>' +
+               '<td><strong>' + esc(h.요양기관명) + '</strong>' + (on ? ' <span class="badge badge-success">선택됨</span>' : '') + '</td>' +
+               '<td>' + esc(h.종별 || '-') + '</td>' +
+               '<td style="font-size:12px;">' + esc(h.주소 || '-') + '</td>' +
+               '<td>' + esc(h.전화번호 || '-') + '</td>' +
+               '<td class="center"><button class="btn btn-outline btn-sm" onclick="hiraPickHospital(\'' + esc(h.요양기호) + '\')">이 병원</button></td>' +
+             '</tr>';
+           }).join('') +
+           '</tbody></table></div></div>'
+       : '';
+
+     el.innerHTML = warnHtml + listHtml + (d.hospital ? hiraHospitalCardHtml_(d) : '') +
+       (d.briefing ? hiraBriefingHtml_(d) : '') +
+       (!d.briefing ? hiraDeptPromptHtml_(d) : '');
+   }
+
+   /** 병원 기본정보 + 평가등급 + 거래처 등록 버튼 */
+   function hiraHospitalCardHtml_(d) {
+     const h = d.hospital;
+     const hira = d.hira || {};
+     const reg = hiraClientMatch_() || (d.registration && d.registration.exists ? d.registration : null);
+     const depts = (hira.진료과목 || []).length
+       ? hira.진료과목
+       : (h.진료과목 ? String(h.진료과목).split(',').map(function (x) { return { 과목: x.trim(), 의사수: 0 }; }) : []);
+     const info = function (k, v) {
+       return '<div class="detail-item"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v === undefined || v === null || v === '' ? '-' : v) + '</span></div>';
+     };
+     const grades = (hira.평가 || []).map(function (g) {
+       const grade = String(g.등급 || '');
+       const cls = /등급제외|^$/.test(grade) ? 'badge-muted' : (/^[12]$/.test(grade) ? 'badge-success' : (/^3$/.test(grade) ? 'badge-amber' : 'badge-danger'));
+       return '<span class="badge ' + cls + '" style="margin:2px 4px 2px 0;" title="' + esc(g.기준 || '') + '">' + esc(g.항목) + ' ' + esc(grade || '자료없음') + '</span>';
+     }).join('');
+
+     return '<div class="card">' +
+       '<div class="card-title"><span>🏥 ' + esc(h.요양기관명 || d.query.name) + '</span>' +
+         '<small style="font-weight:500;font-size:12px;color:var(--muted);">' +
+           esc([h.종별, h.시도, h.시군구].filter(Boolean).join(' · ') || '심평원 공개자료') +
+         '</small></div>' +
+       '<div class="detail-grid">' +
+         info('주소', h.주소) + info('전화', h.전화번호) +
+         info('개설일', h.개설일) + info('의사 / 전문의', (h.의사수 === '' || h.의사수 === undefined ? '-' : h.의사수 + '명') + ' / ' + (h.전문의수 === '' || h.전문의수 === undefined ? '-' : h.전문의수 + '명')) +
+         info('홈페이지', h.홈페이지 || '-') + info('요양기호', h.요양기호 || '-') +
+       '</div>' +
+       (depts.length
+         ? '<div style="margin-top:8px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">진료과목 (심평원 신고)</div><div class="v14-chips">' +
+             depts.map(function (x) {
+               return '<span class="v14-chip" style="cursor:default;">' + esc(x.과목) + (x.의사수 ? ' <small>' + x.의사수 + '명</small>' : '') + '</span>';
+             }).join('') +
+           '</div></div>'
+         : '') +
+       (grades
+         ? '<div style="margin-top:8px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">심평원 평가등급 <small>(1등급에 가까울수록 처방이 적정·적은 편)</small></div>' + grades + '</div>'
+         : '') +
+       '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
+         (reg
+           ? '<span class="badge badge-success">이미 거래처에 등록됨 · ' + esc(reg.거래처코드) + (reg.담당자 ? ' · ' + esc(reg.담당자) : '') + '</span>' +
+             '<button class="btn btn-outline btn-sm" onclick="hiraOpenClientDetail(\'' + esc(reg.거래처코드) + '\')">거래처 상세 열기</button>'
+           : '<button class="btn btn-primary btn-sm" onclick="hiraRegisterClient()">+ 거래처 등록</button>' +
+             '<span style="font-size:11.5px;color:var(--muted);">이름·주소·전화·진료과가 자동으로 채워집니다</span>') +
+       '</div>' +
+     '</div>';
+   }
+
+   /** 브리핑 — TOP 10/30 · 고요율 추천 · 비급여 주사 타깃 */
+   function hiraBriefingHtml_(d) {
+     const b = d.briefing;
+     const top = b.topIngredients || { top10: [], all: [] };
+     const rows = STATE.hiraMore ? (top.all || []) : (top.top10 || []);
+     const matched = (b.matchedDepts || []).map(function (m) { return m.진료과; }).join(' + ');
+
+     const prodChip = function (p) {
+       if (!p) return '<span style="color:var(--muted);font-size:11.5px;">우리 품목 없음</span>';
+       return '<span class="v14-prod" style="display:inline-flex;gap:4px;align-items:center;font-size:11.5px;">' +
+         esc(p.품목명) + ' <span style="font-weight:700;color:#15803d;">' + (Number(p.수수료율) || 0) + '%</span></span>';
+     };
+
+     const rowsHtml = rows.map(function (it, i) {
+       return '<tr>' +
+         '<td class="center"><span class="rank-badge' + (i === 0 ? ' gold' : '') + '">' + (i + 1) + '</span></td>' +
+         '<td>' + esc(it.질환군) + '</td>' +
+         '<td><strong>' + esc(it.성분명) + '</strong>' + (it.대표제품예 ? ' <small style="color:var(--muted);">' + esc(it.대표제품예) + '</small>' : '') + '</td>' +
+         '<td>' + prodChip(it.추천품목) + '</td>' +
+         '<td class="num">' + (it.경구제수 || 0) + ' / ' + (it.주사제수 || 0) + '</td>' +
+       '</tr>';
+     }).join('');
+
+     const picks = (b.highRatePicks || []).map(function (p) {
+       return '<div class="v14-dash-item" style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--border);">' +
+         '<span style="min-width:0;"><span class="n" style="font-weight:700;font-size:12.5px;">' + esc(p.품목명) + '</span>' +
+           '<span class="m" style="display:block;font-size:11.5px;color:var(--muted);">' + esc(p.성분명 || p.성분 || '') + ' · ' + esc(p.급여구분 || '-') + ' · ' + fmtNum(p.약가) + '원</span></span>' +
+         '<span class="badge badge-success">' + (Number(p.수수료율) || 0) + '%</span>' +
+       '</div>';
+     }).join('');
+
+     const targets = (b.injectTargets || []).map(function (t) {
+       return '<div class="v14-group" style="margin-bottom:8px;">' +
+         '<div class="g-head"><div><strong style="font-size:13px;">' + esc(t.케이스) + '</strong>' +
+           (t.tag ? ' <span class="badge badge-blue">' + esc(t.tag) + '</span>' : '') +
+           (t.비급여가 ? ' <span class="badge badge-amber">비급여 ' + fmtNum(t.비급여가) + '원</span>' : '') +
+         '</div><small style="color:var(--muted);">' + esc(t.분류 || '') + '</small></div>' +
+         '<div style="font-size:12px;line-height:1.6;color:#334155;">' +
+           (t.추천 ? '<div><b>추천</b> ' + esc(t.추천) + '</div>' : '') +
+           (t.수액 ? '<div><b>수액·믹스</b> ' + esc(t.수액) + '</div>' : '') +
+           (t.주의 ? '<div style="color:#b45309;"><b>주의</b> ' + esc(t.주의) + '</div>' : '') +
+         '</div>' +
+         '<div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;">' +
+           (t.우리제품 || []).map(function (p) {
+             return '<span class="v14-prod" style="font-size:11.5px;">' + esc(p.품목명) +
+               ' <span style="font-weight:700;color:#15803d;">' + (Number(p.수수료율) || 0) + '%</span>' +
+               (p.급여구분 ? ' <small style="color:var(--muted);">' + esc(p.급여구분) + '</small>' : '') + '</span>';
+           }).join('') +
+         '</div>' +
+       '</div>';
+     }).join('');
+
+     const nonPay = (b.nonPayMatched || []).length
+       ? '<div style="margin-top:10px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">비급여 항목 중 우리 주사와 붙는 것</div>' +
+           '<div class="table-wrap"><table><thead><tr><th>비급여 항목</th><th>병원 표기</th><th class="num">가격</th><th>연결</th></tr></thead><tbody>' +
+             b.nonPayMatched.map(function (x) {
+               return '<tr><td>' + esc(x.항목) + '</td><td style="font-size:12px;">' + esc(x.병원표기 || '-') + '</td>' +
+                 '<td class="num">' + (x.금액 ? fmtNum(x.금액) + '원' : '-') + '</td>' +
+                 '<td><span class="badge badge-blue">' + esc(x.tag) + '</span></td></tr>';
+             }).join('') +
+           '</tbody></table></div></div>'
+       : '';
+
+     return '<div class="card" style="border-color:#bfdbfe;">' +
+       '<div class="card-title"><span>🎯 방문 전 영업 브리핑</span>' +
+         '<small style="font-weight:500;font-size:12px;color:var(--muted);">' + esc(matched || '진료과 미선택') + ' · ' + (STATE.hiraMore ? 'TOP 30' : 'TOP 10') + '</small></div>' +
+       '<div style="padding:8px 10px;background:#eff6ff;border-radius:9px;font-size:11.5px;line-height:1.6;color:#1e3a8a;">' +
+         'ℹ️ ' + esc(b.basis || '심평원 공개 자료 기반 예상 추천입니다.') +
+       '</div>' +
+       '<div class="cd-section">' +
+         '<h4>💊 예상 주요 처방 성분 ' + (STATE.hiraMore ? 'TOP 30' : 'TOP 10') + ' <small style="color:var(--muted);font-weight:500;">· 전체 ' + (top.total || 0) + '성분</small></h4>' +
+         (rows.length
+           ? '<div class="table-wrap"><table><thead><tr><th class="center">순위</th><th>질환군(병명)</th><th>성분 / 대표제품</th><th>우리 추천(최고 요율)</th><th class="num">경구/주사</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
+             ((top.all || []).length > 10
+               ? '<div style="margin-top:6px;"><button class="btn-link" onclick="hiraToggleMore()">' + (STATE.hiraMore ? '접기 (TOP 10만)' : 'TOP 30 더 보기') + '</button></div>'
+               : '')
+           : '<p style="color:var(--muted);font-size:12.5px;">이 진료과의 성분 자료가 없습니다.</p>') +
+       '</div>' +
+       (picks
+         ? '<div class="cd-section"><h4>📈 고요율 추천 품목 <small style="color:var(--muted);font-weight:500;">· 성분별 최고 수수료율(내 등급 반영)</small></h4>' + picks + '</div>'
+         : '') +
+       (targets
+         ? '<div class="cd-section"><h4>💉 비급여·주사 타깃</h4>' + targets + '</div>'
+         : '') +
+       (nonPay ? '<div class="cd-section">' + nonPay + '</div>' : '') +
+       '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">' +
+         '<button class="btn btn-primary btn-sm" onclick="hiraOpenGuide()">🧭 처방 셋팅으로 넘기기</button>' +
+         '<button class="btn btn-outline btn-sm" onclick="hiraCopyBriefing()">📋 브리핑 복사</button>' +
+         (STATE.hira && STATE.hira.hospital && !(hiraClientMatch_() || (STATE.hira.registration && STATE.hira.registration.exists))
+           ? '<button class="btn btn-outline btn-sm" onclick="hiraRegisterClient()">+ 거래처 등록</button>' : '') +
+       '</div>' +
+     '</div>';
+   }
+
+   function hiraDeptPromptHtml_(d) {
+     const depts = (STATE.hiraBase && STATE.hiraBase.deptOptions) || d.deptOptions || [];
+     if (!depts.length) return '';
+     return '<div class="card"><div class="card-title"><span>🩺 진료과를 골라 브리핑 보기</span></div>' +
+       '<div class="v14-chips">' +
+         depts.map(function (x) {
+           return '<button class="v14-chip ' + ((d.query || {}).dept === x.진료과 ? 'on' : '') + '" onclick="hiraPickDept(\'' + esc(x.진료과) + '\')">' +
+             esc(x.진료과) + ' <small>' + x.성분수 + '성분</small></button>';
+         }).join('') +
+       '</div>' +
+       '<div style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.6;">심평원 진료과목이 우리 가이드와 연결되지 않았거나, 병원명을 아직 조회하지 않은 상태입니다.</div>' +
+     '</div>';
+   }
+
+   function hiraToggleMore() {
+     STATE.hiraMore = !STATE.hiraMore;
+     renderHiraBody();
+   }
+
+   function hiraOpenClientDetail(code) {
+     if (!code) return;
+     STATE.activeMenu = 'clients';
+     buildNavMenus();
+     renderActiveMenu();
+     openClientDetail(code);
+   }
+
+   /** 방문 예정 병원을 거래처로 등록 (등록 모달에 자동 채움) */
+   function hiraRegisterClient() {
+     const d = STATE.hira || {};
+     const h = d.hospital || {};
+     openClientModal();
+     const setVal = function (id, v) { const el = document.getElementById(id); if (el) el.value = v; };
+     setVal('c-name', h.요양기관명 || (d.query && d.query.name) || '');
+     setVal('c-dist', /병원|상급종합|종합병원|요양병원/.test(String(h.종별 || '')) ? '병원' : '의원');
+     setVal('c-phone', h.전화번호 || '');
+     setVal('c-addr', h.주소 || '');
+     const matched = (d.briefing && d.briefing.matchedDepts) || [];
+     setVal('c-dept', matched.length ? matched[0].진료과 : '');
+     const memo = [];
+     const hm = (d.hira && d.hira.진료과목) || [];
+     if (hm.length) memo.push('심평원 진료과목: ' + hm.map(function (x) { return x.과목; }).join(', '));
+     if (h.요양기호) memo.push('요양기호 ' + h.요양기호);
+     if (h.개설일) memo.push('개설일 ' + h.개설일);
+     if ((d.briefing && d.briefing.topIngredients && d.briefing.topIngredients.top10 || []).length) {
+       memo.push('예상 다처방: ' + d.briefing.topIngredients.top10.slice(0, 3).map(function (x) { return x.성분명; }).join(', '));
+     }
+     setVal('c-memo', memo.join(' / '));
+   }
+
+   /** 처방 셋팅(경구) 화면으로 matched 진료과 넘기기 */
+   function hiraOpenGuide() {
+     const d = STATE.hira;
+     const matched = (d && d.briefing && d.briefing.matchedDepts) || [];
+     if (!matched.length) { showToast('진료과가 연결되지 않아 처방 셋팅으로 넘길 수 없습니다.'); return; }
+     STATE.guideTab = 'oral';
+     STATE.guideDept = matched[0].진료과;
+     STATE.guideData = null;
+     switchMenu('guide');
+   }
+
+   /** 브리핑을 문자·메모용 텍스트로 복사 */
+   function hiraCopyBriefing() {
+     const d = STATE.hira;
+     if (!d || !d.briefing) return;
+     const b = d.briefing;
+     const h = d.hospital || {};
+     const lines = [];
+     lines.push('[' + (h.요양기관명 || d.query.name || '병원') + '] 방문 전 브리핑' + (h.종별 ? ' (' + h.종별 + ')' : ''));
+     if (h.주소) lines.push('주소: ' + h.주소);
+     if (h.전화번호) lines.push('전화: ' + h.전화번호);
+     if ((b.matchedDepts || []).length) lines.push('진료과: ' + b.matchedDepts.map(function (m) { return m.진료과; }).join(', '));
+     if ((b.hospitalDepts || []).length) lines.push('심평원 진료과목: ' + b.hospitalDepts.map(function (x) { return x.과목; }).join(', '));
+     if ((b.grades || []).length) lines.push('평가: ' + b.grades.map(function (g) { return g.항목 + ' ' + g.등급; }).join(' / '));
+     lines.push('');
+     lines.push('· 예상 다처방 성분 TOP 10');
+     (b.topIngredients.top10 || []).forEach(function (it, i) {
+       const p = it.추천품목;
+       lines.push('  ' + (i + 1) + '. ' + it.성분명 + ' (' + it.질환군 + ')' + (p ? ' → ' + p.품목명 + ' ' + p.수수료율 + '%' : ''));
+     });
+     if ((b.injectTargets || []).length) {
+       lines.push('');
+       lines.push('· 주사·비급여 타깃');
+       b.injectTargets.slice(0, 4).forEach(function (t) {
+         const p = (t.우리제품 || [])[0];
+         lines.push('  - ' + t.케이스 + (t.비급여가 ? ' (' + fmtNum(t.비급여가) + '원)' : '') + (p ? ' → ' + p.품목명 + ' ' + p.수수료율 + '%' : ''));
+       });
+     }
+     lines.push('');
+     lines.push('※ ' + (b.basis || '심평원 공개자료 기반 예상 추천'));
+     copyText(lines.join('\n'), '브리핑이 복사되었습니다. 메모·문자에 붙여넣으세요.');
    }
 
    // =========================================================================
@@ -4223,10 +4712,10 @@
 
    /** 서버(Code.gs) 재배포 전 안내 — v1.6 미만이면 표시 */
    function v14NoticeHtml_() {
-     if (!STATE.serverVersion || serverAtLeast_('v1.6')) return '';
+     if (!STATE.serverVersion || serverAtLeast_('v1.7')) return '';
      return '<div class="card" style="border-color:#fde68a;background:#fffbeb;">' +
        '<div style="font-size:12.5px;line-height:1.6;color:#92400e;">' +
-         '⚠️ 시트 서버(Code.gs)가 <b>' + esc(STATE.serverVersion) + '</b> 로 연결되어 있어 새 기능(<b>회원 요율등급 3단계</b>)이 아직 동작하지 않습니다. 요율이 예전처럼 원본으로 보일 수 있습니다.<br />' +
+         '⚠️ 시트 서버(Code.gs)가 <b>' + esc(STATE.serverVersion) + '</b> 로 연결되어 있어 새 기능(<b>비거래처 심평원 사전조회 · 거래처코드 Sxxx 채번</b>)이 아직 동작하지 않습니다.<br />' +
          '구글 시트 → 확장 프로그램 → Apps Script 에 최신 <b>Code.gs</b>를 넣고 [배포 관리 → 수정 → 새 버전]으로 한 번만 재배포하면 바로 켜집니다.' +
        '</div></div>';
    }
