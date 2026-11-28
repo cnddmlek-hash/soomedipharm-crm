@@ -1043,6 +1043,9 @@ def main():
           '예전 자사(페이서) 표기를 제약사로 쓰지 않는 규칙이 없습니다')
     check("const DISTRIBUTOR_LABEL = '페이서써플라이(주)';" in js, '취급 도매상(페이서써플라이) 표기가 없습니다')
     check('PRODUCT_MAKER_BY_CODE_' in js and 'builtinMakerOf_' in js, '앱 내장 제약사(실제 제조사) 목록이 없습니다')
+    # 2026-11-28 — 이엘파마품목에서 주사제로 넘어오는 2품목도 '제약사 미확인'이 아니어야 합니다
+    for code, maker in [('648508321', '하이알플렉스주'), ('648507821', '하이알원샷주')]:
+        check('"%s": "신풍제약(이엘파마)"' % code in js, '앱 내장 제약사 목록에 %s(%s)이 없습니다' % (maker, code))
     check('<th>보험코드</th><th>제품명</th><th>성분</th><th>제약사</th>' in js, '제품마스터 목록에 제약사 열이 없습니다')
     check("'<td>' + makerCellHtml_(p, 'inject') + '</td>'" in js, '제품마스터 목록 행에 제약사 값이 없습니다')
     check('return SELF_MAKER_LABEL' not in js and 'const SELF_MAKER_LABEL' not in js,
