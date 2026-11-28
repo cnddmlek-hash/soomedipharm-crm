@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
- <title>수메디팜 미니 CRM v1.26</title>
+ <title>수메디팜 미니 CRM v1.27</title>
 
  <!-- ---------------- PWA (홈 화면 앱) 설정 ---------------- -->
  <meta name="description" content="수메디팜 미니 CRM — 거래처·주문·수금·회전일을 구글 시트로 실시간 관리하는 영업 앱" />
@@ -1021,6 +1021,21 @@
            <input type="text" id="c-biz" placeholder="예: 개인/법인" />
          </div>
          <div class="form-group">
+           <label>사업자등록번호</label>
+           <input type="text" id="c-biznum" placeholder="000-00-00000" inputmode="numeric" autocomplete="off" oninput="bizNumFormatInput(this)" />
+         </div>
+         <div class="form-group span-2">
+           <label>사업자등록증 (사진·PDF)</label>
+           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+             <input type="file" id="c-bizcert-file" accept="image/*,.pdf" style="display:none;" onchange="bizCertFileChosen()" />
+             <button type="button" class="btn btn-outline btn-sm" id="c-bizcert-btn" onclick="bizCertPickFile()">📄 등록증 올리고 자동채우기</button>
+             <a id="c-bizcert-url" href="#" target="_blank" rel="noopener" style="display:none;font-size:12.5px;font-weight:700;color:var(--primary);">🔗 등록증 열기</a>
+             <button type="button" class="btn btn-danger-soft btn-sm" id="c-bizcert-del" onclick="bizCertClearUrl()" style="display:none;">✕ 연결 해제</button>
+           </div>
+           <input type="hidden" id="c-bizcert-urlval" />
+           <div id="c-bizcert-status" style="font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:5px;">사진을 올리면 번호·상호·대표자·주소를 읽어 자동으로 채웁니다. (스마트폰 사진은 자동으로 줄여 전송)</div>
+         </div>
+         <div class="form-group">
            <label>진료과</label>
            <input type="text" id="c-dept" placeholder="예: 내과, 정형외과" />
          </div>
@@ -1269,7 +1284,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.26';
+   const APP_VERSION = 'v1.27';   // v1.27 — 거래처 사업자등록증 등록 + 자동 읽기
 
    const STATE = {
      // 로그인/권한
@@ -3736,7 +3751,7 @@
    // =========================================================================
    function clientHaystack(c) {
      return (String(c.거래처코드 || '') + ' ' + String(c.거래처명 || '') + ' ' + String(c.진료과 || '') + ' ' +
-       String(c.담당자 || '') + ' ' + String(c.연락처 || '')).toLowerCase();
+       String(c.담당자 || '') + ' ' + String(c.연락처 || '') + ' ' + String(c.사업자등록번호 || '')).toLowerCase();
    }
 
    function renderClientsPage(container) {
@@ -3936,6 +3951,7 @@
            infoRow('거래처명', c.거래처명) +
            infoRow('유통구분', c.유통구분) +
            infoRow('사업유형', c.사업유형) +
+           infoRow('사업자등록번호', c.사업자등록번호) +
            infoRow('진료과', c.진료과) +
            infoRow('담당자', c.담당자) +
            infoRow('연락처', c.연락처) +
@@ -3945,6 +3961,11 @@
            infoRow('주소', c.주소) +
            infoRow('누적 매출 / 주문건수', fmtNum(s.누적매출) + '원 / ' + s.주문건수 + '건') +
          '</div>' +
+         '<div class="detail-item" style="border-bottom:none;"><span class="k">사업자등록증</span><span class="v">' +
+           (safeHttpUrl_(c.사업자등록증URL)
+             ? '<a href="' + esc(safeHttpUrl_(c.사업자등록증URL)) + '" target="_blank" rel="noopener" class="btn btn-outline btn-sm" style="display:inline-flex;">📄 사업자등록증 보기</a>'
+             : '<span style="color:var(--muted);">미등록 — [수정]에서 사진·PDF를 올리면 자동으로 채워집니다</span>') +
+         '</span></div>' +
          (c.메모 ? '<div class="detail-item" style="border-bottom:none;"><span class="k">메모</span><span class="v">' + esc(c.메모) + '</span></div>' : '') +
        '</div>' +
 
@@ -4059,6 +4080,7 @@
    // ---------------- 거래처 등록/수정 모달 ----------------
    function openClientModal(rowIndex) {
      try { cHiraClose_(); C_HIRA.lastPicked = ''; } catch (e) {}   // v1.26 — 이전 심평원 조회 결과·진행 중 타이머 정리
+     try { cBizCertReset_(rowIndex ? null : ''); } catch (e) {}     // v1.27 — 사업자등록증 상태 초기화(수정 모드면 아래에서 URL 채움)
      const c = rowIndex ? STATE.clients.filter(function (x) { return x._rowIndex === rowIndex; })[0] : null;
      document.getElementById('client-modal-title').textContent = c ? '거래처 수정' : '신규 거래처 등록';
      document.getElementById('c-rowIndex').value = c ? c._rowIndex : '';
@@ -4067,6 +4089,8 @@
      document.getElementById('c-name').value = c ? c.거래처명 : '';
      document.getElementById('c-dist').value = c ? c.유통구분 : '의원';
      document.getElementById('c-biz').value = c ? c.사업유형 : '';
+     document.getElementById('c-biznum').value = c ? (c.사업자등록번호 || '') : '';
+     try { cBizCertReset_(c ? c.사업자등록증URL : ''); } catch (e) {}
      document.getElementById('c-dept').value = c ? c.진료과 : '';
      document.getElementById('c-manager').value = c ? c.담당자 : (STATE.user ? STATE.user.담당자명 : '');
      document.getElementById('c-manager').readOnly = !STATE.isMaster;
@@ -4096,6 +4120,8 @@
        회전일경고기준: Number(document.getElementById('c-warn').value || 100),
        사용여부: document.getElementById('c-active').value,
        주소: document.getElementById('c-addr').value.trim(),
+       사업자등록번호: cBizNumFormat_(document.getElementById('c-biznum').value),
+       사업자등록증URL: String(document.getElementById('c-bizcert-urlval').value || '').trim(),
        메모: document.getElementById('c-memo').value.trim(),
        원장성함: document.getElementById('c-doctor').value.trim(),
        원장생일: document.getElementById('c-birth').value.trim(),
@@ -4107,6 +4133,231 @@
      closeModal('client-modal');
      showToast('거래처가 저장되었습니다 (' + res.code + ')');
      renderActiveMenu();
+   }
+
+
+   // =========================================================================
+   // v1.27 — 🧾 사업자등록증 등록 + 자동 읽기(자동채우기)
+   //   · 사진은 브라우저에서 긴 변 1800px · JPEG 0.85 로 줄여 보냅니다
+   //     (스마트폰 사진 수 MB 를 그대로 base64 로 보내면 Apps Script 요청 크기 제한에 걸림).
+   //   · PDF 는 그대로 보내되 5MB 를 넘으면 안내만 하고 서버로 보내지 않습니다.
+   //   · 서버(uploadAndParseBizCert)는 파일을 드라이브에 저장하고 글자를 읽어
+   //     사업자등록번호·거래처명·사업유형·원장성함·주소를 돌려줍니다.
+   // =========================================================================
+   const C_BIZCERT = { url: '', busy: false, timer: null, last: null };
+
+   /** 000-00-00000 형식으로 (숫자만 남겨 10자리까지) */
+   function cBizNumFormat_(v) {
+     const d = String(v === null || v === undefined ? '' : v).replace(/[^0-9]/g, '').slice(0, 10);
+     if (d.length <= 3) return d;
+     if (d.length <= 5) return d.slice(0, 3) + '-' + d.slice(3);
+     return d.slice(0, 3) + '-' + d.slice(3, 5) + '-' + d.slice(5);
+   }
+
+   /** 입력 중 자동 하이픈 — 끝에서 타이핑할 때 커서를 끝에 유지 */
+   function bizNumFormatInput(el) {
+     if (!el) return;
+     const before = String(el.value || '');
+     const atEnd = (el.selectionStart === null || el.selectionStart === before.length);
+     const next = cBizNumFormat_(before);
+     if (next === before) return;
+     el.value = next;
+     if (atEnd) { try { el.setSelectionRange(next.length, next.length); } catch (e) {} }
+   }
+
+   /** 링크로 쓸 수 있는 http(s) 주소만 (그 밖의 값은 링크로 만들지 않음) */
+   function safeHttpUrl_(u) {
+     const s = String(u === null || u === undefined ? '' : u).trim();
+     return /^https?:\/\//i.test(s) ? s : '';
+   }
+
+   function cBizCertStatus_(html, kind) {
+     const el = document.getElementById('c-bizcert-status');
+     if (!el) return;
+     el.innerHTML = html || '';
+     el.style.color = kind === 'err' ? 'var(--danger)' : (kind === 'ok' ? 'var(--success)' : (kind === 'warn' ? 'var(--warn)' : 'var(--muted)'));
+   }
+
+   /** 등록증 URL 표시(링크·숨은 값·해제 버튼) 갱신 */
+   function cBizCertShowUrl_(url) {
+     C_BIZCERT.url = String(url === null || url === undefined ? '' : url).trim();
+     const safe = safeHttpUrl_(C_BIZCERT.url);
+     const val = document.getElementById('c-bizcert-urlval');
+     if (val) val.value = C_BIZCERT.url;
+     const a = document.getElementById('c-bizcert-url');
+     if (a) {
+       if (safe) { a.href = safe; a.style.display = 'inline-flex'; a.title = C_BIZCERT.url; }
+       else { a.removeAttribute('href'); a.style.display = 'none'; }
+     }
+     const del = document.getElementById('c-bizcert-del');
+     if (del) del.style.display = C_BIZCERT.url ? 'inline-flex' : 'none';
+   }
+
+   /** 모달을 열 때 — 이전 등록증 상태를 비우고 저장된 URL 만 다시 표시 */
+   function cBizCertReset_(url) {
+     cBizCertStopTimer_();
+     C_BIZCERT.busy = false;
+     C_BIZCERT.last = null;
+     cBizCertShowUrl_(url || '');
+     const btn = document.getElementById('c-bizcert-btn');
+     if (btn) { btn.disabled = false; btn.textContent = '📄 등록증 올리고 자동채우기'; }
+     const file = document.getElementById('c-bizcert-file');
+     if (file) file.value = '';
+     cBizCertStatus_(url ? '등록증이 연결되어 있습니다. 다시 올리면 새 파일로 바뀝니다.' : '사진을 올리면 번호·상호·대표자·주소를 읽어 자동으로 채웁니다. (스마트폰 사진은 자동으로 줄여 전송)', '');
+   }
+
+   /** 연결 해제 — 저장해야 거래처에서 빠짐(드라이브 파일은 그대로) */
+   function bizCertClearUrl() {
+     if (!C_BIZCERT.url) return;
+     cBizCertShowUrl_('');
+     cBizCertStatus_('등록증 연결을 지웠습니다. <b>저장하기</b>를 눌러야 거래처에서 빠집니다. (드라이브 파일은 그대로 남습니다)', 'warn');
+   }
+
+   function bizCertPickFile() {
+     if (C_BIZCERT.busy) return;
+     const el = document.getElementById('c-bizcert-file');
+     if (!el) return;
+     el.value = '';
+     el.click();
+   }
+
+   function cBizCertReadDataUrl_(file) {
+     return new Promise(function (resolve, reject) {
+       const reader = new FileReader();
+       reader.onload = function () { resolve(String(reader.result || '')); };
+       reader.onerror = function () { reject(new Error('파일을 읽지 못했습니다. 다른 사진으로 다시 시도해 주세요.')); };
+       reader.readAsDataURL(file);
+     });
+   }
+
+   /** 사진을 긴 변 maxSide · JPEG quality 로 줄여 base64(헤더 없는 본문) 반환 */
+   function cBizCertShrinkImage_(file, maxSide, quality) {
+     return cBizCertReadDataUrl_(file).then(function (dataUrl) {
+       const raw = String(dataUrl).split(',')[1] || '';
+       return new Promise(function (resolve) {
+         const img = new Image();
+         img.onload = function () {
+           try {
+             const w = img.naturalWidth || img.width || 0;
+             const h = img.naturalHeight || img.height || 0;
+             if (!w || !h) { resolve(raw); return; }
+             const scale = Math.min(1, maxSide / Math.max(w, h));
+             const cw = Math.max(1, Math.round(w * scale));
+             const ch = Math.max(1, Math.round(h * scale));
+             const canvas = document.createElement('canvas');
+             canvas.width = cw; canvas.height = ch;
+             const ctx = canvas.getContext('2d');
+             ctx.fillStyle = '#ffffff';            // 투명 PNG 도 흰 배경으로(글자 판독)
+             ctx.fillRect(0, 0, cw, ch);
+             ctx.drawImage(img, 0, 0, cw, ch);
+             const out = canvas.toDataURL('image/jpeg', quality).split(',')[1] || '';
+             resolve(out || raw);
+           } catch (e) {
+             resolve(raw);                          // 캔버스 불가 환경은 원본 그대로
+           }
+         };
+         img.onerror = function () { resolve(raw); };
+         img.src = dataUrl;
+       });
+     });
+   }
+
+   function cBizCertStopTimer_() {
+     if (C_BIZCERT.timer) { clearInterval(C_BIZCERT.timer); C_BIZCERT.timer = null; }
+   }
+
+   /** 파일 선택 → (사진이면 축소) → 서버 업로드·자동인식 → 칸 채우기 */
+   async function bizCertFileChosen() {
+     const input = document.getElementById('c-bizcert-file');
+     const file = input && input.files && input.files[0];
+     if (!file || C_BIZCERT.busy) return;
+
+     const isPdf = /pdf/i.test(file.type || '') || /\.pdf$/i.test(file.name || '');
+     const isImage = /^image\//i.test(file.type || '') || /\.(jpe?g|png|webp|heic|heif|bmp)$/i.test(file.name || '');
+     if (!isPdf && !isImage) {
+       cBizCertStatus_('사진(JPG·PNG) 또는 PDF 파일만 올릴 수 있습니다.', 'err');
+       return;
+     }
+     if (isPdf && file.size > 5 * 1024 * 1024) {
+       const mb = Math.round(file.size / 1024 / 1024 * 10) / 10;
+       cBizCertStatus_('PDF 가 너무 큽니다 (' + mb + 'MB). 5MB 이하 PDF 로 다시 올려 주세요.', 'err');
+       return;
+     }
+
+     C_BIZCERT.busy = true;
+     const btn = document.getElementById('c-bizcert-btn');
+     if (btn) { btn.disabled = true; btn.textContent = '⏳ 올리는 중...'; }
+     const started = Date.now();
+     const tick = function () {
+       const sec = Math.max(0, Math.round((Date.now() - started) / 1000));
+       cBizCertStatus_('📤 <b>' + esc(file.name || '파일') + '</b> 올리고 글자를 읽는 중... ' + sec + '초', '');
+     };
+     tick();
+     cBizCertStopTimer_();
+     C_BIZCERT.timer = setInterval(tick, 1000);
+
+     try {
+       let base64 = '';
+       let mimeType = file.type || (isPdf ? 'application/pdf' : 'image/jpeg');
+       if (isImage) {
+         base64 = await cBizCertShrinkImage_(file, 1800, 0.85);
+         mimeType = 'image/jpeg';
+       } else {
+         base64 = String(await cBizCertReadDataUrl_(file)).split(',')[1] || '';
+       }
+       if (!base64) throw new Error('파일 내용을 읽지 못했습니다. 다른 파일로 다시 시도해 주세요.');
+
+       const nameEl = document.getElementById('c-name');
+       const res = await runServer('uploadAndParseBizCert', [{
+         fileName: file.name || (isPdf ? 'bizcert.pdf' : 'bizcert.jpg'),
+         mimeType: mimeType,
+         base64: base64,
+         clientName: nameEl ? String(nameEl.value || '').trim() : ''
+       }], { silent: true });
+
+       C_BIZCERT.last = res;
+       cBizCertShowUrl_(res && res.fileUrl ? res.fileUrl : '');
+       const filled = cBizCertApplyParsed_(res && res.parsed ? res.parsed : {});
+       const lines = [];
+       if (res && res.message) lines.push(esc(res.message));
+       if (filled.filled.length) lines.push('자동으로 채운 칸: <b>' + esc(filled.filled.join(' · ')) + '</b>');
+       if (filled.replaced.length) lines.push('기존 값을 바꾼 칸: <b>' + esc(filled.replaced.join(' · ')) + '</b> — 저장 전에 확인해 주세요');
+       if (!lines.length) lines.push('파일이 저장되었습니다.');
+       cBizCertStatus_(lines.join('<br>'), (res && res.ocrOk && !filled.replaced.length) ? 'ok' : (res && res.ocrOk ? 'warn' : 'warn'));
+     } catch (e) {
+       cBizCertStatus_('❌ ' + esc(friendlyError_(e)), 'err');
+     } finally {
+       cBizCertStopTimer_();
+       C_BIZCERT.busy = false;
+       if (btn) { btn.disabled = false; btn.textContent = '📄 등록증 올리고 자동채우기'; }
+       if (input) input.value = '';
+     }
+   }
+
+   /**
+    * 자동 인식 결과를 모달 칸에 채웁니다.
+    *  · 비어 있는 칸은 무조건 채우고, 값이 다르면 덮어쓰되 어떤 칸을 바꿨는지 돌려줍니다(저장 전 확인용).
+    */
+   function cBizCertApplyParsed_(p) {
+     const filled = [];
+     const replaced = [];
+     function put(id, value, label, format) {
+       const el = document.getElementById(id);
+       if (!el) return;
+       const v = String(value === null || value === undefined ? '' : value).trim();
+       if (!v) return;
+       const next = format ? format(v) : v;
+       if (!next) return;
+       const cur = String(el.value || '').trim();
+       if (!cur) { el.value = next; filled.push(label); return; }
+       if (cur !== next) { el.value = next; replaced.push(label); }
+     }
+     put('c-biznum', p.사업자등록번호, '사업자등록번호', cBizNumFormat_);
+     put('c-name', p.거래처명, '거래처명');
+     put('c-biz', p.사업유형, '사업유형');
+     put('c-doctor', p.원장성함, '원장님 성함');
+     put('c-addr', p.주소, '주소');
+     return { filled: filled, replaced: replaced };
    }
 
    // =========================================================================
