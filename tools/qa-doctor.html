@@ -22,16 +22,16 @@
   var frame = document.getElementById('frame');
   var lines = [];
 
+  function paint() {
+    logEl.innerHTML = lines.map(function (l) {
+      return '<div class="' + (l.indexOf('PASS') === 0 ? 'pass' : 'fail') + '">' + l.replace(/</g, '&lt;') + '</div>';
+    }).join('') + '<div id="qa-tail">' + (window.__QA_TAIL || '') + '</div>';
+  }
   function out(ok, msg, extra) {
     lines.push((ok ? 'PASS' : 'FAIL') + ' — ' + msg + (extra ? '  [' + extra + ']' : ''));
-    logEl.innerHTML = lines.map(function (l) {
-      return '<div class="' + (l.indexOf('PASS') === 0 ? 'pass' : 'fail') + '">' + l + '</div>';
-    }).join('') + '<div id="qa-tail">…</div>';
+    paint();
   }
-  function note(t) {
-    var tail = document.getElementById('qa-tail');
-    if (tail) tail.textContent = t;
-  }
+  function note(t) { window.__QA_TAIL = t; paint(); }
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   function W() { return frame.contentWindow; }
   function D() { return frame.contentDocument; }
@@ -46,76 +46,75 @@
     throw new Error('대기 시간 초과: ' + (label || ''));
   }
 
-  // ---------- 가짜 시트 서버 ----------
-  var QA_CLIENTS = [];
-  var SEED = [
-    ['C001', '김가정의원', '내과', '김원장', '051-111-0001', 'a1@clinic.kr', '김도현', '04-08', '홍삼 선호, 커피 X'],
-    ['C002', '부산튼튼병원', '정형외과', '박원장', '051-111-0002', 'a2@clinic.kr', '박서준', '11-30', '주말 연락 자제'],
-    ['C003', '김해속편한내과', '내과', '이원장', '055-111-0003', 'a3@clinic.kr', '이하늘', '05-02', ''],
-    ['C004', '신호약국', '약국', '정약사', '051-111-0004', 'a4@pharm.kr', '', '', ''],
-    ['C005', '강서연세의원', '가정의학과', '최원장', '051-111-0005', 'a5@clinic.kr', '최민수', '12-15', '골프'],
-    ['C006', '명지이비인후과', '이비인후과', '한원장', '051-111-0006', 'a6@clinic.kr', '', '', ''],
-    ['C007', '녹산보건진료소', '내과', '서원장', '051-111-0007', 'a7@clinic.kr', '', '', ''],
-    ['C008', '김해미소치과', '치과', '문원장', '055-111-0008', 'a8@clinic.kr', '', '', ''],
-    ['C009', '하단중앙의원', '내과', '임원장', '051-111-0009', 'a9@clinic.kr', '', '', ''],
-    ['C010', '대저한의원', '한방', '오원장', '051-111-0010', 'a10@clinic.kr', '', '', ''],
-    ['C011', '사하약국', '약국', '윤약사', '051-111-0011', 'a11@pharm.kr', '', '', ''],
-    ['C012', '수메디팜도매', '도매', '-', '051-111-0012', 'a12@sumedipharm.co.kr', '', '', '']
-  ];
-  SEED.forEach(function (r, i) {
-    QA_CLIENTS.push({
-      거래처코드: r[0], 거래처명: r[1], 진료과: r[2], 담당자: r[3], 연락처: r[4], 이메일: r[5],
-      원장성함: r[6], 원장생일: r[7], 취향: r[8], 유통구분: r[2] === '약국' ? '약국' : (r[2] === '도매' ? '도매' : '의원'),
-      사용여부: 'Y', 회전일경고기준: 30, _rowIndex: i + 2, 사업자등록번호: '', 사업자등록증URL: ''
-    });
-  });
-
-  function profileItems(q) {
-    q = String(q || '').trim().toLowerCase();
-    return QA_CLIENTS.filter(function (c) {
-      if (!q) return true;
-      return (c.거래처명 + ' ' + c.원장성함 + ' ' + c.취향 + ' ' + c.거래처코드).toLowerCase().indexOf(q) !== -1;
-    }).map(function (c) {
-      var o = {};
-      for (var k in c) if (Object.prototype.hasOwnProperty.call(c, k)) o[k] = c[k];
-      o.생일까지 = 3;
-      return o;
-    });
-  }
-
-  function serverStub(fn, args) {
+  /* 가짜 시트 서버 — iframe 안에서 실행되므로 바깥 함수·변수를 쓰지 않고 스스로 완결됩니다. */
+  function qaServer(fn, args) {
     fn = String(fn || '');
-    var calls = W().__QACalls;
+    var calls = window.__QACalls || (window.__QACalls = {});
     calls[fn] = (calls[fn] || 0) + 1;
+
+    if (!window.__QAClients) {
+      var SEED = [
+        ['C001', '김가정의원', '내과', '김원장', '051-111-0001', 'a1@clinic.kr', '김도현', '04-08', '홍삼 선호, 커피 X'],
+        ['C002', '부산튼튼병원', '정형외과', '박원장', '051-111-0002', 'a2@clinic.kr', '박서준', '11-30', '주말 연락 자제'],
+        ['C003', '김해속편한내과', '내과', '이원장', '055-111-0003', 'a3@clinic.kr', '이하늘', '05-02', ''],
+        ['C004', '신호약국', '약국', '정약사', '051-111-0004', 'a4@pharm.kr', '', '', ''],
+        ['C005', '강서연세의원', '가정의학과', '최원장', '051-111-0005', 'a5@clinic.kr', '최민수', '12-15', '골프'],
+        ['C006', '명지이비인후과', '이비인후과', '한원장', '051-111-0006', 'a6@clinic.kr', '', '', ''],
+        ['C007', '녹산보건진료소', '내과', '서원장', '051-111-0007', 'a7@clinic.kr', '', '', ''],
+        ['C008', '김해미소치과', '치과', '문원장', '055-111-0008', 'a8@clinic.kr', '', '', ''],
+        ['C009', '하단중앙의원', '내과', '임원장', '051-111-0009', 'a9@clinic.kr', '', '', ''],
+        ['C010', '대저한의원', '한방', '오원장', '051-111-0010', 'a10@clinic.kr', '', '', ''],
+        ['C011', '사하약국', '약국', '윤약사', '051-111-0011', 'a11@pharm.kr', '', '', ''],
+        ['C012', '수메디팜도매', '도매', '-', '051-111-0012', 'a12@sumedipharm.co.kr', '', '', '']
+      ];
+      window.__QAClients = SEED.map(function (r, i) {
+        return {
+          거래처코드: r[0], 거래처명: r[1], 진료과: r[2], 담당자: r[3], 연락처: r[4], 이메일: r[5],
+          원장성함: r[6], 원장생일: r[7], 취향: r[8],
+          유통구분: (r[2] === '약국' ? '약국' : (r[2] === '도매' ? '도매' : '의원')),
+          사용여부: 'Y', 회전일경고기준: 30, _rowIndex: i + 2, 사업자등록번호: '', 사업자등록증URL: ''
+        };
+      });
+    }
+    var clients = window.__QAClients;
+
     if (fn === 'getBootstrapData') {
       return Promise.resolve({
-        settings: { '회사명': '수메디팜' }, clients: QA_CLIENTS, products: [], elpharmaCount: 0,
+        settings: { '회사명': '수메디팜' }, clients: clients, products: [], elpharmaCount: 0,
         today: '2026-11-29', currentMonth: '2026-11', user: { 아이디: 'qa', 담당자명: 'QA 담당' },
         isMaster: true, appVersion: 'v1.29', hiraConfigured: false
       });
     }
     if (fn === 'searchClientsProfile') {
-      var items = profileItems(args && args[0]);
+      var q = String((args && args[0]) || '').trim().toLowerCase();
+      var items = clients.filter(function (c) {
+        if (!q) return true;
+        return (c.거래처명 + ' ' + c.원장성함 + ' ' + c.취향 + ' ' + c.거래처코드).toLowerCase().indexOf(q) !== -1;
+      }).map(function (c) {
+        var o = {};
+        for (var k in c) if (Object.prototype.hasOwnProperty.call(c, k)) o[k] = c[k];
+        o.생일까지 = 3;
+        return o;
+      });
       return Promise.resolve({ items: items, total: items.length });
     }
     if (fn === 'saveClientProfile') {
       var p = (args && args[0]) || {};
-      QA_CLIENTS.forEach(function (c) {
+      clients.forEach(function (c) {
         if (c.거래처코드 === p.거래처코드) {
           if (typeof p.원장성함 === 'string') c.원장성함 = p.원장성함;
           if (typeof p.원장생일 === 'string') c.원장생일 = p.원장생일;
           if (typeof p.취향 === 'string') c.취향 = p.취향;
         }
       });
-      return Promise.resolve({ clients: QA_CLIENTS });
+      return Promise.resolve({ clients: clients });
     }
     return Promise.resolve({});
   }
 
-  // ---------- 라이브 index.html 을 받아 서버 호출만 바꿔 iframe 에 넣기 ----------
   var STUB = [
     'window.__QACalls = {};',
-    'window.__QA_SERVER = ' + serverStub.toString() + ';',
+    'window.__QA_SERVER = ' + qaServer.toString() + ';',
     'runServer = function (fnName, args, opts) { try { return window.__QA_SERVER(fnName, args); } catch (e) { return Promise.reject(e); } };',
     'registerServiceWorker = function () {};'
   ].join('\n');
@@ -124,8 +123,8 @@
     note('index.html 내려받는 중…');
     var res = await fetch('../index.html?qa=' + Date.now(), { cache: 'no-store' });
     var html = await res.text();
+    note('서버 스텁 심는 중…');
 
-    // 런타임 오류 수집기 + 서버 스텁을 심습니다.
     var guard = '<script>window.__errs=[];window.addEventListener("error",function(e){window.__errs.push(String((e&&e.message)||e));});' +
       'window.addEventListener("unhandledrejection",function(e){window.__errs.push("unhandledrejection: "+String((e&&e.reason&&e.reason.message)||(e&&e.reason)||e));});' +
       'var _ce=console.error;console.error=function(){try{window.__errs.push(Array.prototype.join.call(arguments," "));}catch(x){}return _ce.apply(console,arguments);};<\/script>\n<script>';
@@ -134,10 +133,9 @@
     html = html.slice(0, first) + guard + html.slice(first + '<script>'.length);
 
     var closeIdx = html.lastIndexOf('<\/script>');
-    if (closeIdx < 0) { out(false, 'index.html 에서 <\/script> 를 찾지 못했습니다'); return; }
+    if (closeIdx < 0) { out(false, 'index.html 에서 닫는 script 태그를 찾지 못했습니다'); return; }
     html = html.slice(0, closeIdx) + '\n' + STUB + '\n' + html.slice(closeIdx);
 
-    // 세션·서버주소를 미리 심어 로그인 화면을 건너뜁니다.
     try {
       localStorage.setItem('crm_server_url', 'https://script.google.com/macros/s/QA-PLACEHOLDER/exec');
       localStorage.setItem('crm_session_v1', JSON.stringify({ token: 'qa-token', user: { 아이디: 'qa', 담당자명: 'QA 담당' }, isMaster: true }));
@@ -146,14 +144,15 @@
     note('iframe 부팅 중…');
     frame.srcdoc = html;
 
-    await waitFor(function () { return D() && D().readyState === 'complete' && W().__errs; }, 15000, 'iframe 로드');
-    await sleep(400);
+    await waitFor(function () { return D() && D().readyState === 'complete' && W().__errs; }, 20000, 'iframe 로드');
+    await sleep(500);
     W().eval("switchMenu('clients')");
     await waitFor(function () { return $('cp-head'); }, 10000, '거래처 화면');
-    await sleep(300);
+    await sleep(400);
 
     var errs = W().__errs;
     out(errs.length === 0, '거래처 화면 부팅 중 런타임 오류 0건', errs.join(' | '));
+    out(D().querySelector('.page-title') && D().querySelector('.page-title').textContent.indexOf('거래처 등록 / 관리') !== -1, '거래처 등록/관리 화면이 그려졌다');
 
     // A. 기본은 접힘
     out($('cp-body').style.display === 'none', '기본: 카드 본문이 접혀 있다');
@@ -192,9 +191,9 @@
 
     // D. 화면을 통째로 다시 그려도(메뉴 재진입) 유지
     W().eval('renderActiveMenu()');
-    await sleep(600);
+    await sleep(700);
     out($('cp-body') && $('cp-body').style.display !== 'none', '재렌더: 펼침 유지');
-    out($('cp-q').value === '김', '재렌더: 검색어 유지', $('cp-q') ? $('cp-q').value : '(칸 없음)');
+    out($('cp-q') && $('cp-q').value === '김', '재렌더: 검색어 유지', $('cp-q') ? $('cp-q').value : '(칸 없음)');
     out(D().querySelectorAll('#cp-result tbody tr').length === 3, '재렌더: 검색 결과 유지',
       String(D().querySelectorAll('#cp-result tbody tr').length));
 
@@ -203,18 +202,21 @@
     var btns = D().querySelectorAll('#cp-result button');
     for (var i = 0; i < btns.length; i++) if (btns[i].textContent.indexOf('생일·취향 입력') !== -1) { editBtn = btns[i]; break; }
     out(!!editBtn, '결과 줄에 "생일·취향 입력" 버튼이 있다');
-    editBtn.click();
-    await waitFor(function () { return $('cpf-taste'); }, 4000, '입력 모달');
-    $('cpf-taste').value = '홍삼 선호(테스트)';
-    $('cpf-birth').value = '04-08';
-    W().eval('submitClientProfile()');
-    await waitFor(function () { return W().__QACalls['saveClientProfile'] === 1; }, 6000, '저장 호출');
-    await sleep(800);
-    out($('cp-body') && $('cp-body').style.display !== 'none', '저장 후: 펼침 유지');
-    out($('cp-q') && $('cp-q').value === '김', '저장 후: 검색어 유지', $('cp-q') ? $('cp-q').value : '(칸 없음)');
-    out(D().querySelector('#cp-result').textContent.indexOf('홍삼 선호(테스트)') !== -1, '저장 후: 결과가 새 값으로 갱신됨');
-    out(D().querySelectorAll('#cp-result tbody tr').length === 3, '저장 후: 결과 3건 유지',
-      String(D().querySelectorAll('#cp-result tbody tr').length));
+    if (editBtn) {
+      editBtn.click();
+      await waitFor(function () { return $('cpf-taste'); }, 4000, '입력 모달');
+      await sleep(200);
+      $('cpf-taste').value = '홍삼 선호(테스트)';
+      $('cpf-birth').value = '04-08';
+      W().eval('submitClientProfile()');
+      await waitFor(function () { return W().__QACalls['saveClientProfile'] === 1; }, 6000, '저장 호출');
+      await sleep(900);
+      out($('cp-body') && $('cp-body').style.display !== 'none', '저장 후: 펼침 유지');
+      out($('cp-q') && $('cp-q').value === '김', '저장 후: 검색어 유지', $('cp-q') ? $('cp-q').value : '(칸 없음)');
+      out(D().querySelector('#cp-result').textContent.indexOf('홍삼 선호(테스트)') !== -1, '저장 후: 결과가 새 값으로 갱신됨');
+      out(D().querySelectorAll('#cp-result tbody tr').length === 3, '저장 후: 결과 3건 유지',
+        String(D().querySelectorAll('#cp-result tbody tr').length));
+    }
 
     // F. 접었다 다시 펼쳐도 결과·검색어 유지 (서버 재조회 없음)
     var callsBefore = W().__QACalls['searchClientsProfile'];
@@ -244,9 +246,8 @@
     out(ver === 'v1.29', 'APP_VERSION 이 v1.29', String(ver));
     out(/v1\.29/.test(D().title), '화면 제목에 v1.29', D().title);
 
-    // 오류가 없으면 최종 상태(펼침 + 검색 결과)로 남깁니다.
     var fails = lines.filter(function (l) { return l.indexOf('FAIL') === 0; }).length;
-    note(fails ? ('실패 ' + fails + '건') : '모두 통과');
+    note(fails ? ('실패 ' + fails + '건 / 전체 ' + lines.length + '건') : ('모두 통과 · 전체 ' + lines.length + '건'));
     window.__QA_RESULT = { total: lines.length, fails: fails, lines: lines };
     window.__QA_DONE = true;
   }
