@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
- <title>수메디팜 미니 CRM v1.27</title>
+ <title>수메디팜 미니 CRM v1.28</title>
 
  <!-- ---------------- PWA (홈 화면 앱) 설정 ---------------- -->
  <meta name="description" content="수메디팜 미니 CRM — 거래처·주문·수금·회전일을 구글 시트로 실시간 관리하는 영업 앱" />
@@ -843,7 +843,7 @@
  <div id="login-overlay" class="login-overlay">
    <div class="login-card">
      <div class="login-brand">
-       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.27</span></div>
+       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.28</span></div>
        <div class="s">담당자 아이디로 로그인해 주세요</div>
      </div>
      <div class="form-group" style="margin-bottom:10px;">
@@ -1246,7 +1246,7 @@
    <!-- PC 사이드바 -->
    <aside class="sidebar">
      <div class="sidebar-brand">
-       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.27</span></h1>
+       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.28</span></h1>
        <div class="sub" id="brand-sub">로딩 중...</div>
      </div>
      <nav class="sidebar-nav" id="sidebar-nav"></nav>
@@ -1263,7 +1263,7 @@
 
    <!-- 모바일 상단 헤더 -->
    <header class="mobile-header">
-     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.27</span></h1>
+     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.28</span></h1>
      <div style="display:flex;gap:6px;align-items:center;">
        <span id="m-user" class="ver-chip" style="display:none;" onclick="openPasswordModal()" title="내 계정 · 비밀번호 변경"></span>
        <button class="btn btn-sm" id="guest-login-btn" style="display:none;background:rgba(255,255,255,0.16);color:#fff;" onclick="exitGuestPreview()">🔑 로그인</button>
@@ -1284,7 +1284,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.27';   // v1.27 — 거래처 사업자등록증 등록 + 자동 읽기
+   const APP_VERSION = 'v1.28';   // v1.28 — 고시문·삭감통보서 자동 읽기 + 이의신청 초안
 
    const STATE = {
      // 로그인/권한
@@ -8000,6 +8000,7 @@
      renderGuideMakerResult();
      renderGuideIngResult();
      renderGuidePicked();         // v1.21 — 담아 둔 품목이 있으면 화면에 다시 그립니다
+     noticeRestoreUi_();          // v1.28 — 고른 파일·초안은 화면을 다시 그려도 남겨 둡니다
    }
 
    /** 🏥 지금 어느 병원에 담는 중인지 — 처방전에서 고른 병원을 그대로 이어받습니다 */
@@ -8049,6 +8050,7 @@
        guideIngSearchCardHtml_() +
        '<div id="guide-picked"></div>' +          /* v1.21 — 담은 품목 목록 (검색 결과 바로 아래) */
        '<div id="guide-coverage"></div>' +
+       noticeDocCardHtml_() +                     /* v1.28 — 고시문·삭감통보서 자동 읽기 */
        '<div id="guide-body"></div>';
    }
 
@@ -8578,6 +8580,280 @@
      renderGuideIngResult();
      guideSyncPickUI_();
      if (capped) showToast('한 번에 200품목까지만 체크합니다. 검색어를 좁히거나 성분을 펼쳐 골라 주세요.');
+   }
+
+   // =========================================================================
+   // v1.28 — 📑 고시문·삭감통보서 자동 읽기 + 이의신청 사유서 초안 (회원 전용)
+   //   · 사진은 기존 등록증과 같은 규칙으로 긴 변 1800px · JPEG 0.85 로 줄여 보내고,
+   //     PDF 는 그대로 보내되 5MB 를 넘으면 안내만 하고 서버로 보내지 않습니다.
+   //   · 서버 analyzeNoticeOrCutDoc 이 글자를 읽어 문서 종류·핵심 요약·문서번호·날짜와
+   //     이의신청 사유서 초안을 돌려줍니다. 파일은 서버에 보관하지 않습니다.
+   // =========================================================================
+   const NOTICE_DOC = {
+     file: null,            // 고른 파일 (화면을 다시 그려도 유지)
+     busy: false,
+     timer: null,
+     last: null,            // 마지막 서버 응답
+     meta: { clientCode: '', itemName: '', docType: 'auto' },
+     statusHtml: '',
+     statusKind: ''
+   };
+
+   /** 📑 카드 — 파일 선택 + 병원·품목·종류 선택 + 실행 버튼 + 결과 영역 */
+   function noticeDocCardHtml_() {
+     const clients = (STATE.clients || []).filter(function (c) { return c.사용여부 !== 'N'; });
+     const items = [];
+     const seen = {};
+     (STATE.products || []).forEach(function (p) {
+       const n = String(p.제품명 || '').trim();
+       if (!n || seen[n]) return;
+       seen[n] = true;
+       items.push(n);
+     });
+     const meta = NOTICE_DOC.meta;
+     return '<div class="card" id="notice-card" style="border-color:#ddd6fe;background:#fbfaff;">' +
+         '<div class="card-title"><span>📑 고시문 · 삭감통보서 자동 읽기</span>' +
+           '<small style="font-weight:500;font-size:12px;color:var(--muted);">사진·PDF 를 올리면 핵심 요약과 이의신청 초안을 만들어 드립니다 · 로그인 회원 전용</small></div>' +
+         '<div class="toolbar" style="gap:6px;flex-wrap:wrap;align-items:center;">' +
+           '<input type="file" id="notice-file" accept="image/*,.pdf" style="display:none" onchange="noticeFileChosen()" />' +
+           '<button class="btn btn-primary btn-sm" id="notice-pick" onclick="noticePickFile()">📷 사진·PDF 선택</button>' +
+           '<select id="notice-client" style="max-width:210px;" onchange="noticeMetaChanged()">' +
+             '<option value="">병원(거래처) — 선택</option>' +
+             clients.map(function (c) {
+               return '<option value="' + esc(c.거래처코드) + '"' + (meta.clientCode === c.거래처코드 ? ' selected' : '') + '>' +
+                 esc(c.거래처명) + ' (' + esc(c.거래처코드) + ')</option>';
+             }).join('') +
+           '</select>' +
+           '<input type="text" id="notice-item" list="notice-item-options" style="flex:0 1 190px;max-width:240px;" placeholder="품목명 — 선택" autocomplete="off" value="' + esc(meta.itemName || '') + '" oninput="noticeMetaChanged()" />' +
+           '<datalist id="notice-item-options">' + items.slice(0, 400).map(function (n) {
+             return '<option value="' + esc(n) + '"></option>';
+           }).join('') + '</datalist>' +
+           '<select id="notice-doctype" style="max-width:140px;" onchange="noticeMetaChanged()">' +
+             '<option value="auto"' + (meta.docType !== 'cut' && meta.docType !== 'notice' ? ' selected' : '') + '>종류 자동 판별</option>' +
+             '<option value="notice"' + (meta.docType === 'notice' ? ' selected' : '') + '>고시·공지</option>' +
+             '<option value="cut"' + (meta.docType === 'cut' ? ' selected' : '') + '>삭감통보서</option>' +
+           '</select>' +
+           '<button class="btn btn-outline btn-sm" id="notice-run" onclick="noticeAnalyze()">🔍 문서 읽고 초안 만들기</button>' +
+         '</div>' +
+         '<div id="notice-status" style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:6px;">' +
+           '심평원 고시문·심사결과(삭감) 통보서 사진이나 PDF 를 올려 주세요. 스마트폰 사진은 자동으로 줄여 보냅니다.' +
+         '</div>' +
+         '<div id="notice-result"></div>' +
+       '</div>';
+   }
+
+   /** 화면을 다시 그린 뒤 이전 선택·안내·결과를 되살립니다 */
+   function noticeRestoreUi_() {
+     const sel = document.getElementById('notice-client');
+     if (sel) sel.value = NOTICE_DOC.meta.clientCode || '';
+     const item = document.getElementById('notice-item');
+     if (item) item.value = NOTICE_DOC.meta.itemName || '';
+     const kind = document.getElementById('notice-doctype');
+     if (kind) kind.value = NOTICE_DOC.meta.docType || 'auto';
+     const btn = document.getElementById('notice-run');
+     if (btn) { btn.disabled = Boolean(NOTICE_DOC.busy); btn.textContent = NOTICE_DOC.busy ? '⏳ 읽는 중...' : '🔍 문서 읽고 초안 만들기'; }
+     if (NOTICE_DOC.statusHtml) noticeStatus_(NOTICE_DOC.statusHtml, NOTICE_DOC.statusKind, true);
+     else if (NOTICE_DOC.file) {
+       noticeStatus_('📄 <b>' + esc(NOTICE_DOC.file.name || '문서') + '</b> 선택됨 — [🔍 문서 읽고 초안 만들기]를 눌러 주세요.', '', true);
+     }
+     renderNoticeResult_();
+   }
+
+   function noticeStatus_(html, kind, keep) {
+     NOTICE_DOC.statusHtml = html || '';
+     NOTICE_DOC.statusKind = kind || '';
+     const el = document.getElementById('notice-status');
+     if (!el) return;
+     el.innerHTML = html || '';
+     el.style.color = kind === 'err' ? 'var(--danger)' : (kind === 'ok' ? 'var(--success)' : (kind === 'warn' ? 'var(--warn)' : 'var(--muted)'));
+   }
+
+   /** 병원·품목·종류 선택값을 기억 (다시 그려도 유지) */
+   function noticeMetaChanged() {
+     const sel = document.getElementById('notice-client');
+     const item = document.getElementById('notice-item');
+     const kind = document.getElementById('notice-doctype');
+     if (sel) NOTICE_DOC.meta.clientCode = String(sel.value || '');
+     if (item) NOTICE_DOC.meta.itemName = String(item.value || '').trim();
+     if (kind) NOTICE_DOC.meta.docType = String(kind.value || 'auto');
+   }
+
+   function noticePickFile() {
+     if (NOTICE_DOC.busy) return;
+     const el = document.getElementById('notice-file');
+     if (!el) return;
+     el.value = '';
+     el.click();
+   }
+
+   /** 파일 선택 — 형식·크기만 확인하고 저장 (읽기는 버튼을 눌렀을 때) */
+   function noticeFileChosen() {
+     const input = document.getElementById('notice-file');
+     const file = input && input.files && input.files[0];
+     if (!file) return;
+     const isPdf = /pdf/i.test(file.type || '') || /\.pdf$/i.test(file.name || '');
+     const isImage = /^image\//i.test(file.type || '') || /\.(jpe?g|png|webp|heic|heif|bmp)$/i.test(file.name || '');
+     if (!isPdf && !isImage) {
+       NOTICE_DOC.file = null;
+       noticeStatus_('사진(JPG·PNG) 또는 PDF 파일만 올릴 수 있습니다.', 'err');
+       return;
+     }
+     if (isPdf && file.size > 5 * 1024 * 1024) {
+       const mb = Math.round(file.size / 1024 / 1024 * 10) / 10;
+       NOTICE_DOC.file = null;
+       noticeStatus_('PDF 가 너무 큽니다 (' + mb + 'MB). 5MB 이하 PDF 로 다시 올려 주세요.', 'err');
+       return;
+     }
+     NOTICE_DOC.file = file;
+     noticeStatus_('📄 <b>' + esc(file.name || '문서') + '</b> 선택됨 — [🔍 문서 읽고 초안 만들기]를 눌러 주세요.', '');
+   }
+
+   function noticeStopTimer_() {
+     if (NOTICE_DOC.timer) { clearInterval(NOTICE_DOC.timer); NOTICE_DOC.timer = null; }
+   }
+
+   /** 고른 파일을 서버로 보내 읽고 초안까지 받아 옵니다 */
+   async function noticeAnalyze(forceKind) {
+     if (NOTICE_DOC.busy) return;
+     noticeMetaChanged();
+     const meta = NOTICE_DOC.meta;
+     const docType = forceKind || meta.docType || 'auto';
+     const file = NOTICE_DOC.file;
+     if (!file) { noticeStatus_('먼저 사진이나 PDF 를 선택해 주세요.', 'err'); return; }
+
+     const isPdf = /pdf/i.test(file.type || '') || /\.pdf$/i.test(file.name || '');
+     NOTICE_DOC.busy = true;
+     const btn = document.getElementById('notice-run');
+     if (btn) { btn.disabled = true; btn.textContent = '⏳ 읽는 중...'; }
+     const started = Date.now();
+     const tick = function () {
+       const sec = Math.max(0, Math.round((Date.now() - started) / 1000));
+       noticeStatus_('📤 <b>' + esc(file.name || '문서') + '</b> 글자를 읽고 초안을 만드는 중... ' + sec + '초', '');
+     };
+     tick();
+     noticeStopTimer_();
+     NOTICE_DOC.timer = setInterval(tick, 1000);
+
+     try {
+       let base64 = '';
+       let mimeType = file.type || (isPdf ? 'application/pdf' : 'image/jpeg');
+       if (isPdf) {
+         base64 = String(await cBizCertReadDataUrl_(file)).split(',')[1] || '';
+         mimeType = 'application/pdf';
+       } else {
+         base64 = await cBizCertShrinkImage_(file, 1800, 0.85);
+         mimeType = 'image/jpeg';
+       }
+       if (!base64) throw new Error('파일 내용을 읽지 못했습니다. 다른 파일로 다시 시도해 주세요.');
+
+       const client = meta.clientCode ? findClient(meta.clientCode) : null;
+       const res = await runServer('analyzeNoticeOrCutDoc', [{
+         fileName: file.name || (isPdf ? 'notice.pdf' : 'notice.jpg'),
+         mimeType: mimeType,
+         base64: base64,
+         docType: docType,
+         clientName: client ? String(client.거래처명 || '') : '',
+         itemName: meta.itemName || ''
+       }], { silent: true });
+
+       NOTICE_DOC.last = res || null;
+       renderNoticeResult_();
+       const ok = Boolean(res && res.ocrOk && ((res.summaryLines && res.summaryLines.length) || (res.codes && res.codes.length)));
+       noticeStatus_(esc((res && res.message) || '문서를 읽었습니다.'), ok ? 'ok' : 'warn');
+     } catch (e) {
+       noticeStatus_('❌ ' + esc(friendlyError_(e)), 'err');
+     } finally {
+       noticeStopTimer_();
+       NOTICE_DOC.busy = false;
+       if (btn) { btn.disabled = false; btn.textContent = '🔍 문서 읽고 초안 만들기'; }
+       const input = document.getElementById('notice-file');
+       if (input) input.value = '';
+     }
+   }
+
+   /** 결과 — 종류 배지 · 핵심 요약 줄 · 코드/날짜 · 초안 상자 + 복사 버튼 */
+   function renderNoticeResult_() {
+     const el = document.getElementById('notice-result');
+     if (!el) return;
+     const r = NOTICE_DOC.last;
+     if (!r) { el.innerHTML = ''; return; }
+     const key = String(r.docKindKey || '');
+     const badge = key === 'cut' ? 'badge-danger' : (key === 'notice' ? 'badge-blue' : 'badge-amber');
+     const lines = Array.isArray(r.summaryLines) ? r.summaryLines : [];
+     const codes = Array.isArray(r.codes) ? r.codes : [];
+     const dates = Array.isArray(r.dates) ? r.dates : [];
+     const draft = String(r.appealDraft || '');
+     const chip = function (text, cls) {
+       return '<span class="badge ' + cls + '" style="margin-right:4px;">' + esc(text) + '</span>';
+     };
+     const draftTitle = key === 'cut' ? '📝 이의신청 사유서 초안'
+       : (key === 'notice' ? '📝 고시 요약·적용 검토 메모 초안' : '📝 문서 요약 메모 초안');
+
+     el.innerHTML =
+       '<div style="margin-top:10px;border-top:1px dashed #e5e7eb;padding-top:10px;">' +
+         '<div class="toolbar" style="gap:6px;flex-wrap:wrap;align-items:center;">' +
+           chip(r.docKind || '문서 종류 미확인', badge) +
+           codes.map(function (c) { return chip(c, 'badge-blue'); }).join('') +
+           dates.map(function (d) { return chip(d, 'badge-muted'); }).join('') +
+         '</div>' +
+         (lines.length
+           ? '<ul style="margin:8px 0 0;padding-left:18px;font-size:12.5px;line-height:1.7;color:var(--text);">' +
+               lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul>'
+           : '<div style="margin-top:6px;font-size:12.5px;color:var(--muted);">핵심 줄을 찾지 못했습니다. 사진을 다시 찍거나 화면에서 문서 종류를 골라 한 번 더 읽혀 주세요.</div>') +
+         (draft
+           ? '<div style="margin-top:10px;">' +
+               '<div class="card-title" style="margin-bottom:6px;"><span>' + draftTitle + '</span>' +
+                 '<small style="font-weight:500;font-size:11.5px;color:var(--muted);">필요한 곳(상병·진료내역·금액)을 고쳐 쓰세요</small></div>' +
+               '<textarea id="notice-draft" style="width:100%;min-height:280px;font-size:12.5px;line-height:1.7;font-family:inherit;box-sizing:border-box;">' + esc(draft) + '</textarea>' +
+               '<div class="toolbar" style="gap:6px;flex-wrap:wrap;margin-top:6px;">' +
+                 '<button class="btn btn-primary btn-sm" onclick="noticeCopyDraft()">📋 초안 복사</button>' +
+                 '<button class="btn btn-outline btn-sm" onclick="noticeReanalyzeAs(\'' + (key === 'cut' ? 'notice' : 'cut') + '\')">' +
+                   (key === 'cut' ? '고시·공지로 다시 읽기' : '삭감통보서로 다시 읽기') + '</button>' +
+               '</div>' +
+             '</div>'
+           : '') +
+         (r.rawTextPreview
+           ? '<details style="margin-top:10px;font-size:11.5px;color:var(--muted);"><summary style="cursor:pointer;">읽어 들인 글자 보기</summary>' +
+               '<div style="white-space:pre-wrap;line-height:1.6;margin-top:6px;">' + esc(r.rawTextPreview) + '</div></details>'
+           : '') +
+       '</div>';
+   }
+
+   /** 종류를 바꿔 한 번 더 읽기 (고른 파일은 메모리에 남아 있습니다) */
+   function noticeReanalyzeAs(kind) {
+     const sel = document.getElementById('notice-doctype');
+     if (sel) sel.value = kind;
+     NOTICE_DOC.meta.docType = kind;
+     noticeAnalyze(kind);
+   }
+
+   /** 초안 복사 — 클립보드가 막힌 환경은 임시 상자로 대신합니다 */
+   async function noticeCopyDraft() {
+     const ta = document.getElementById('notice-draft');
+     const text = ta ? String(ta.value || '') : String((NOTICE_DOC.last && NOTICE_DOC.last.appealDraft) || '');
+     if (!text.trim()) { showToast('복사할 초안이 없습니다.'); return; }
+     let ok = false;
+     try {
+       if (navigator.clipboard && navigator.clipboard.writeText) {
+         await navigator.clipboard.writeText(text);
+         ok = true;
+       }
+     } catch (e) { ok = false; }
+     if (!ok) {
+       try {
+         const tmp = document.createElement('textarea');
+         tmp.value = text;
+         tmp.style.position = 'fixed';
+         tmp.style.left = '-9999px';
+         tmp.style.top = '0';
+         document.body.appendChild(tmp);
+         tmp.focus();
+         tmp.select();
+         ok = document.execCommand('copy');
+         document.body.removeChild(tmp);
+       } catch (e2) { ok = false; }
+     }
+     showToast(ok ? '초안을 복사했습니다. 원장님께 붙여넣어 보내세요.' : '복사하지 못했습니다. 초안 상자를 길게 눌러 직접 복사해 주세요.');
    }
 
    // ---------------------------------------------------------------- 급여·삭감 가이드 (v1.5)
