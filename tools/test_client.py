@@ -93,9 +93,9 @@ def main():
         print('(esprima 없음 — 문법 검사 생략: pip install esprima)')
 
     # 2) v1.14 요소
-    check("const APP_VERSION = 'v1.16'" in js, 'APP_VERSION 이 v1.16 이 아닙니다')
-    check('<title>수메디팜 미니 CRM v1.16</title>' in html, '브라우저 탭 제목의 버전이 v1.16 이 아닙니다')
-    check('ver-chip">v1.16' in html and 'ver-chip dark">v1.16' in html, '로그인 화면·상단 바의 버전 칩이 v1.16 이 아닙니다')
+    check("const APP_VERSION = 'v1.17'" in js, 'APP_VERSION 이 v1.17 이 아닙니다')
+    check('<title>수메디팜 미니 CRM v1.17</title>' in html, '브라우저 탭 제목의 버전이 v1.17 이 아닙니다')
+    check('ver-chip">v1.17' in html and 'ver-chip dark">v1.17' in html, '로그인 화면·상단 바의 버전 칩이 v1.17 이 아닙니다')
     check('id: \'drug\'' in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
     check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
     # v1.11 — 🧭 처방 셋팅은 경구제 전용 · 💉 주사제 셋팅은 💉 주사제 주문 메뉴 안 탭
@@ -1371,7 +1371,7 @@ def main():
     except ImportError:
         print('(quickjs 없음 — v1.12 실행 검사 생략: pip install quickjs)')
 
-    # 13) v1.16 — 📢 공지사항 · 게시판 (한 화면 위아래 분리: 위 공지 / 아래 소통 게시판)
+    # 13) v1.16~v1.17 — 📢 공지사항 · 게시판 (한 화면 위아래: 위 공지 / 아래 소통 게시판, v1.17 게시물 목록 위 / 글쓰기 입력란 아래)
     check("id: 'board'" in js and 'renderBoardPage' in js and 'loadBoardModule' in js,
           '📢 공지사항 · 게시판 메뉴가 없습니다')
     check("label: '공지사항 · 게시판'" in js and "shortLabel: '공지'" in js,
@@ -1407,6 +1407,15 @@ def main():
     check('data-board-no' in js, '게시판 글 카드 식별자가 없습니다')
     check('data-board-section' in js and 'board-notice-list' in js and 'board-free-list' in js,
           '한 화면 두 영역(공지·소통)의 자리가 없습니다')
+    # v1.17 — 소통 게시판 카드 안은 위에서부터 [게시물 목록] → [글쓰기 입력란]
+    free_fn = extract_fn(js, 'boardFreeCardHtml_') or ''
+    check(bool(free_fn) and 'board-free-list' in free_fn and 'boardComposerHtml_' in free_fn and
+          free_fn.index('board-free-list') < free_fn.index('boardComposerHtml_'),
+          '소통 게시판이 게시물 목록 → 글쓰기 입력란 순서가 아닙니다')
+    check('title="아래 글쓰기 입력란으로"' in js or '아래 글쓰기 입력란으로' in js,
+          '✏️ 새 글 버튼이 아래 글쓰기 입력란으로 안내하지 않습니다')
+    check('아래 입력란에 첫 글을 남겨 보세요' in js,
+          '글이 없을 때 아래 입력란 안내가 없습니다')
     check('BOARD_NOTICE_SHOW' in js and '＋ 공지 ' in js, '공지 영역 컴팩트 표시(더 보기)가 없습니다')
     # 메뉴가 실제로 가장 첫 번째인지
     first_menu = re.search(r"const APP_MENUS = \[\s*\{\s*\n\s*id: '([a-z]+)'", js)
@@ -1495,7 +1504,7 @@ def main():
                                              '자유': [{ 카테고리: '특이사항', 개수: 1 }, { 카테고리: '정보공유', 개수: 1 }] },
                                isMaster: %s, me: { 아이디: 'choi', 담당자명: '최충의' } }
                 };
-                var __toasts = [], __els = {}, __calls = [], __renders = 0;
+                var __toasts = [], __els = {}, __calls = [], __renders = 0, __focus = [], __scroll = [];
                 function showToast(m) { __toasts.push(String(m)); }
                 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
                   .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
@@ -1506,8 +1515,9 @@ def main():
                 var __RESULT = {};
                 var window = { confirm: function () { return true; } };
                 var document = { getElementById: function (id) {
-                  if (!__els[id]) __els[id] = { _h: '', value: '', focus: function () {},
-                    scrollIntoView: function () {},
+                  if (!__els[id]) __els[id] = { _h: '', value: '',
+                    focus: function (o) { __focus.push({ id: id, opts: o || null }); },
+                    scrollIntoView: function (o) { __scroll.push({ id: id, opts: o || null }); },
                     set innerHTML(v) { this._h = v; }, get innerHTML() { return this._h; } };
                   return __els[id];
                 } };
@@ -1582,6 +1592,40 @@ def main():
             bar_free = q13(cm.eval('boardToolbarHtml_("free")'))
             for label in ['🔍 제목·내용·작성자 검색', '특이사항 1', '정보공유 1', '전체 2']:
                 check(label in bar_free, '소통 게시판 툴바에 %s 가 없습니다' % label)
+
+            # (C-2) v1.17 — 화면 위에서부터 공지사항 → 게시물 목록 → 글쓰기 입력란
+            check(page_m.index('data-board-section="free"') < page_m.index('board-free-list')
+                  < page_m.index('board-free-composer'),
+                  '소통 게시판이 게시물 목록 → 글쓰기 입력란 순서가 아닙니다')
+            check(bottom.index('data-board-no="5"') < bottom.index('board-free-composer')
+                  and bottom.index('💬 소통 · 특이사항 게시판') < bottom.index('board-free-list'),
+                  '게시물이 글쓰기 입력란보다 위에 있지 않습니다')
+            check(page_m.index('📌 공지사항') < page_m.index('💬 소통 · 특이사항 게시판')
+                  < page_m.index('board-free-composer'),
+                  '공지사항 → 게시물 → 글쓰기 입력란 순서가 아닙니다')
+            check('아래 글쓰기 입력란으로' in bar_free, '✏️ 새 글 버튼이 아래 입력란으로 안내하지 않습니다')
+
+            # ✏️ 새 글 — 아래 입력란으로 부드럽게 내려가 제목칸에 포커스
+            cm.eval('__focus.length = 0; __scroll.length = 0; focusBoardComposer("free");')
+            scrolls = json.loads(q13(cm.eval('JSON.stringify(__scroll)')))
+            focuses = json.loads(q13(cm.eval('JSON.stringify(__focus)')))
+            check(any(v['id'] == 'board-free-composer' and (v.get('opts') or {}).get('behavior') == 'smooth'
+                      for v in scrolls),
+                  '✏️ 새 글이 아래 글쓰기 입력란으로 부드럽게 내려가지 않습니다: %s' % scrolls)
+            check(any(v['id'] == 'board-free-title' for v in focuses),
+                  '✏️ 새 글이 글쓰기 제목칸에 포커스를 주지 않습니다: %s' % focuses)
+
+            # ✏️ 수정 — 그 글을 아래 입력란으로 불러오고 역시 부드럽게 내려간다
+            cm.eval('__focus.length = 0; __scroll.length = 0; openBoardEdit(5);')
+            check(int(cm.eval('STATE.boardEditNo')) == 5, '✏️ 를 눌러도 수정 상태가 아닙니다')
+            scrolls_e = json.loads(q13(cm.eval('JSON.stringify(__scroll)')))
+            focuses_e = json.loads(q13(cm.eval('JSON.stringify(__focus)')))
+            check(any(v['id'] == 'board-free-composer' for v in scrolls_e),
+                  '✏️ 수정이 아래 글쓰기 입력란으로 내려가지 않습니다: %s' % scrolls_e)
+            check(any(v['id'] == 'board-free-title' for v in focuses_e), '수정 시 제목칸 포커스가 없습니다')
+            check('✏️ 글 수정 (#' in section_html(q13(cm.eval('boardPageHtml_()')), 'free'),
+                  '수정 폼이 게시물 목록 아래에 그려지지 않았습니다')
+            cm.eval('STATE.boardDraft = null; STATE.boardEditNo = 0;')
 
             # 검색·말머리 거르기 (두 영역이 서로 영향 없이)
             cm.eval("STATE.boardNoticeQuery = 'EDI';")

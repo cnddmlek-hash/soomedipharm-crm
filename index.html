@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
- <title>수메디팜 미니 CRM v1.16</title>
+ <title>수메디팜 미니 CRM v1.17</title>
 
  <!-- ---------------- PWA (홈 화면 앱) 설정 ---------------- -->
  <meta name="description" content="수메디팜 미니 CRM — 거래처·주문·수금·회전일을 구글 시트로 실시간 관리하는 영업 앱" />
@@ -770,7 +770,7 @@
  <div id="login-overlay" class="login-overlay">
    <div class="login-card">
      <div class="login-brand">
-       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.16</span></div>
+       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.17</span></div>
        <div class="s">담당자 아이디로 로그인해 주세요</div>
      </div>
      <div class="form-group" style="margin-bottom:10px;">
@@ -1152,7 +1152,7 @@
    <!-- PC 사이드바 -->
    <aside class="sidebar">
      <div class="sidebar-brand">
-       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.16</span></h1>
+       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.17</span></h1>
        <div class="sub" id="brand-sub">로딩 중...</div>
      </div>
      <nav class="sidebar-nav" id="sidebar-nav"></nav>
@@ -1168,7 +1168,7 @@
 
    <!-- 모바일 상단 헤더 -->
    <header class="mobile-header">
-     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.16</span></h1>
+     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.17</span></h1>
      <div style="display:flex;gap:6px;align-items:center;">
        <span id="m-user" class="ver-chip" style="display:none;" onclick="openPasswordModal()" title="내 계정 · 비밀번호 변경"></span>
        <button class="btn btn-sm" id="pw-btn-m" title="비밀번호 변경" aria-label="비밀번호 변경" style="display:none;background:rgba(255,255,255,0.16);color:#fff;" onclick="openPasswordModal()">🔑</button>
@@ -1188,7 +1188,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.16';
+   const APP_VERSION = 'v1.17';
 
    const STATE = {
      // 로그인/권한
@@ -1205,7 +1205,7 @@
      userEmail: '',
      userList: null,          // MASTER 설정 탭 — 사용자 목록·가입 승인 (getUsersList)
      serverVersion: '',       // 시트 서버(Code.gs) 버전 — v1.4 함수 사용 가능 여부 판단
-     // 📢 공지사항 · 게시판 (v1.16 — 한 화면 위아래 분리)
+     // 📢 공지사항 · 게시판 (v1.16 한 화면 위아래 · v1.17 게시물 목록 위 / 글쓰기 입력란 아래)
      boardNoticeCat: '',          // 위 공지 영역 말머리 필터 ('' 면 전체)
      boardNoticeQuery: '',        // 위 공지 영역 검색어
      boardNoticeOpen: {},         // 번호 → 펼침 여부 (공지)
@@ -8866,7 +8866,7 @@
    }
 
    // =========================================================================
-   // 8-C. MODULE: 📢 공지사항 · 게시판 (v1.16 — 한 화면 위아래 분리)
+   // 8-C. MODULE: 📢 공지사항 · 게시판 (v1.16 한 화면 위아래 분리 · v1.17 게시물 목록 위 / 글쓰기 입력란 아래)
    //   · 위   📌 공지사항 — 미지급 사유 / 특별 수수료율 / 일반 공지
    //          MASTER 만 작성·수정·삭제·상단 고정 (STAFF 는 읽기)
    //   · 아래 💬 소통 · 특이사항 게시판 — 로그인한 모든 직원(STAFF·MASTER) 글쓰기
@@ -8962,12 +8962,13 @@
      return '<div class="card" data-board-section="notice">' + boardSectionHeadHtml_('notice') + body + '</div>';
    }
 
+   /** v1.17 — 위에서부터 [게시물 목록] → [글쓰기 입력란] (공지사항 → 게시물 → 글쓰기 순) */
    function boardFreeCardHtml_() {
      return '<div class="card" data-board-section="free">' +
          boardSectionHeadHtml_('free') +
-         boardComposerHtml_('free') +
          boardToolbarHtml_('free') +
          '<div id="board-free-list">' + boardListHtml_('free') + '</div>' +
+         boardComposerHtml_('free') +
        '</div>';
    }
 
@@ -9007,7 +9008,7 @@
        ? (STATE.isMaster
            ? '<button class="btn btn-primary btn-sm" onclick="openBoardComposer(\'notice\')">✏️ 공지 쓰기</button>'
            : '<span style="font-size:11.5px;color:var(--muted);">공지 작성은 MASTER만</span>')
-       : '<button class="btn btn-outline btn-sm" title="맨 위 입력란으로" onclick="focusBoardComposer(\'free\')">✏️ 새 글</button>';
+       : '<button class="btn btn-outline btn-sm" title="아래 글쓰기 입력란으로" onclick="focusBoardComposer(\'free\')">✏️ 새 글</button>';
      return '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0 8px;">' +
          '<input id="board-' + sec + '-search" style="flex:1 1 150px;min-width:130px;" placeholder="🔍 제목·내용·작성자 검색" value="' + esc(boardQueryOf_(sec)) + '" oninput="onBoardSearch(\'' + sec + '\', this.value)" />' +
          composeBtn +
@@ -9077,7 +9078,7 @@
        return '<div style="padding:18px 6px;text-align:center;color:var(--muted);font-size:13px;">' +
          (filtered
            ? '조건에 맞는 글이 없습니다.'
-           : (sec === 'notice' ? '공지사항이 없습니다.' : '아직 올라온 글이 없습니다. 위 입력란에 첫 글을 남겨 보세요.')) +
+           : (sec === 'notice' ? '공지사항이 없습니다.' : '아직 올라온 글이 없습니다. 아래 입력란에 첫 글을 남겨 보세요.')) +
        '</div>';
      }
      if (sec !== 'notice') return items.map(boardItemHtml_).join('');
@@ -9173,9 +9174,19 @@
        '</div>';
    }
 
+   /** v1.17 — 글쓰기 입력란은 게시물 목록 아래에 있어서, ✏️ 새 글·✏️ 수정을 누르면 그쪽으로 부드럽게 내려가 포커스를 줍니다 */
    function focusBoardComposer(sec) {
-     const el = document.getElementById('board-' + (sec === 'notice' ? 'notice' : 'free') + '-title');
-     if (el && el.focus) el.focus();
+     const s = sec === 'notice' ? 'notice' : 'free';
+     const card = document.getElementById('board-' + s + '-composer');
+     const el = document.getElementById('board-' + s + '-title');
+     if (card && card.scrollIntoView) {
+       try { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+       catch (e) { try { card.scrollIntoView(); } catch (e2) { /* 무시 */ } }
+     }
+     if (el && el.focus) {
+       try { el.focus({ preventScroll: true }); }
+       catch (e) { el.focus(); }
+     }
    }
 
    function openBoardComposer(kind) {
