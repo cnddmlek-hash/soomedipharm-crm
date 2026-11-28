@@ -1295,7 +1295,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.29';   // v1.29 — 🎂 원장님 정보 검색 카드 접기·펼치기
+   const APP_VERSION = 'v1.30';   // v1.30 — 🤖 고시문·삭감통보서 Gemini AI 분석 (키 없거나 실패하면 무료 OCR)
 
    const STATE = {
      // 로그인/권한
@@ -1353,6 +1353,7 @@
      // 발송이력/설정
      mailLogs: [],
      hiraConfigured: false,
+     geminiConfigured: false,   // v1.30 — 설정에 GEMINI_API_KEY 가 있는지 (키 원문은 받지 않음)
      emailDraft: null,
      // 월별 실적 (v1.3)
      perfMonth: '',
@@ -3203,6 +3204,7 @@
      STATE.user = data.user || null;
      STATE.isMaster = Boolean(data.isMaster);
      if (data.hiraConfigured !== undefined) STATE.hiraConfigured = Boolean(data.hiraConfigured);
+     if (data.geminiConfigured !== undefined) STATE.geminiConfigured = Boolean(data.geminiConfigured);
      if (data.appVersion) STATE.serverVersion = String(data.appVersion);
    }
 
@@ -8664,7 +8666,10 @@
            '<button class="btn btn-outline btn-sm" id="notice-run" onclick="noticeAnalyze()">🔍 문서 읽고 초안 만들기</button>' +
          '</div>' +
          '<div id="notice-status" style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:6px;">' +
-           '심평원 고시문·심사결과(삭감) 통보서 사진이나 PDF 를 올려 주세요. 스마트폰 사진은 자동으로 줄여 보냅니다.' +
+           '심평원 고시문·심사결과(삭감) 통보서 사진이나 PDF 를 올려 주세요. ' +
+           (STATE.geminiConfigured
+             ? '🤖 Gemini AI가 직접 읽어 요약·이의신청 초안을 만듭니다.'
+             : '무료 드라이브 OCR로 읽습니다. [✉️ 발송이력 · 설정]에 GEMINI_API_KEY를 넣으면 AI 분석으로 바뀝니다.') +
          '</div>' +
          '<div id="notice-result"></div>' +
        '</div>';
@@ -8821,8 +8826,9 @@
 
        NOTICE_DOC.last = res || null;
        renderNoticeResult_();
-       const ok = Boolean(res && res.ocrOk && ((res.summaryLines && res.summaryLines.length) || (res.codes && res.codes.length)));
-       noticeStatus_(esc((res && res.message) || '문서를 읽었습니다.'), ok ? 'ok' : 'warn');
+       const r = NOTICE_DOC.last;
+       const ok = Boolean(r && r.ocrOk && ((r.summaryLines && r.summaryLines.length) || (r.codes && r.codes.length)));
+       noticeStatus_(esc((r && r.message) || '문서를 읽었습니다.'), ok ? 'ok' : 'warn');
      } catch (e) {
        noticeStatus_('❌ ' + esc(friendlyError_(e)), 'err');
      } finally {
@@ -8842,6 +8848,13 @@
      if (!r) { el.innerHTML = ''; return; }
      const key = String(r.docKindKey || '');
      const badge = key === 'cut' ? 'badge-danger' : (key === 'notice' ? 'badge-blue' : 'badge-amber');
+     // v1.30 — 어느 엔진으로 읽었는지 배지로 표시 (Gemini AI / 기본 OCR / OCR 자동 전환)
+     const engine = String(r.analysisEngine || 'ocr');
+     const engineChip = engine === 'gemini'
+       ? chip('🤖 Gemini AI 분석', 'badge-success')
+       : (engine === 'ocr-fallback'
+         ? chip('📄 기본 OCR 분석 (AI에서 자동 전환)', 'badge-amber')
+         : chip('📄 기본 OCR 분석', 'badge-muted'));
      const lines = Array.isArray(r.summaryLines) ? r.summaryLines : [];
      const codes = Array.isArray(r.codes) ? r.codes : [];
      const dates = Array.isArray(r.dates) ? r.dates : [];
@@ -8855,10 +8868,15 @@
      el.innerHTML =
        '<div style="margin-top:10px;border-top:1px dashed #e5e7eb;padding-top:10px;">' +
          '<div class="toolbar" style="gap:6px;flex-wrap:wrap;align-items:center;">' +
+           engineChip +
            chip(r.docKind || '문서 종류 미확인', badge) +
            codes.map(function (c) { return chip(c, 'badge-blue'); }).join('') +
            dates.map(function (d) { return chip(d, 'badge-muted'); }).join('') +
          '</div>' +
+         (r.reasonNote
+           ? '<div style="margin-top:8px;font-size:12.5px;line-height:1.65;color:var(--text);background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;">' +
+               '<b>' + (key === 'cut' ? '🧾 삭감·조정 사유' : '🧾 핵심 취지') + '</b> — ' + esc(r.reasonNote) + '</div>'
+           : '') +
          (lines.length
            ? '<ul style="margin:8px 0 0;padding-left:18px;font-size:12.5px;line-height:1.7;color:var(--text);">' +
                lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul>'
@@ -11358,6 +11376,14 @@
            '<div class="form-group span-2"><label>HIRA_API_KEY (공공데이터포털 인증키 · 비우면 자동조회 꺼짐)</label>' +
              '<input type="password" id="st-hira" placeholder="' + (STATE.hiraConfigured ? '키가 등록되어 있습니다 (변경 시에만 입력)' : '미등록 - 심평원 자동조회 사용 안 함') + '" />' +
            '</div>' +
+           '<div class="form-group span-2"><label>GEMINI_API_KEY (AI 고시문·삭감 분석용 · 비우면 무료 OCR로 동작)</label>' +
+             '<input type="password" id="st-gemini" placeholder="' + (STATE.geminiConfigured ? '키가 등록되어 있습니다 (변경 시에만 입력)' : '미등록 - 무료 드라이브 OCR로 분석') + '" />' +
+             '<small style="display:block;margin-top:4px;color:var(--muted);font-size:11.5px;line-height:1.55;">' +
+               'Google AI Studio <b>aistudio.google.com/apikey</b> 에서 무료 발급 → 붙여넣고 저장. ' +
+               '키가 있으면 고시문·삭감통보서를 <b>Gemini 2.5 Flash</b>가 직접 보고 요약과 이의신청 초안을 씁니다. ' +
+               '키가 없거나 한도·오류가 나면 자동으로 기본 OCR로 전환됩니다.' +
+             '</small>' +
+           '</div>' +
          '</div>' +
          '<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
            '<small style="color:var(--muted);">* 접근 PIN 번호 변경은 구글 시트 [설정] 탭의 접근PIN 행에서 직접 수정하세요.<br />* 내 비밀번호는 상단 🔑 [비밀번호 변경]에서 직접 바꿀 수 있습니다.<br />* 계정 추가·중지·가입 승인은 아래 [👥 사용자 목록 · 가입 승인]에서 합니다.</small>' +
@@ -11416,10 +11442,13 @@
      };
      const hiraKey = document.getElementById('st-hira').value.trim();
      if (hiraKey) updates['HIRA_API_KEY'] = hiraKey;
+     const geminiKey = document.getElementById('st-gemini').value.trim();
+     if (geminiKey) updates['GEMINI_API_KEY'] = geminiKey;
 
      const res = await runServer('saveSettings', [updates]);
      STATE.settings = res.settings;
      if (hiraKey) STATE.hiraConfigured = true;
+     if (geminiKey) STATE.geminiConfigured = true;
      updateUserUi();
      showToast('설정이 저장되었습니다.');
      renderActiveMenu();

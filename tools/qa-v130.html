@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>QA — v1.30 (임시)</title>
+<style>
+  body { font-family: -apple-system, "Malgun Gothic", sans-serif; margin: 0; padding: 10px; background: #f1f5f9; }
+  #log { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; font-size: 12.5px; line-height: 1.6; margin-bottom: 10px; white-space: pre-wrap; }
+  #log .pass { color: #166534; }
+  #log .fail { color: #b91c1c; font-weight: 700; }
+  iframe { width: 1180px; height: 1000px; border: 1px solid #94a3b8; background: #fff; }
+</style>
+</head>
+<body>
+<div id="log">준비 중…</div>
+<iframe id="frame" srcdoc=""></iframe>
+<script>
+/* 임시 QA 페이지 — 라이브 index.html 을 같은 출처 iframe(srcdoc)으로 띄우고
+   서버 호출(runServer)만 가짜로 바꿔 v1.30(Gemini 키 설정 칸 + 분석 배지)을 확인합니다. 확인 후 삭제합니다. */
+(function () {
+  var logEl = document.getElementById('log');
+  var frame = document.getElementById('frame');
+  var lines = [];
+
+  function paint() {
+    logEl.innerHTML = lines.map(function (l) {
+      return '<div class="' + (l.indexOf('PASS') === 0 ? 'pass' : 'fail') + '">' + l.replace(/</g, '&lt;') + '</div>';
+    }).join('') + '<div id="qa-tail">' + (window.__QA_TAIL || '') + '</div>';
+  }
+  function out(ok, msg, extra) {
+    lines.push((ok ? 'PASS' : 'FAIL') + ' — ' + msg + (extra ? '  [' + extra + ']' : ''));
+    paint();
+  }
+  function note(t) { window.__QA_TAIL = t; paint(); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function W() { return frame.contentWindow; }
+  function D() { return frame.contentDocument; }
+  function $(id) { return D().getElementById(id); }
+  function txt(id) { var el = $(id); return el ? String(el.textContent || '').trim() : ''; }
+  async function waitFor(fn, ms, label) {
+    var t0 = Date.now();
+    while (Date.now() - t0 < (ms || 10000)) {
+      try { if (fn()) return true; } catch (e) {}
+      await sleep(120);
+    }
+    throw new Error('대기 시간 초과: ' + (label || ''));
+  }
+
+  /* 가짜 시트 서버 — iframe 안에서 실행되므로 바깥 함수·변수를 쓰지 않고 스스로 완결됩니다. */
+  function qaServer(fn, args) {
+    fn = String(fn || '');
+    var calls = window.__QACalls || (window.__QACalls = {});
+    calls[fn] = (calls[fn] || 0) + 1;
+
+    if (!window.__QASettings) {
+      window.__QASettings = { '회사명': '수메디팜', '담당자명': '최충의', '담당자연락처': '010-2227-8668', '부가세율': '10', '회전일공식': 'MONTHLY_30', '회전일기준일수': '30', '기본경고회전일': '100' };
+    }
+    if (fn === 'getBootstrapData') {
+      return Promise.resolve({
+        settings: window.__QASettings,
+        clients: [
+          { 거래처코드: 'S001', 거래처명: '김가정의원', 진료과: '내과', 사용여부: 'Y' },
+          { 거래처코드: 'S002', 거래처명: '부산튼튼병원', 진료과: '정형외과', 사용여부: 'Y' }
+        ],
+        products: [
+          { 보험코드: '645000010', 제품명: '가나주 5ml', 급여구분: '급여' },
+          { 보험코드: '645000020', 제품명: '케토롤락 트로메타민 주 30mg', 급여구분: '급여' }
+        ],
+        elpharmaCount: 0,
+        today: '2026-11-29', currentMonth: '2026-11',
+        user: { 아이디: 'master', 담당자명: '최충의', 권한: 'MASTER' },
+        isMaster: true, appVersion: 'v1.30',
+        hiraConfigured: true,
+        geminiConfigured: Boolean(window.__QAGeminiConfigured)
+      });
+    }
+    if (fn === 'saveSettings') {
+      var upd = (args && args[0]) || {};
+      window.__QASaveArg = upd;
+      for (var k in upd) if (Object.prototype.hasOwnProperty.call(upd, k)) window.__QASettings[k] = upd[k];
+      if (upd['GEMINI_API_KEY']) window.__QAGeminiSaved = upd['GEMINI_API_KEY'];
+      var safe = {};
+      for (var k2 in window.__QASettings) if (Object.prototype.hasOwnProperty.call(window.__QASettings, k2)) safe[k2] = window.__QASettings[k2];
+      delete safe['GEMINI_API_KEY'];
+      return Promise.resolve({ success: true, settings: safe });
+    }
+    if (fn === 'getMailLogs') return Promise.resolve([]);
+    if (fn === 'getHiraKeyStatus') return Promise.resolve({ configured: true });
+    if (fn === 'getUsersList') return Promise.resolve({ success: true, users: [{ 아이디: 'master', 담당자명: '최충의', 권한: 'MASTER' }], pendingCount: 0 });
+    if (fn === 'getBirthdayTriggerStatus') return Promise.resolve({ installed: false, emails: {} });
+    if (fn === 'analyzeNoticeOrCutDoc') {
+      window.__QANoticeArg = (args && args[0]) || {};
+      return Promise.resolve(window.__QANoticeReply || {});
+    }
+    return Promise.resolve({});
+  }
+
+  var STUB = [
+    'window.__QACalls = {};',
+    'window.__QA_SERVER = ' + qaServer.toString() + ';',
+    'runServer = function (fnName, args, opts) { try { return window.__QA_SERVER(fnName, args); } catch (e) { return Promise.reject(e); } };',
+    'registerServiceWorker = function () {};'
+  ].join('\n');
+
+  async function boot() {
+    var res = await fetch('../index.html?qa=' + Date.now(), { cache: 'no-store' });
+    var html = await res.text();
+    var guard = '<script>window.__errs=[];window.addEventListener("error",function(e){window.__errs.push(String((e&&e.message)||e));});' +
+      'window.addEventListener("unhandledrejection",function(e){window.__errs.push("unhandledrejection: "+String((e&&e.reason&&e.reason.message)||(e&&e.reason)||e));});' +
+      'var _ce=console.error;console.error=function(){try{window.__errs.push(Array.prototype.join.call(arguments," "));}catch(x){}return _ce.apply(console,arguments);};<\/script>\n<script>';
+    var first = html.indexOf('<script>');
+    if (first < 0) throw new Error('index.html 에서 <script> 를 찾지 못했습니다');
+    html = html.slice(0, first) + guard + html.slice(first + '<script>'.length);
+    var closeIdx = html.lastIndexOf('<\/script>');
+    if (closeIdx < 0) throw new Error('index.html 에서 닫는 script 태그를 찾지 못했습니다');
+    html = html.slice(0, closeIdx) + '\n' + STUB + '\n' + html.slice(closeIdx);
+
+    try {
+      localStorage.setItem('crm_server_url', 'https://script.google.com/macros/s/QA-PLACEHOLDER/exec');
+      localStorage.setItem('crm_session_v1', JSON.stringify({ token: 'qa-token', user: { 아이디: 'master', 담당자명: '최충의' }, isMaster: true }));
+    } catch (e) {}
+
+    frame.srcdoc = html;
+    await waitFor(function () { return D() && D().readyState === 'complete' && W().__errs; }, 20000, 'iframe 로드');
+    await sleep(600);
+  }
+
+  var GEMINI_RESULT = {
+    success: true,
+    analysisEngine: 'gemini',
+    docKind: '삭감통보서',
+    docKindKey: 'cut',
+    summaryLines: [
+      '케토롤락 트로메타민 주 30mg 1회분이 투여 기준(1일 1회) 초과로 삭감 조정되었습니다.',
+      '조정코드 0231, 불인정 금액 12,340원입니다.',
+      '이의신청은 통보일로부터 90일 이내에 가능합니다.'
+    ],
+    codes: ['조정코드 0231', '보험코드 645001230'],
+    dates: ['통보일 2026-11-20'],
+    appealDraft: '[이의신청 / 재심사조정청구 사유서 초안]\n\n■ 청구기관: 김가정의원\n■ 대상 품목: 케토롤락 트로메타민 주 30mg\n' +
+      '■ 관련 고시·문서번호: 조정코드 0231\n■ 시행일·적용일: 통보일 2026-11-20\n\n■ 통보(조정) 내용 요지\n' +
+      ' - 요양급여의 적용기준 및 방법에 관한 세부사항에 따라 1일 1회만 인정되는 약제를 2회 투여분으로 청구하여 1회분이 삭감되었습니다.\n\n' +
+      '■ 이의신청 사유\n 1. 해당 약제는 관련 고시에서 정한 산정 기준에 따라 실제 진료기록상 처방·투여 내역이 확인됩니다.\n' +
+      ' 2. [환자 상병/진료내역 기재] — 상병명, 처방일자, 투여량·기간을 적어 주세요.\n' +
+      ' 3. 따라서 해당 삭감(조정) 처분은 재검토되어 주시기를 요청드립니다.\n\n■ 첨부서류: 진료기록부 사본, 처방전·투약기록, 관련 고시문 사본\n■ 작성일: 2026-11-29',
+    reasonNote: '투여 기준(1일 1회) 초과 처방으로 1회분이 삭감 조정되었습니다.',
+    rawTextPreview: '',
+    ocrOk: true,
+    message: '🤖 Gemini AI 가 삭감통보서 로 읽었습니다 — 요약 3줄 · 코드 2개 · 날짜 1개. 초안을 보내기 전에 상병·진료내역을 채워 주세요.'
+  };
+
+  async function main() {
+    note('index.html 내려받는 중…');
+    await boot();
+    var viewMode = (new URLSearchParams(location.search)).get('view') || '';
+
+    out(W().eval('APP_VERSION') === 'v1.30', 'APP_VERSION 이 v1.30', String(W().eval('APP_VERSION')));
+
+    // ---------- 1) ✉️ 발송이력 · 설정 : GEMINI_API_KEY 칸 ----------
+    W().eval("switchMenu('docs')");
+    await waitFor(function () { return $('st-gemini'); }, 12000, '설정 화면');
+    await sleep(500);
+
+    out(!!$('st-gemini'), '설정 탭에 GEMINI_API_KEY 입력칸이 있다');
+    out($('st-gemini') && $('st-gemini').getAttribute('type') === 'password', '입력칸은 password 타입(가려서 입력)',
+      $('st-gemini') ? $('st-gemini').getAttribute('type') : '(없음)');
+    var cardText = $('st-gemini') ? String($('st-gemini').closest('.card').textContent || '') : '';
+    out(cardText.indexOf('GEMINI_API_KEY') !== -1 && cardText.indexOf('AI 고시문·삭감') !== -1, '라벨에 GEMINI_API_KEY (AI 고시문·삭감 분석용)');
+    out(cardText.indexOf('aistudio.google.com/apikey') !== -1, '무료 키 발급 안내(aistudio.google.com/apikey)');
+    out(cardText.indexOf('Gemini 2.5 Flash') !== -1, '어떤 모델이 읽는지 안내(Gemini 2.5 Flash)');
+    out(cardText.indexOf('자동으로 기본 OCR로 전환') !== -1, '한도·오류 시 OCR 자동 전환 안내');
+    out(!!$('st-hira'), '기존 HIRA_API_KEY 칸도 그대로 있다');
+    var hiraTop = $('st-hira').getBoundingClientRect().top;
+    var gemTop = $('st-gemini').getBoundingClientRect().top;
+    out(gemTop > hiraTop, 'GEMINI 칸이 HIRA_API_KEY 바로 아래에 있다');
+    out(($('st-gemini').getAttribute('placeholder') || '').indexOf('미등록') !== -1, '키 미등록일 때 안내 문구',
+      $('st-gemini').getAttribute('placeholder'));
+
+    if (viewMode === 'settings') {
+      $('st-gemini').value = 'AIzaSyQA-테스트키';
+      W().eval("document.querySelector('.page-title').scrollIntoView({block:'start'})");
+      await sleep(400);
+      note('보기 모드 — 설정 탭 GEMINI_API_KEY');
+      window.__QA_DONE = true;
+      return;
+    }
+
+    // 저장 → saveSettings 에 GEMINI_API_KEY 가 실려 나가고 화면이 등록 상태로 바뀐다
+    $('st-gemini').value = 'AIzaSyQA-테스트키';
+    var saveBtn = null;
+    var btns = D().querySelectorAll('.card button');
+    for (var i = 0; i < btns.length; i++) if (String(btns[i].textContent).indexOf('설정 저장') !== -1) { saveBtn = btns[i]; break; }
+    out(!!saveBtn, '"설정 저장" 버튼이 있다');
+    if (saveBtn) {
+      saveBtn.click();
+      await waitFor(function () { return W().__QACalls['saveSettings'] === 1; }, 6000, 'saveSettings 호출');
+      await sleep(900);
+      out(W().__QASaveArg && W().__QASaveArg['GEMINI_API_KEY'] === 'AIzaSyQA-테스트키', 'saveSettings 로 GEMINI_API_KEY 가 전달됨',
+        W().__QASaveArg ? JSON.stringify(Object.keys(W().__QASaveArg)) : '(없음)');
+      out(W().eval('STATE.geminiConfigured') === true, '저장 후 STATE.geminiConfigured = true');
+      out((($('st-gemini') || {}).placeholder || '').indexOf('등록되어') !== -1, '저장 후 placeholder 가 "등록되어 있습니다"',
+        ($('st-gemini') || {}).placeholder);
+      out(W().eval('STATE.settings') && W().eval('STATE.settings')['GEMINI_API_KEY'] === undefined, 'STATE.settings 에 키 원문이 남지 않는다');
+    }
+
+    // ---------- 2) 📑 고시문 · 삭감통보서 자동 읽기 : 분석 엔진 배지 ----------
+    W().eval("switchMenu('guide')");
+    await waitFor(function () { return $('notice-card') && $('notice-status'); }, 12000, '처방 셋팅 화면');
+    await sleep(700);
+    out(!!$('notice-status'), '📑 고시문·삭감통보서 카드가 그려졌다');
+    out(txt('notice-status').indexOf('Gemini AI가 직접 읽어') !== -1, '키 등록 시 카드 안내가 Gemini로 바뀐다', txt('notice-status'));
+
+    // 결과 영역 모의 렌더 — Gemini 성공 결과
+    W().eval('NOTICE_DOC.last = ' + JSON.stringify(GEMINI_RESULT) + ';');
+    W().eval('renderNoticeResult_()');
+    await sleep(300);
+    var resText = txt('notice-result');
+    out(resText.indexOf('🤖 Gemini AI 분석') !== -1, 'analysisEngine=gemini → "🤖 Gemini AI 분석" 배지');
+    out(resText.indexOf('📄 기본 OCR 분석') === -1, 'Gemini 결과에는 OCR 배지가 붙지 않는다');
+    out(resText.indexOf('🧾 삭감·조정 사유') !== -1 && resText.indexOf('1일 1회') !== -1, '삭감·조정 사유 한 줄 요약이 보인다');
+    out(resText.indexOf('조정코드 0231') !== -1 && resText.indexOf('통보일 2026-11-20') !== -1, '코드·날짜 칩이 보인다');
+    out($('notice-draft') && $('notice-draft').value.indexOf('[환자 상병/진료내역 기재]') !== -1, '초안에 환자정보 빈칸이 남아 있다');
+    out(!!$('notice-draft') && $('notice-draft').value.indexOf('■ 이의신청 사유') !== -1, '이의신청 사유서 형식 초안');
+
+    if (viewMode === 'notice') {
+      W().eval("document.getElementById('notice-card').scrollIntoView({block:'start'})");
+      await sleep(400);
+      note('보기 모드 — Gemini 분석 결과 배지');
+      window.__QA_DONE = true;
+      return;
+    }
+
+    // fallback 배지
+    var fb = JSON.parse(JSON.stringify(GEMINI_RESULT));
+    fb.analysisEngine = 'ocr-fallback';
+    fb.message = '(Gemini AI 분석을 쓰지 못해 무료 OCR 로 읽었습니다 — Gemini 응답 오류 (HTTP 429): Quota exceeded) 삭감통보서 로 읽었습니다 — 요약 3줄.';
+    W().eval('NOTICE_DOC.last = ' + JSON.stringify(fb) + ';');
+    W().eval('renderNoticeResult_()');
+    await sleep(250);
+    out(txt('notice-result').indexOf('📄 기본 OCR 분석 (AI에서 자동 전환)') !== -1, 'analysisEngine=ocr-fallback → "📄 기본 OCR 분석 (AI에서 자동 전환)" 배지');
+
+    // 키 없는 OCR 배지
+    var ocr = JSON.parse(JSON.stringify(GEMINI_RESULT));
+    ocr.analysisEngine = 'ocr';
+    W().eval('NOTICE_DOC.last = ' + JSON.stringify(ocr) + ';');
+    W().eval('renderNoticeResult_()');
+    await sleep(250);
+    out(txt('notice-result').indexOf('📄 기본 OCR 분석') !== -1 && txt('notice-result').indexOf('자동 전환') === -1, 'analysisEngine=ocr → "📄 기본 OCR 분석" 배지');
+
+    // 상태 문구 — Gemini 실패 사유가 화면에 그대로 보인다
+    W().eval('noticeStatus_(' + JSON.stringify(fb.message) + ', "warn")');
+    await sleep(150);
+    out(txt('notice-status').indexOf('HTTP 429') !== -1, '자동 전환 사유(HTTP 429)가 안내에 보인다');
+
+    // ---------- 3) 서비스워커 캐시 버전 ----------
+    try {
+      var swText = await (await fetch('../sw.js?qa=' + Date.now(), { cache: 'no-store' })).text();
+      out(/soomedipharm-crm-v25/.test(swText), 'sw.js 캐시 버전 v25', (swText.match(/const CACHE = '[^']+'/) || [''])[0]);
+    } catch (e) { out(false, 'sw.js 를 읽지 못했다', String(e)); }
+
+    var errs = W().__errs;
+    out(errs.length === 0, '전체 동작 중 콘솔·런타임 오류 0건', errs.join(' | '));
+
+    var fails = lines.filter(function (l) { return l.indexOf('FAIL') === 0; }).length;
+    note(fails ? ('실패 ' + fails + '건 / 전체 ' + lines.length + '건') : ('모두 통과 · 전체 ' + lines.length + '건'));
+    window.__QA_RESULT = { total: lines.length, fails: fails, lines: lines, gemini: W().eval('STATE.geminiConfigured') };
+    window.__QA_DONE = true;
+  }
+
+  main().catch(function (e) {
+    out(false, 'QA 실행 오류: ' + String((e && e.message) || e));
+    window.__QA_RESULT = { error: String((e && e.stack) || e), lines: lines };
+    window.__QA_DONE = true;
+  });
+})();
+</script>
+</body>
+</html>
