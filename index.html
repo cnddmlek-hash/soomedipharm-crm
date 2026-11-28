@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
- <title>수메디팜 미니 CRM v1.29</title>
+ <title>수메디팜 미니 CRM v1.30</title>
 
  <!-- ---------------- PWA (홈 화면 앱) 설정 ---------------- -->
  <meta name="description" content="수메디팜 미니 CRM — 거래처·주문·수금·회전일을 구글 시트로 실시간 관리하는 영업 앱" />
@@ -854,7 +854,7 @@
  <div id="login-overlay" class="login-overlay">
    <div class="login-card">
      <div class="login-brand">
-       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.29</span></div>
+       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.30</span></div>
        <div class="s">담당자 아이디로 로그인해 주세요</div>
      </div>
      <div class="form-group" style="margin-bottom:10px;">
@@ -1257,7 +1257,7 @@
    <!-- PC 사이드바 -->
    <aside class="sidebar">
      <div class="sidebar-brand">
-       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.29</span></h1>
+       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.30</span></h1>
        <div class="sub" id="brand-sub">로딩 중...</div>
      </div>
      <nav class="sidebar-nav" id="sidebar-nav"></nav>
@@ -1274,7 +1274,7 @@
 
    <!-- 모바일 상단 헤더 -->
    <header class="mobile-header">
-     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.29</span></h1>
+     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.30</span></h1>
      <div style="display:flex;gap:6px;align-items:center;">
        <span id="m-user" class="ver-chip" style="display:none;" onclick="openPasswordModal()" title="내 계정 · 비밀번호 변경"></span>
        <button class="btn btn-sm" id="guest-login-btn" style="display:none;background:rgba(255,255,255,0.16);color:#fff;" onclick="exitGuestPreview()">🔑 로그인</button>
@@ -8850,11 +8850,6 @@
      const badge = key === 'cut' ? 'badge-danger' : (key === 'notice' ? 'badge-blue' : 'badge-amber');
      // v1.30 — 어느 엔진으로 읽었는지 배지로 표시 (Gemini AI / 기본 OCR / OCR 자동 전환)
      const engine = String(r.analysisEngine || 'ocr');
-     const engineChip = engine === 'gemini'
-       ? chip('🤖 Gemini AI 분석', 'badge-success')
-       : (engine === 'ocr-fallback'
-         ? chip('📄 기본 OCR 분석 (AI에서 자동 전환)', 'badge-amber')
-         : chip('📄 기본 OCR 분석', 'badge-muted'));
      const lines = Array.isArray(r.summaryLines) ? r.summaryLines : [];
      const codes = Array.isArray(r.codes) ? r.codes : [];
      const dates = Array.isArray(r.dates) ? r.dates : [];
@@ -8862,6 +8857,11 @@
      const chip = function (text, cls) {
        return '<span class="badge ' + cls + '" style="margin-right:4px;">' + esc(text) + '</span>';
      };
+     const engineChip = engine === 'gemini'
+       ? chip('🤖 Gemini AI 분석', 'badge-success')
+       : (engine === 'ocr-fallback'
+         ? chip('📄 기본 OCR 분석 (AI에서 자동 전환)', 'badge-amber')
+         : chip('📄 기본 OCR 분석', 'badge-muted'));
      const draftTitle = key === 'cut' ? '📝 이의신청 사유서 초안'
        : (key === 'notice' ? '📝 고시 요약·적용 검토 메모 초안' : '📝 문서 요약 메모 초안');
 
