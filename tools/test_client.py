@@ -93,9 +93,9 @@ def main():
         print('(esprima 없음 — 문법 검사 생략: pip install esprima)')
 
     # 2) v1.14 요소
-    check("const APP_VERSION = 'v1.20'" in js, 'APP_VERSION 이 v1.20 이 아닙니다')
-    check('<title>수메디팜 미니 CRM v1.20</title>' in html, '브라우저 탭 제목의 버전이 v1.20 이 아닙니다')
-    check('ver-chip">v1.20' in html and 'ver-chip dark">v1.20' in html, '로그인 화면·상단 바의 버전 칩이 v1.20 이 아닙니다')
+    check("const APP_VERSION = 'v1.21'" in js, 'APP_VERSION 이 v1.21 이 아닙니다')
+    check('<title>수메디팜 미니 CRM v1.21</title>' in html, '브라우저 탭 제목의 버전이 v1.21 이 아닙니다')
+    check('ver-chip">v1.21' in html and 'ver-chip dark">v1.21' in html, '로그인 화면·상단 바의 버전 칩이 v1.21 이 아닙니다')
     check('id: \'drug\'' in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
     check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
     # v1.11 — 🧭 처방 셋팅은 경구제 전용 · 💉 주사제 셋팅은 💉 주사제 주문 메뉴 안 탭
@@ -892,6 +892,7 @@ def main():
           function loadCoverageNotes() {} function renderGuideDeptChips() {} function renderGuideBody() {}
           function v14NoticeHtml_() { return ''; }
           function renderActiveMenu() {}
+          function renderGuidePicked() {}      // v1.21 — 담은 품목 목록은 별도 검사에서 그립니다
         ''')
         names = ['orderTabBar_', 'orderInjectStripHtml_', 'injCautionsHtml_', 'renderInjectPanelHtml_',
                  'renderInjectBody', 'renderInjectRecommend', 'renderInjectProtocols', 'renderInjectCards',
@@ -1183,7 +1184,7 @@ def main():
                      'guideCodesOfIngredient_', 'guidePickCodes_', 'guidePickCount_',
                      'guideBulkAddLabel_', 'guidePendingSet_', 'guidePendingCount_',
                      'guideSyncPickUI_', 'guideSyncPendingUI_', 'guideToggleIngredient', 'guideToggleProduct',
-                     'guideAddSelected'], '처방 셋팅 선택 담기'):
+                     'guideAddSelected', 'renderGuidePicked'], '처방 셋팅 선택 담기'):
             check('073001620,073001480' in q12(c2.eval('guideCodesOfIngredient_(STATE.guideData.items[0])')),
                   '성분 체크가 제품 보험코드를 함께 기억하지 않습니다')
             c2.eval("guideToggleIngredient('k1', true);")
@@ -1284,7 +1285,7 @@ def main():
         check(load_maker_ctx(c5, js), '앱 내장 제약사 목록을 실행 문맥에 넣지 못했습니다')
         c5.eval('function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;"); }')
         names5 = ['fmtNum', 'rxCodeNorm_', 'rxCodeKey_', 'makerFromName_', 'makerOf_', 'makerCellHtml_',
-                  'guidePickCodes_', 'guideCacheProduct_', 'guideFindProduct_', 'printItemRows_',
+                  'guidePickCodes_', 'guidePickedList_', 'guideCacheProduct_', 'guideFindProduct_', 'printItemRows_',
                   'guidePrintRows_', 'injectPrintRows_', 'injPickedProducts_', 'rxPrintRows_',
                   'printStamp_', 'printDocHtml_', 'printArea_', 'printGuideSheet', 'printInjectSheet',
                   'printRxSheet']
@@ -1792,7 +1793,8 @@ def main():
                    'guidePendingCount_', 'guideSendBtnLabel_', 'guideToggleProduct', 'guideAddSelected',
                    'guideSyncPickUI_', 'guideSyncPendingUI_', 'guideAddItem', 'guidePrintRows_',
                    'printItemRows_', 'makerOf_', 'makerFromName_', 'guideCodesOfIngredient_',
-                   'guideIngItemsTableHtml_']
+                   'guideIngItemsTableHtml_',
+                   'renderGuidePicked', 'guidePickedList_', 'guidePickedRow_', 'guidePickedCardHtml_']
         blocks14 = [extract_fn(js, n) for n in names14]
         missing14 = [n for n, b in zip(names14, blocks14) if b is None]
         check(not missing14, '성분 검색 함수를 추출하지 못했습니다: %s' % missing14)
@@ -1902,6 +1904,7 @@ def main():
 
             # (D) 검색 결과에서 고른 품목이 원장님 안내용 출력 대상에 들어간다
             c.eval("STATE.guideIngData.groups.forEach(function (g) { (g.items || []).forEach(guideCacheProduct_); });")
+            c.eval("STATE.guidePending = []; STATE.rxGuideCodes = [];")   # v1.21 — 담은 목록이 비었을 때의 출력 대상
             c.eval("guideToggleProduct('640902490', true);")
             rows = json.loads(q14(c.eval('JSON.stringify(guidePrintRows_())')))
             check(len(rows) == 1 and rows[0]['보험코드'] == '640902490',
@@ -2253,7 +2256,7 @@ def main():
         if all(blocks15b):
             c = quickjs.Context()
             c.eval("""
-            var APP_VERSION = 'v1.20';
+            var APP_VERSION = 'v1.21';
             var STATE = { guestMode: false, isMaster: false,
               user: { 아이디: 'choi', 담당자명: '최충의' },
               settings: { 회사명: '수메디팜', 담당자명: '최충의' } };
@@ -2269,7 +2272,7 @@ def main():
                 c.eval(b)
             c.eval('updateUserUi();')
             sub = q15b(c.eval("__els['brand-sub'].textContent"))
-            check(sub == '수메디팜 · v1.20', '메뉴판 브랜드 부제가 회사명·버전이 아닙니다: %s' % sub)
+            check(sub == '수메디팜 · v1.21', '메뉴판 브랜드 부제가 회사명·버전이 아닙니다: %s' % sub)
             check('최충의' not in sub, '메뉴판 맨 위에 개인 이름이 남아 있습니다: %s' % sub)
             check(q15b(c.eval("__els['m-user'].style.display")) == 'none',
                   '모바일 상단 바에 개인 이름 칩이 남아 있습니다')
@@ -2277,6 +2280,242 @@ def main():
                   '사이드바 하단 계정 표시에서 사용자 이름이 사라졌습니다')
     except ImportError:
         print('(quickjs 없음 — 메뉴판 브랜드 이름 검사 생략: pip install quickjs)')
+
+    # 16) v1.21 — 🛒 처방 셋팅 '담은 품목 목록' (검색 결과 바로 아래 · 심평원 급여 가이드 위)
+    check("'<div id=\"guide-picked\"></div>'" in js,
+          '처방 셋팅에 담은 품목 목록 자리(#guide-picked)가 없습니다')
+    oral_fn = extract_fn(js, 'renderGuideOralHtml_') or ''
+    check(oral_fn != '', 'renderGuideOralHtml_ 를 찾지 못했습니다')
+    if oral_fn:
+        check(oral_fn.index('guideIngSearchCardHtml_()') < oral_fn.index('guide-picked')
+              < oral_fn.index('guide-coverage') < oral_fn.index('guide-body'),
+              '담은 품목 목록이 검색 결과와 심평원 급여 가이드 사이에 있지 않습니다')
+    for need in ['guidePickedList_', 'guidePickedRow_', 'guidePickedCardHtml_', 'renderGuidePicked',
+                 'guideRemovePicked', 'guideClearPicked', 'guideSendPickedToRx']:
+        check('function %s' % need in js, 'v1.21 담은 품목 목록에 %s 가 없습니다' % need)
+    for need in ['🛒 담은 품목 목록', '전체 비우기', '💊 처방전 입력으로 보내기',
+                 '원장님 안내용 출력 / PDF', '✕ 빼기', '총 ']:
+        check(need in js, 'v1.21 담은 품목 목록 카드에 %s 가 없습니다' % need)
+    # 검색·담기·체크 어느 경로에서도 카드가 다시 그려지는지 (스크롤 유지를 위해 목록만 갱신)
+    for fn_name, label in [('guideSyncPickUI_', '체크'), ('guideSyncPendingUI_', '담기'),
+                           ('toggleGuideAll', '전체 선택')]:
+        body = extract_fn(js, fn_name) or ''
+        check('renderGuidePicked()' in body, '%s 시 담은 품목 목록이 갱신되지 않습니다' % label)
+    check('renderGuidePicked()' in (extract_fn(js, 'renderGuidePage') or ''),
+          '처방 셋팅 화면을 그릴 때 담은 품목 목록이 그려지지 않습니다')
+    # 비회원 미리보기에는 담은 품목 목록을 내보내지 않습니다 (기능·수수료율 잠금 유지)
+    gp_body16 = extract_fn(js, 'guestPreviewBody_') or ''
+    check('guide-picked' not in gp_body16 and '담은 품목 목록' not in gp_body16,
+          '비회원 미리보기에 담은 품목 목록이 노출됩니다')
+    # 출력/PDF 도 담은 목록(체크 + 담기) 그대로
+    gpr = extract_fn(js, 'guidePrintRows_') or ''
+    check('guidePickedList_()' in gpr, '원장님 안내용 출력이 담은 품목 목록을 쓰지 않습니다')
+
+    # 16-a) 담은 품목 목록 실행 검사 — 표시 · 빼기 · 전체 비우기 · 처방전 전송
+    try:
+        import quickjs
+        import json as _json16
+
+        def q16(v):
+            return v.decode() if isinstance(v, bytes) else v
+
+        names16 = ['guidePickedList_', 'guidePickedRow_', 'guidePickedCardHtml_', 'renderGuidePicked',
+                   'guideRemovePicked', 'guideClearPicked', 'guideSendPickedToRx',
+                   'guideToggleProduct', 'guideToggleIngredient', 'guideSyncPickUI_', 'guideSyncPendingUI_',
+                   'guideAddSelected', 'guideAddItem', 'guideCacheProduct_', 'guideFindProduct_',
+                   'guidePendingSet_', 'guidePendingCount_', 'guideSendBtnLabel_', 'guidePickCodes_',
+                   'guidePickCount_', 'guideBulkAddLabel_', 'guideCodesOfIngredient_', 'applyGuidePending',
+                   'rxCodeNorm_', 'rxCodeKey_', 'makerOf_', 'makerFromName_', 'rxDedupeRows_']
+        blocks16 = [extract_fn(js, n) for n in names16]
+        missing16 = [n for n, b in zip(names16, blocks16) if b is None]
+        check(not missing16, 'v1.21 담은 품목 목록 함수를 추출하지 못했습니다: %s' % missing16)
+
+        ATOR16 = {
+            '성분키': 'atorvastatin', '성분명': '아토르바스타틴', '분류': '고지혈증치료제',
+            '품목수': 2, '제약사수': 2, '최고수수료율': 57, '최저약가': 1254, '잘림': False,
+            'items': [
+                {'표': '경구', '보험코드': '621804250', '품목명': '아토브정10/10mg', '규격': '10정',
+                 '제약사': '한국파비스제약', '약가': 1254, '수수료율': 57, '급여구분': '급여', '성분': '아토르바스타틴'},
+                {'표': '경구', '보험코드': '640902490', '품목명': '아토타틴정10mg', '규격': '10정',
+                 '제약사': '(주)일화', '약가': 1971, '수수료율': 34, '급여구분': '급여', '성분': '아토르바스타틴'},
+            ],
+        }
+        ROSU16 = {
+            '성분키': 'rosuvastatin', '성분명': '로수바스타틴', '분류': '고지혈증치료제',
+            '품목수': 1, '제약사수': 1, '최고수수료율': 40, '최저약가': 500, '잘림': False,
+            'items': [
+                {'표': '경구', '보험코드': '641601230', '품목명': '로수정10mg', '규격': '10정',
+                 '제약사': '한화제약㈜', '약가': 500, '수수료율': 40, '급여구분': '급여', '성분': '로수바스타틴'},
+            ],
+        }
+
+        if not missing16:
+            c = quickjs.Context()
+            c.eval("""
+            var STATE = {
+              guideIngQ: '아토르', guideIngKey: '', guideIngOpen: {}, guideIngLoading: false,
+              guideIngData: null, guidePick: {}, guidePending: [], rxGuideCodes: [],
+              rxClient: 'S001', rxRows: [], rxDirty: false,
+              guideProductCache: {}, guideData: null, guideRec: null, guideSelected: {},
+              products: [], rxFrequent: [], clients: [], guideDept: '', guideMode: 'maxrate',
+              guideMaxMakers: 3, guideMaker: '', guideMakerQ: '', guideMakerData: null
+            };
+            var __toasts = [], __menus = [], __els = {}, __renders = 0, __sums = 0;
+            function showToast(m) { __toasts.push(String(m)); }
+            function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+            function fmtNum(n) { return String(Math.round(Number(n || 0))).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ','); }
+            function findClient(code) {
+              if (String(code) === 'S001') return { 거래처코드: 'S001', 거래처명: '푸른정의원' };
+              return null;
+            }
+            function switchMenu(id) { __menus.push(String(id)); }
+            function renderActiveMenu() {}
+            function renderRxRows() { __renders++; }
+            function updateRxSummary() { __sums++; }
+            var document = { querySelectorAll: function () { return []; },
+              getElementById: function (id) {
+                if (!__els[id]) __els[id] = { _h: '', value: '', title: '', className: '', classList: { add: function () {}, remove: function () {} },
+                  set innerHTML(v) { this._h = v; }, get innerHTML() { return this._h || ''; } };
+                return __els[id];
+              } };
+            """)
+            check(load_maker_ctx(c, js), '앱 내장 제약사 목록을 실행 문맥에 넣지 못했습니다')
+            for b in blocks16:
+                c.eval(b)
+
+            def card():
+                return q16(c.eval("(__els['guide-picked'] || {}).innerHTML || ''"))
+
+            # (A) 성분을 펼쳐 체크 → 아래 담은 품목 목록에 성분·품목·제약사·보험코드·약가·요율이 산다
+            c.eval('STATE.guideIngData = ' + _json16.dumps(
+                {'q': '아토르', 'total성분': 1, 'total품목': 2, 'shown성분': 1, 'groups': [ATOR16]},
+                ensure_ascii=False) + '; '
+                # 실제 화면(loadGuideIngSearch)처럼 검색 결과를 보험코드로 기억해 둡니다
+                'STATE.guideIngData.groups.forEach(function (g) { (g.items || []).forEach(guideCacheProduct_); });'
+                'renderGuidePicked();')
+            empty = card()
+            check('🛒 담은 품목 목록' in empty and '총 0개' in empty,
+                  '처음 화면에 담은 품목 목록(0개)이 없습니다: %s' % empty[:200])
+            check('아직 담은 품목이 없습니다' in empty, '담은 품목이 없을 때 안내가 없습니다')
+            c.eval("guideToggleProduct('621804250', true);")
+            html1 = card()
+            for need in ['아토르바스타틴', '아토브정10/10mg', '한국파비스제약', '621804250', '1,254원', '57%',
+                         '총 1개', '✕ 빼기', 'guideRemovePicked', '전체 비우기',
+                         '💊 처방전 입력으로 보내기 (1)', '🖨️ 원장님 안내용 출력 / PDF']:
+                check(need in html1, '담은 목록에 %s 가 없습니다' % need)
+            check('guideSendPickedToRx' in html1, '담은 목록에서 처방전 전송 버튼이 연결되지 않았습니다')
+            check(int(c.eval('guidePickedList_().length')) == 1, '체크한 품목이 담은 목록에 들어가지 않았습니다')
+
+            # (B) 다른 성분·다른 화면으로 옮겨 다녀도 담은 목록은 그대로
+            c.eval("STATE.guideMaker = '한화제약'; STATE.guideMakerQ = '한화제약'; STATE.guideIngData = null; renderGuidePicked();")
+            keep = card()
+            check('아토브정10/10mg' in keep and '총 1개' in keep,
+                  '제약사 필터로 옮기면 담은 목록이 사라집니다: %s' % keep[:200])
+            c.eval('STATE.guideIngData = ' + _json16.dumps(
+                {'q': '로수', 'total성분': 1, 'total품목': 1, 'shown성분': 1, 'groups': [ROSU16]},
+                ensure_ascii=False) + "; STATE.guideMaker = ''; "
+                "STATE.guideIngData.groups.forEach(function (g) { (g.items || []).forEach(guideCacheProduct_); });"
+                "guideToggleProduct('641601230', true);")
+            two = card()
+            check('아토브정10/10mg' in two and '로수정10mg' in two and '총 2개' in two,
+                  '검색을 옮겨 담아도 이전 품목이 남지 않습니다: %s' % two[:300])
+            check('1,754원' in two, '담은 목록 약가 합계가 다릅니다: %s' % two[:300])
+            c.eval('guideAddSelected();')
+            check('총 2개' in card(), '선택 항목 담기 뒤 담은 목록이 중복으로 늘었습니다')
+            check(int(c.eval('guidePickedList_().length')) == 2, '담은 목록 중복 제거가 안 됩니다')
+
+            # (C) ✕ 빼기 — 담은 목록·체크에서 함께 빠지고 위 품목 표의 체크도 풀린다
+            c.eval("guideRemovePicked('621804250');")
+            removed = card()
+            check('아토브정10/10mg' not in removed and '로수정10mg' in removed and '총 1개' in removed,
+                  '✕ 빼기가 담은 목록에서 지우지 못했습니다: %s' % removed[:300])
+            check(c.eval("STATE.guidePick['621804250'] ? 1 : 0") == 0, '✕ 빼기가 체크를 풀지 않았습니다')
+            check(q16(c.eval('__toasts[__toasts.length - 1]')).find('뺐습니다') != -1, '✕ 빼기 안내가 없습니다')
+
+            # (D) 전체 비우기
+            c.eval('guideClearPicked();')
+            cleared = card()
+            check('총 0개' in cleared and '아직 담은 품목이 없습니다' in cleared,
+                  '전체 비우기가 담은 목록을 비우지 못했습니다: %s' % cleared[:200])
+            check(int(c.eval('STATE.guidePending.length')) == 0 and int(c.eval('guidePickCount_()')) == 0,
+                  '전체 비우기 뒤에도 담은 품목·체크가 남아 있습니다 ')
+
+            # (E) 💊 처방전 입력으로 보내기 — 담은 목록 그대로 처방전 화면으로
+            c.eval("guideToggleProduct('640902490', true); guideToggleProduct('641601230', true);")
+            c.eval('guideSendPickedToRx();')
+            sent = _json16.loads(q16(c.eval("JSON.stringify([__menus[__menus.length - 1], STATE.guidePending.slice().sort(), STATE.rxGuideCodes.slice().sort()])")))
+            check(sent == ['prescription', ['640902490', '641601230'], ['640902490', '641601230']],
+                  '담은 목록이 처방전 화면으로 그대로 넘어가지 않았습니다: %s' % sent)
+            check(q16(c.eval('__toasts[__toasts.length - 1]')).find('푸른정의원') != -1,
+                  '담을 병원 안내가 없습니다: %s' % q16(c.eval('__toasts[__toasts.length - 1]')))
+            c.eval('applyGuidePending();')
+            got16 = q16(c.eval("STATE.rxRows.map(function (r) { return r.보험코드; }).sort().join(',')"))
+            check(got16 == '640902490,641601230', '담은 목록이 처방전 목록에 들어가지 않았습니다: %s' % got16)
+
+            # (F) 담은 것이 없으면 보내지 않고 안내만
+            c.eval('STATE.guidePending = []; STATE.guidePick = {}; STATE.rxGuideCodes = [];')
+            before_menus = int(c.eval('__menus.length'))
+            c.eval('guideSendPickedToRx();')
+            check(int(c.eval('__menus.length')) == before_menus, '담은 것이 없는데 화면을 옮겼습니다')
+            check(q16(c.eval('__toasts[__toasts.length - 1]')).find('담은 품목이 없습니다') != -1,
+                  '담은 것이 없을 때 안내가 없습니다')
+    except ImportError:
+        print('(quickjs 없음 — v1.21 담은 품목 목록 실행 검사 생략: pip install quickjs)')
+
+    # 17) v1.21 — 🏭 제약사를 고르면 성분 칩은 기본 10개만 (너무 많다는 요청)
+    check('const LIMIT = 10;' in js and 'const LIMIT = 60;' not in js,
+          '제약사 성분 칩이 기본 10개로 줄지 않았습니다')
+    check("'개 더 보기 ▼'" in js, '성분 더 보기 버튼 문구가 없습니다')
+
+    try:
+        import quickjs
+        import json as _json17
+
+        def q17(v):
+            return v.decode() if isinstance(v, bytes) else v
+
+        names17 = ['guideMakerResultHtml_', 'guideMakerTableHtml_', 'guideMakerKeyOf_', 'toggleGuideMakerMore',
+                   'renderGuideMakerResult']
+        blocks17 = [extract_fn(js, n) for n in names17]
+        missing17 = [n for n, b in zip(names17, blocks17) if b is None]
+        check(not missing17, '제약사 성분 칩 함수를 추출하지 못했습니다: %s' % missing17)
+        if not missing17:
+            c = quickjs.Context()
+            ings = [{'성분키': 'k%02d' % i, '성분명': '성분%02d' % i, '품목수': i + 1} for i in range(25)]
+            c.eval("""
+            var STATE = { guideMaker: '한화제약', guideMakerQ: '한화제약', guideMakerMore: false,
+              guideMakerKey: '', guideMakerGroup: null, guideMakerIngLoading: false,
+              guideMakerData: null };
+            function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+            function fmtNum(n) { return String(Math.round(Number(n || 0))).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ','); }
+            var __els17 = {};
+            var document = { getElementById: function (id) { return __els17[id] || null; } };
+            """)
+            for b in blocks17:
+                c.eval(b)
+            c.eval('STATE.guideMakerData = ' + _json17.dumps(
+                {'maker': '한화제약', 'q': '', '성분목록': ings, 'total성분': 25, 'total품목': 325},
+                ensure_ascii=False) + ';')
+            folded17 = q17(c.eval('guideMakerResultHtml_()'))
+            check(folded17.count('data-guide-maker-ing') == 10,
+                  '제약사 성분 칩이 10개가 아닙니다: %d' % folded17.count('data-guide-maker-ing'))
+            check('성분15' not in folded17 and '성분09' in folded17, '처음부터 10개를 넘겨 그립니다')
+            check('15개 더 보기 ▼' in folded17, '남은 성분 더 보기 버튼이 없습니다: %s' % folded17[-300:])
+            check('10개</b>만 먼저 보여 줍니다' in folded17, '성분 10개만 보인다는 안내가 없습니다')
+            c.eval('toggleGuideMakerMore();')
+            opened17 = q17(c.eval('guideMakerResultHtml_()'))
+            check(opened17.count('data-guide-maker-ing') == 25,
+                  '더 보기를 눌러도 전체 성분이 안 나옵니다: %d' % opened17.count('data-guide-maker-ing'))
+            check('접기 ▲' in opened17, '더 보기 뒤 접기 버튼이 없습니다')
+            # 성분이 10개 이하면 더 보기 버튼 없음
+            c.eval('STATE.guideMakerMore = false; STATE.guideMakerData.성분목록 = STATE.guideMakerData.성분목록.slice(0, 4);')
+            few17 = q17(c.eval('guideMakerResultHtml_()'))
+            check(few17.count('data-guide-maker-ing') == 4 and '더 보기' not in few17,
+                  '성분이 10개 이하일 때 더 보기 버튼이 뜹니다')
+    except ImportError:
+        print('(quickjs 없음 — 제약사 성분 칩 검사 생략: pip install quickjs)')
 
     print('=' * 62)
     if fails:
