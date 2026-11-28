@@ -8648,10 +8648,14 @@
                  esc(c.거래처명) + ' (' + esc(c.거래처코드) + ')</option>';
              }).join('') +
            '</select>' +
-           '<input type="text" id="notice-item" list="notice-item-options" style="flex:0 1 190px;max-width:240px;" placeholder="품목명 — 선택" autocomplete="off" value="' + esc(meta.itemName || '') + '" oninput="noticeMetaChanged()" />' +
-           '<datalist id="notice-item-options">' + items.slice(0, 400).map(function (n) {
-             return '<option value="' + esc(n) + '"></option>';
-           }).join('') + '</datalist>' +
+           '<select id="notice-item" style="flex:0 1 190px;max-width:240px;" onchange="noticeItemSelectChanged()">' +
+             '<option value="">품목명 — 선택</option>' +
+             items.slice().sort(function (a, b) { return String(a).localeCompare(String(b), 'ko'); }).map(function (n) {
+               return '<option value="' + esc(n) + '">' + esc(n) + '</option>';
+             }).join('') +
+             '<option value="__custom__">✏️ 직접 입력...</option>' +
+           '</select>' +
+           '<input type="text" id="notice-item-custom" style="display:none;flex:0 1 160px;max-width:220px;" placeholder="품목명 직접 입력" autocomplete="off" oninput="noticeMetaChanged()" />' +
            '<select id="notice-doctype" style="max-width:140px;" onchange="noticeMetaChanged()">' +
              '<option value="auto"' + (meta.docType !== 'cut' && meta.docType !== 'notice' ? ' selected' : '') + '>종류 자동 판별</option>' +
              '<option value="notice"' + (meta.docType === 'notice' ? ' selected' : '') + '>고시·공지</option>' +
@@ -8670,8 +8674,7 @@
    function noticeRestoreUi_() {
      const sel = document.getElementById('notice-client');
      if (sel) sel.value = NOTICE_DOC.meta.clientCode || '';
-     const item = document.getElementById('notice-item');
-     if (item) item.value = NOTICE_DOC.meta.itemName || '';
+     noticeApplyItemUi_();
      const kind = document.getElementById('notice-doctype');
      if (kind) kind.value = NOTICE_DOC.meta.docType || 'auto';
      const btn = document.getElementById('notice-run');
@@ -8692,13 +8695,49 @@
      el.style.color = kind === 'err' ? 'var(--danger)' : (kind === 'ok' ? 'var(--success)' : (kind === 'warn' ? 'var(--warn)' : 'var(--muted)'));
    }
 
+   /** v1.29 — 품목명: 목록에서 고르거나 [✏️ 직접 입력...]을 골라 직접 적습니다 (모바일 네이티브 드롭다운) */
+   const NOTICE_ITEM_CUSTOM = '__custom__';
+
+   function noticeItemSelectChanged() {
+     const sel = document.getElementById('notice-item');
+     const custom = document.getElementById('notice-item-custom');
+     const isCustom = Boolean(sel) && sel.value === NOTICE_ITEM_CUSTOM;
+     if (custom) custom.style.display = isCustom ? '' : 'none';
+     if (isCustom && custom) { try { custom.focus(); } catch (e) {} }
+     noticeMetaChanged();
+   }
+
+   /** 지금 기억된 품목명을 목록 선택/직접 입력 칸에 반영 (목록에 없으면 직접 입력 모드) */
+   function noticeApplyItemUi_() {
+     const sel = document.getElementById('notice-item');
+     const custom = document.getElementById('notice-item-custom');
+     if (!sel) return;
+     const v = String(NOTICE_DOC.meta.itemName || '');
+     let known = false;
+     if (v) {
+       for (let i = 0; i < sel.options.length; i++) {
+         if (sel.options[i].value === v) { known = true; break; }
+       }
+     }
+     sel.value = !v ? '' : (known ? v : NOTICE_ITEM_CUSTOM);
+     if (custom) {
+       custom.value = known ? '' : v;
+       custom.style.display = (v && !known) ? '' : 'none';
+     }
+   }
+
    /** 병원·품목·종류 선택값을 기억 (다시 그려도 유지) */
    function noticeMetaChanged() {
      const sel = document.getElementById('notice-client');
      const item = document.getElementById('notice-item');
+     const custom = document.getElementById('notice-item-custom');
      const kind = document.getElementById('notice-doctype');
      if (sel) NOTICE_DOC.meta.clientCode = String(sel.value || '');
-     if (item) NOTICE_DOC.meta.itemName = String(item.value || '').trim();
+     if (item) {
+       NOTICE_DOC.meta.itemName = item.value === NOTICE_ITEM_CUSTOM
+         ? String((custom && custom.value) || '').trim()
+         : String(item.value || '').trim();
+     }
      if (kind) NOTICE_DOC.meta.docType = String(kind.value || 'auto');
    }
 
