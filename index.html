@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
- <title>수메디팜 미니 CRM v1.23</title>
+ <title>수메디팜 미니 CRM v1.24</title>
 
  <!-- ---------------- PWA (홈 화면 앱) 설정 ---------------- -->
  <meta name="description" content="수메디팜 미니 CRM — 거래처·주문·수금·회전일을 구글 시트로 실시간 관리하는 영업 앱" />
@@ -826,7 +826,7 @@
  <div id="login-overlay" class="login-overlay">
    <div class="login-card">
      <div class="login-brand">
-       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.23</span></div>
+       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.24</span></div>
        <div class="s">담당자 아이디로 로그인해 주세요</div>
      </div>
      <div class="form-group" style="margin-bottom:10px;">
@@ -1210,7 +1210,7 @@
    <!-- PC 사이드바 -->
    <aside class="sidebar">
      <div class="sidebar-brand">
-       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.23</span></h1>
+       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.24</span></h1>
        <div class="sub" id="brand-sub">로딩 중...</div>
      </div>
      <nav class="sidebar-nav" id="sidebar-nav"></nav>
@@ -1227,7 +1227,7 @@
 
    <!-- 모바일 상단 헤더 -->
    <header class="mobile-header">
-     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.23</span></h1>
+     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.24</span></h1>
      <div style="display:flex;gap:6px;align-items:center;">
        <span id="m-user" class="ver-chip" style="display:none;" onclick="openPasswordModal()" title="내 계정 · 비밀번호 변경"></span>
        <button class="btn btn-sm" id="guest-login-btn" style="display:none;background:rgba(255,255,255,0.16);color:#fff;" onclick="exitGuestPreview()">🔑 로그인</button>
@@ -1248,7 +1248,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.23';
+   const APP_VERSION = 'v1.24';
 
    const STATE = {
      // 로그인/권한
@@ -1256,6 +1256,9 @@
      user: null,
      isMaster: false,
      guestMode: false,        // 👀 비회원 맛보기(v1.18) — 내과 다처방 순위만, 서버 호출 없음
+     // v1.24 — 뒤로 가기(안드로이드 버튼·제스처)·모달 닫기 관리
+     openModals: [],          // 지금 열려 있는 모달 id — 뒤로 가기는 맨 위 모달부터 닫습니다
+     exitArmedAt: 0,          // 첫 메뉴에서 뒤로 가기를 한 번 누른 시각 (한 번 더 누르면 앱 종료)
      // 공통 마스터 데이터
      activeMenu: 'board',
      settings: {},
@@ -2206,8 +2209,121 @@
      return raw + (ko ? ' (' + ko + ')' : '');
    }
 
-   function openModal(id) { document.getElementById(id).classList.add('open'); }
-   function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+   // -------------------------------------------------------------------------
+   // v1.24 — 뒤로 가기 · 로그인 세션 유지
+   //   안드로이드 뒤로 가기(버튼·제스처)를 누를 때 앱이 그냥 닫혀 다시 열리면,
+   //   예전에는 sessionStorage 에만 있던 로그인 토큰이 사라져 로그인 화면부터 시작했습니다.
+   //   ① 세션은 localStorage 에 남겨 앱을 다시 열어도 유지하고(로그아웃 버튼·세션 만료에만 삭제)
+   //   ② 메뉴 이동·모달을 history 에 쌓아 뒤로 가기가 화면 안에서 움직이게 합니다.
+   // -------------------------------------------------------------------------
+   const SESSION_KEY = 'crm_session_v1';
+   const HISTORY_MARK = 'crm';
+   let _suppressHistoryPush = false;   // popstate 로 화면을 되돌릴 때는 히스토리를 새로 쌓지 않음
+   let _suppressPopOnce = 0;           // closeModal 이 스스로 history.back() 한 경우 그 popstate 한 번 무시
+
+   function historyState_(extra) {
+     const st = { crm: 1, menu: STATE.activeMenu || 'board' };
+     if (extra) {
+       for (const k in extra) {
+         if (Object.prototype.hasOwnProperty.call(extra, k)) st[k] = extra[k];
+       }
+     }
+     return st;
+   }
+
+   function currentHistoryState_() {
+     try { return history.state || null; } catch (e) { return null; }
+   }
+
+   /** 앱의 바닥 항목 — 이 아래로 한 번 더 뒤로 가면 앱이 나갑니다. */
+   function replaceHistoryBase_() {
+     try { history.replaceState(historyState_({ base: 1 }), ''); } catch (e) {}
+   }
+
+   /** 로그인 직후·세션 복원 직후: 바닥 항목 + 지금 메뉴 항목을 새로 깔아 둡니다. */
+   function resetAppHistory_() {
+     STATE.exitArmedAt = 0;
+     STATE.openModals = [];
+     replaceHistoryBase_();
+     try { history.pushState(historyState_({}), ''); } catch (e) {}
+   }
+
+   /** 메뉴가 실제로 바뀌었을 때만 히스토리를 한 칸 쌓습니다. */
+   function syncHistoryToMenu_(menuId) {
+     if (_suppressHistoryPush || STATE.guestMode || !STATE.user) return;
+     const cur = currentHistoryState_();
+     if (cur && cur[HISTORY_MARK] === 1 && cur.menu === menuId && !cur.modal) return;
+     STATE.exitArmedAt = 0;           // 메뉴를 옵기면 종료 대기(한 번 더 누르기)는 풀립니다
+     try { history.pushState(historyState_({}), ''); } catch (e) {}
+   }
+
+   /** 모달을 열 때 한 칸 쌓아 — 뒤로 가기가 모달만 닫고 화면은 그대로 있게 */
+   function pushModalHistory_(id) {
+     if (_suppressHistoryPush || STATE.guestMode) return;
+     try { history.pushState(historyState_({ modal: id }), ''); } catch (e) {}
+   }
+
+   /** 모달을 화면에서 닫을 때(버튼)는 그 히스토리 칸도 같이 걷어냅니다. */
+   function dropModalHistory_(id) {
+     const cur = currentHistoryState_();
+     if (cur && cur[HISTORY_MARK] === 1 && cur.modal === id) {
+       _suppressPopOnce += 1;
+       try { history.back(); } catch (e) { _suppressPopOnce -= 1; }
+     }
+   }
+
+   /** 뒤로 가기가 앱 바닥까지 왔을 때 — 바로 종료하지 않고 한 번 더 누르면 나가도록 안내 */
+   function handleRootBack_() {
+     const now = Date.now();
+     if (STATE.exitArmedAt && now - STATE.exitArmedAt < 2500) {
+       STATE.exitArmedAt = 0;
+       try { history.back(); } catch (e) {}
+       return;
+     }
+     STATE.exitArmedAt = now;
+     showToast('한 번 더 뒤로 가면 앱에서 나갑니다.');
+   }
+
+   /** 뒤로 가기·앞으로 가기(popstate) — 모달 → 메뉴 순서로 되돌립니다. */
+   function onAppPopState_(ev) {
+     if (_suppressPopOnce > 0) { _suppressPopOnce -= 1; return; }
+     const openId = topOpenModal_();
+     if (openId) {                      // ① 열린 모달이 있으면 모달부터 닫기
+       closeModal(openId);
+       return;
+     }
+     const st = (ev && ev.state) || currentHistoryState_();
+     if (!st || st[HISTORY_MARK] !== 1 || st.base || !st.menu) {
+       handleRootBack_();               // ② 앱 바닥 — 실수로 바로 꺼지지 않게
+       return;
+     }
+     const target = st.menu;
+     if (!STATE.user && !STATE.guestMode) {   // 로그아웃 상태에서는 메뉴를 되살리지 않음
+       replaceHistoryBase_();
+       return;
+     }
+     if (target === STATE.activeMenu) { syncHistoryToMenu_(target); return; }
+     _suppressHistoryPush = true;
+     try { switchMenu(target); } finally { _suppressHistoryPush = false; }
+   }
+
+   function openModal(id) {
+     const el = document.getElementById(id);
+     if (!el) return;
+     el.classList.add('open');
+     if (STATE.openModals.indexOf(id) === -1) STATE.openModals.push(id);
+     pushModalHistory_(id);
+   }
+   function closeModal(id) {
+     const el = document.getElementById(id);
+     if (el) el.classList.remove('open');
+     const i = STATE.openModals.indexOf(id);
+     if (i !== -1) STATE.openModals.splice(i, 1);
+     dropModalHistory_(id);
+   }
+   function topOpenModal_() {
+     return STATE.openModals.length ? STATE.openModals[STATE.openModals.length - 1] : '';
+   }
 
    function copyText(text, okMsg) {
      const value = String(text || '');
@@ -2965,7 +3081,13 @@
        '</div>';
    }
 
+   /** 메뉴 전환 — 화면을 바꾸고 히스토리에도 한 칸 남깁니다(v1.24). */
    function switchMenu(menuId) {
+     switchMenuCore_(menuId);
+     syncHistoryToMenu_(STATE.activeMenu);
+   }
+
+   function switchMenuCore_(menuId) {
      /* 👀 비회원 맛보기(v1.20) — 모든 메뉴에 들어가 구성만 보고, 기능은 잠금. MASTER 전용만 막습니다. */
      if (STATE.guestMode) {
        if (menuId === GUEST_MENU_ID) {
@@ -3078,7 +3200,88 @@
      STATE.collectionClientCode = '';
      STATE.collectionBalances = {};
      STATE.mailLogs = [];
+     STATE.openModals = [];
      try { sessionStorage.removeItem('crm_token'); } catch (e) {}
+     removeStoredSession();
+   }
+
+   // -------------------------------------------------------------------------
+   // v1.24 — 로그인 세션을 localStorage 에도 남깁니다.
+   //   · 예전에는 sessionStorage 에만 있어서, 뒤로 가기로 앱이 닫혔다 다시 열리면 토큰이 사라져
+   //     로그인 화면부터 시작했습니다(최지웅 님 제보 "팅김현상").
+   //   · 비밀번호는 절대 저장하지 않고, 서버가 발급한 토큰과 표시용 사용자 정보만 둡니다.
+   //   · 지우는 때는 [로그아웃] 버튼을 직접 누를 때와 서버가 세션 만료라고 할 때뿐입니다.
+   // -------------------------------------------------------------------------
+   function readStoredSession() {
+     let raw = '';
+     try { raw = localStorage.getItem(SESSION_KEY) || ''; } catch (e) { raw = ''; }
+     if (!raw) return null;
+     let s = null;
+     try { s = JSON.parse(raw); } catch (e) { s = null; }
+     if (!s || !s.token) return null;
+     return s;
+   }
+
+   function saveStoredSession() {
+     if (!STATE.authToken || !STATE.user) { removeStoredSession(); return; }
+     const u = STATE.user || {};
+     try {
+       localStorage.setItem(SESSION_KEY, JSON.stringify({
+         token: STATE.authToken,
+         user: {
+           아이디: u.아이디 || '',
+           담당자명: u.담당자명 || u.아이디 || '',
+           권한: u.권한 || (STATE.isMaster ? 'MASTER' : 'STAFF')
+         },
+         isMaster: Boolean(STATE.isMaster),
+         savedAt: Date.now()
+       }));
+     } catch (e) { /* 저장 공간이 막혀 있으면 이번 세션만 쓰면 됩니다 */ }
+   }
+
+   function removeStoredSession() {
+     try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+   }
+
+   /** 복원한 세션으로 로그인 화면을 먼저 건너뛰고 화면 틀만 그립니다(자료는 바로 이어서 받음) */
+   function applySessionHint_(s) {
+     const u = (s && s.user) || {};
+     STATE.user = { 아이디: u.아이디 || '', 담당자명: u.담당자명 || u.아이디 || '', 권한: u.권한 || 'STAFF' };
+     STATE.isMaster = Boolean(s && (s.isMaster || String(u.권한 || '').toUpperCase() === 'MASTER'));
+     const login = document.getElementById('login-overlay');
+     if (login) login.classList.add('hidden');
+     try { updateUserUi(); } catch (e) {}
+     try { buildNavMenus(); } catch (e) {}
+     const main = document.getElementById('main-content');
+     if (main && !main.innerHTML) {
+       main.innerHTML = '<div class="card"><div style="padding:26px 16px;text-align:center;color:var(--muted);">자료를 불러오는 중입니다…</div></div>';
+     }
+   }
+
+   /** 서버가 "로그인이 필요합니다"라고 한 경우와 인터넷 장애를 구분합니다. */
+   function isAuthError_(err) {
+     const msg = String((err && err.message) || err || '');
+     return /로그인이 필요합니다|로그인.{0,4}만료|세션이 만료|다시 로그인/i.test(msg);
+   }
+
+   /** 연결이 잠깐 끊겼을 때 — 로그인은 그대로 두고 다시 시도할 수 있게 안내합니다. */
+   function showOfflineNotice_(err) {
+     const msg = friendlyError_(err);
+     STATE.exitArmedAt = 0;
+     replaceHistoryBase_();
+     try { history.pushState(historyState_({}), ''); } catch (e) {}
+     try { updateUserUi(); } catch (e) {}
+     try { buildNavMenus(); } catch (e) {}
+     const el = document.getElementById('main-content');
+     if (!el) return;
+     el.innerHTML =
+       '<div class="page-header"><h2 class="page-title">📶 연결이 잠시 끊겼습니다</h2></div>' +
+       '<div class="card"><div style="padding:22px 16px;text-align:center;">' +
+         '<p style="margin:0 0 6px;font-weight:700;">시트 서버에 연결하지 못했습니다.</p>' +
+         '<p style="margin:0 0 14px;color:var(--muted);font-size:13px;">' + esc(msg) +
+         '<br />로그인 상태는 그대로 남아 있습니다 — 다시 시도해 주세요.</p>' +
+         '<button class="btn btn-primary" onclick="refreshBootstrap()">🔄 다시 시도</button>' +
+       '</div></div>';
    }
 
    function showLoginScreen(message) {
@@ -3115,16 +3318,24 @@
        return;
      }
 
-     let token = '';
-     try { token = sessionStorage.getItem('crm_token') || ''; } catch (e) { token = ''; }
+     // v1.24 — 기기에 남겨 둔 로그인 세션(localStorage)부터 확인합니다.
+     const stored = readStoredSession();
+     let token = stored ? stored.token : '';
+     if (!token) {
+       // v1.23 이하에서 쓰던 sessionStorage 토큰이 남아 있으면 그대로 이어받습니다.
+       try { token = sessionStorage.getItem('crm_token') || ''; } catch (e) { token = ''; }
+     }
 
      if (token) {
        STATE.authToken = token;
+       if (stored) applySessionHint_(stored);   // 로그인 화면을 거치지 않고 바로 앱으로
        try {
          const data = await runServer('getBootstrapData', [], { silent: true });
          applyBootstrap(data);
+         saveStoredSession();
          document.getElementById('login-overlay').classList.add('hidden');
          updateUserUi();
+         resetAppHistory_();
          if (data.requiresPin && !window._pinUnlocked) {
            openModal('pin-modal');
            setTimeout(function () { document.getElementById('pin-input').focus(); }, 100);
@@ -3133,7 +3344,14 @@
          }
          return;
        } catch (e) {
-         clearLocalSession();
+         if (isAuthError_(e)) {          // 진짜로 세션이 끝난 경우만 로그인 화면으로
+           clearLocalSession();
+           showLoginScreen('로그인이 만료되었습니다. 다시 로그인해 주세요.');
+           return;
+         }
+         // 인터넷·시트 서버가 잠깐 끊긴 경우 — 세션을 지우지 않고 다시 시도할 수 있게
+         showOfflineNotice_(e);
+         return;
        }
      }
      showLoginScreen('');
@@ -3158,8 +3376,10 @@
        STATE.authToken = res.token || '';
        applyBootstrap(res.bootstrap);
        try { sessionStorage.setItem('crm_token', STATE.authToken); } catch (e) {}
+       saveStoredSession();            // v1.24 — 앱을 닫았다 열어도 로그인 유지
        document.getElementById('login-overlay').classList.add('hidden');
        document.getElementById('login-pw').value = '';
+       resetAppHistory_();             // 뒤로 가기 기준점을 새로 잡음
        updateUserUi();
        if (res.requiresPin && !window._pinUnlocked) {
          openModal('pin-modal');
@@ -3292,8 +3512,11 @@
    async function doLogout() {
      if (!confirm('로그아웃 하시겠습니까?')) return;
      try { await runServer('logout', [], { silent: true }); } catch (e) {}
-     clearLocalSession();
+     clearLocalSession();               // 저장된 토큰도 함께 삭제 (직접 누를 때만)
      window._pinUnlocked = false;
+     STATE.openModals = [];
+     STATE.exitArmedAt = 0;
+     replaceHistoryBase_();
      document.getElementById('main-content').innerHTML = '';
      showLoginScreen('로그아웃 되었습니다.');
    }
@@ -3304,13 +3527,17 @@
      try {
        const data = await runServer('getBootstrapData', []);
        applyBootstrap(data);
+       saveStoredSession();
        updateUserUi();
        if (data.requiresPin && !window._pinUnlocked) {
          openModal('pin-modal');
          return;
        }
        switchMenu(STATE.activeMenu);
-     } catch (e) {}
+     } catch (e) {
+       if (isAuthError_(e)) return;      // runServer 가 이미 로그인 화면으로 넘겼습니다
+       showOfflineNotice_(e);           // 연결 실패 — 로그인은 그대로 두고 다시 시도
+     }
    }
 
    async function submitPin() {
@@ -4276,6 +4503,7 @@
      STATE.activeMenu = 'clients';
      buildNavMenus();
      renderActiveMenu();
+     syncHistoryToMenu_('clients');   // v1.24 — 뒤로 가기로 직전 화면으로
      openClientDetail(code);
    }
 
@@ -9498,6 +9726,7 @@
      STATE.activeMenu = 'ledger';
      buildNavMenus();
      renderActiveMenu();
+     syncHistoryToMenu_('ledger');    // v1.24 — 뒤로 가기로 직전 화면으로
    }
 
    function renderLedgerPage(container) {
@@ -10738,6 +10967,19 @@
    // 9. 부팅
    // =========================================================================
    window.addEventListener('DOMContentLoaded', initApp);
+
+   /* v1.24 — 안드로이드 뒤로 가기(버튼·제스처)를 앱 안에서 처리합니다.
+      · 메뉴 이동·모달은 history 에 쌓아 두었으므로, 뒤로 가기는 앱을 닫지 않고
+        모달 닫기 → 직전 메뉴 순서로 움직입니다. (로그인 세션은 localStorage 에 남아 로그아웃되지 않음)
+      · 앱 첫 화면에서 한 번 더 누르면 "앱에서 나갑니다" 안내만 보여 줍니다. */
+   window.addEventListener('popstate', onAppPopState_);
+   window.addEventListener('pageshow', function (ev) {
+     // bfcache 로 돌아온 경우 — 세션·화면은 그대로이므로 메뉴 상태만 맞춰 둡니다.
+     if (!ev || !ev.persisted) return;
+     if (STATE.authToken && !STATE.guestMode) {
+       try { buildNavMenus(); } catch (e) {}
+     }
+   });
 
 </script>
 </body>

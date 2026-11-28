@@ -132,9 +132,9 @@ def main():
         print('(esprima 없음 — 문법 검사 생략: pip install esprima)')
 
     # 2) v1.14 요소
-    check("const APP_VERSION = 'v1.23'" in js, 'APP_VERSION 이 v1.23 이 아닙니다')
-    check('<title>수메디팜 미니 CRM v1.23</title>' in html, '브라우저 탭 제목의 버전이 v1.23 이 아닙니다')
-    check('ver-chip">v1.23' in html and 'ver-chip dark">v1.23' in html, '로그인 화면·상단 바의 버전 칩이 v1.23 이 아닙니다')
+    check("const APP_VERSION = 'v1.24'" in js, 'APP_VERSION 이 v1.24 가 아닙니다')
+    check('<title>수메디팜 미니 CRM v1.24</title>' in html, '브라우저 탭 제목의 버전이 v1.24 가 아닙니다')
+    check('ver-chip">v1.24' in html and 'ver-chip dark">v1.24' in html, '로그인 화면·상단 바의 버전 칩이 v1.24 가 아닙니다')
     check('id: \'drug\'' in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
     check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
     # v1.11 — 🧭 처방 셋팅은 경구제 전용 · 💉 주사제 셋팅은 💉 주사제 주문 메뉴 안 탭
@@ -316,7 +316,8 @@ def main():
         check('style=' not in m.group(0), '합계 행에 인라인 스타일이 붙어 인쇄 색상 규칙을 덮습니다: %s' % m.group(0))
     # 서비스워커 캐시·배포 사본
     _sw = open(os.path.join(PROJECT, 'sw.js'), encoding='utf-8').read()
-    check("'soomedipharm-crm-v18'" in _sw, '서비스워커 캐시가 v18 이 아닙니다')
+    check("'soomedipharm-crm-v19'" in _sw, '서비스워커 캐시가 v19 가 아닙니다')
+    check('soomedipharm-crm-v18' not in _sw, '서비스워커 캐시 이름이 v18 로 남아 있습니다')
     _dl = os.path.abspath(os.path.join(PROJECT, '..', '..', 'downloads', 'Index.html'))
     if os.path.exists(_dl):
         import hashlib
@@ -360,6 +361,140 @@ def main():
         check('tierCell' in body and 'userSetTier' in body, '사용자 목록에 등급 선택기가 없습니다')
         check('요율등급' in body, '사용자 목록에 요율등급 열이 없습니다')
         check('차감 없음' in body, 'MASTER 행의 차감 없음 표기가 없습니다')
+
+    # 2-f) v1.24 — 뒤로 가기·로그인 세션 유지 (최지웅 님 "팅김현상")
+    sess_blk = extract_fn(js, 'saveStoredSession') or ''
+    clear_blk = extract_fn(js, 'clearLocalSession') or ''
+    init_blk = extract_fn(js, 'initApp') or ''
+    check("const SESSION_KEY = 'crm_session_v1'" in js, 'v1.24 로그인 세션 저장 키가 없습니다')
+    check('localStorage.setItem(SESSION_KEY' in sess_blk, '로그인 세션이 localStorage 에 저장되지 않습니다')
+    check('비밀번호' not in sess_blk and 'password' not in sess_blk.lower(),
+          '세션 저장에 비밀번호 관련 값이 들어갑니다')
+    check('removeStoredSession()' in clear_blk, '로그아웃·세션 만료 시 저장된 세션을 지우지 않습니다')
+    check('readStoredSession()' in init_blk, '앱 시작 시 저장된 세션을 복원하지 않습니다')
+    check('showOfflineNotice_' in init_blk, '연결 실패와 세션 만료를 구분하지 않습니다(세션 삭제 위험)')
+    check("window.addEventListener('popstate', onAppPopState_)" in js, '뒤로 가기(popstate) 처리가 없습니다')
+    check('history.pushState' in (extract_fn(js, 'syncHistoryToMenu_') or ''), '메뉴 이동 시 히스토리를 쌓지 않습니다')
+    check('history.pushState' in (extract_fn(js, 'pushModalHistory_') or ''), '모달 열기 시 히스토리를 쌓지 않습니다')
+    check('history.back()' in (extract_fn(js, 'dropModalHistory_') or ''), '모달을 닫을 때 히스토리를 걷어내지 않습니다')
+    check('한 번 더 뒤로 가면 앱에서 나갑니다' in (extract_fn(js, 'handleRootBack_') or ''),
+          '첫 화면에서 뒤로 가기 안내가 없습니다')
+
+    try:
+        import quickjs
+
+        def q24(v):
+            return v.decode() if isinstance(v, bytes) else v
+
+        names24 = ['historyState_', 'currentHistoryState_', 'replaceHistoryBase_', 'resetAppHistory_',
+                   'syncHistoryToMenu_', 'pushModalHistory_', 'dropModalHistory_',
+                   'handleRootBack_', 'onAppPopState_', 'topOpenModal_', 'openModal', 'closeModal',
+                   'switchMenu', 'switchMenuCore_', 'canUseMenu', 'readStoredSession',
+                   'saveStoredSession', 'removeStoredSession', 'applySessionHint_', 'clearLocalSession']
+        blocks24 = [extract_fn(js, n) for n in names24]
+        missing24 = [n for n, b in zip(names24, blocks24) if b is None]
+        check(not missing24, '뒤로 가기·세션 함수를 추출하지 못했습니다: %s' % missing24)
+        if not missing24:
+            c = quickjs.Context()
+            c.eval("""
+            var __els = {};
+            function mkEl(id) { return { id: id, _h: '', value: '', textContent: '', style: {},
+              _cls: {},
+              classList: { add: function (c) { this._s = this._s || {}; this._s[c] = 1; },
+                remove: function (c) { this._s = this._s || {}; delete this._s[c]; },
+                contains: function (c) { this._s = this._s || {}; return !!this._s[c]; } },
+              focus: function () {}, querySelector: function () { return null; },
+              set innerHTML(v) { this._h = v; }, get innerHTML() { return this._h; } }; }
+            var document = { title: '', getElementById: function (id) {
+              if (!__els[id]) __els[id] = mkEl(id); return __els[id]; } };
+            var window = { scrollTo: function () {} };
+            var __toasts = [];
+            function showToast(m) { __toasts.push(String(m)); }
+            function esc(s) { return String(s == null ? '' : s); }
+            function buildNavMenus() {}
+            function renderActiveMenu() {}
+            var __ui = 0;
+            function updateUserUi() { __ui++; }
+            var APP_MENUS = [ { id: 'board', label: '공지사항' }, { id: 'clients', label: '거래처' },
+                              { id: 'drug', label: '약 검색' }, { id: 'docs', label: '설정', masterOnly: true } ];
+            var STATE = { authToken: '', user: null, isMaster: false, guestMode: false,
+              activeMenu: 'board', openModals: [], exitArmedAt: 0, clients: [], products: [],
+              turnoverData: null, ledgerData: null, detailData: null, pastOrders: null,
+              orderClientCode: '', collectionClientCode: '', collectionBalances: {}, mailLogs: [] };
+            const SESSION_KEY = 'crm_session_v1';
+            const HISTORY_MARK = 'crm';
+            let _suppressHistoryPush = false;
+            let _suppressPopOnce = 0;
+            var __popCb = null;
+            var __hist = [];
+            var history = {
+              get state() { return __hist.length ? __hist[__hist.length - 1] : null; },
+              pushState: function (st) { __hist.push(st); },
+              replaceState: function (st) { if (__hist.length) __hist[__hist.length - 1] = st; else __hist.push(st); },
+              back: function () { __hist.pop(); if (__popCb) __popCb({ state: __hist.length ? __hist[__hist.length - 1] : null }); }
+            };
+            var __ls = {};
+            var localStorage = { getItem: function (k) { return __ls[k] === undefined ? null : __ls[k]; },
+              setItem: function (k, v) { __ls[k] = String(v); }, removeItem: function (k) { delete __ls[k]; } };
+            var sessionStorage = { getItem: function () { return ''; }, setItem: function () {}, removeItem: function () {} };
+            """)
+            for b in blocks24:
+                c.eval(b)
+            c.eval('__popCb = onAppPopState_;')
+
+            # (A) 세션 저장 → 복원 → 로그아웃 버튼에서만 삭제
+            c.eval("STATE.authToken = 'tok123'; STATE.user = { 아이디: 'wldnd', 담당자명: '최지웅', 권한: 'STAFF' };")
+            c.eval('saveStoredSession();')
+            check(q24(c.eval("JSON.parse(localStorage.getItem(SESSION_KEY)).token")) == 'tok123',
+                  '로그인 토큰이 localStorage 에 저장되지 않았습니다')
+            c.eval("STATE.authToken = ''; STATE.user = null;")
+            saved24 = q24(c.eval('JSON.stringify(readStoredSession())'))
+            check('tok123' in saved24, '앱을 다시 열었을 때 저장된 세션을 읽지 못합니다')
+            c.eval("applySessionHint_(JSON.parse(localStorage.getItem(SESSION_KEY)));")
+            check(q24(c.eval('STATE.user.담당자명')) == '최지웅', '복원한 세션으로 사용자 표시를 되살리지 못합니다')
+            check(c.eval("document.getElementById('login-overlay').classList.contains('hidden') ? 1 : 0") == 1,
+                  '세션이 남아 있는데 로그인 화면이 그대로 보입니다')
+            c.eval('clearLocalSession();')
+            check(c.eval('readStoredSession() === null ? 1 : 0') == 1, '로그아웃해도 저장된 세션이 남아 있습니다')
+
+            # (B) 메뉴 이동 → 히스토리 한 칸 · 뒤로 가기 → 직전 메뉴
+            c.eval("STATE.authToken = 'tok123'; STATE.user = { 아이디: 'wldnd', 담당자명: '최지웅', 권한: 'STAFF' }; STATE.activeMenu = 'board';")
+            c.eval('resetAppHistory_();')
+            check(int(c.eval('__hist.length')) == 2, '로그인 직후 히스토리 기준점이 없습니다(뒤로 가기 시 앱이 닫힘): %s' % c.eval('__hist.length'))
+            c.eval("switchMenu('drug');")
+            check(q24(c.eval('STATE.activeMenu')) == 'drug', '메뉴 전환이 실패했습니다')
+            check(int(c.eval('__hist.length')) == 3, '메뉴 이동이 히스토리에 쌓이지 않습니다')
+            c.eval("switchMenu('drug');")
+            check(int(c.eval('__hist.length')) == 3, '같은 메뉴를 다시 눌러도 히스토리가 쌓입니다')
+            c.eval('history.back();')          # → 직전 메뉴(기준점)
+            check(q24(c.eval('STATE.activeMenu')) == 'board', '뒤로 가기로 직전 화면으로 돌아가지 않습니다: %s' % c.eval('STATE.activeMenu'))
+            check(int(c.eval('__hist.length')) == 2, '뒤로 간 뒤 히스토리 깊이가 맞지 않습니다')
+            c.eval('history.back();')          # → 앱 바닥(base): 바로 닫지 않고 안내
+            check('한 번 더' in q24(c.eval('__toasts.join("|")')),
+                  '첫 화면에서 뒤로 가기 안내가 뜨지 않습니다')
+
+            # (C) 모달 열기 → 뒤로 가기는 모달만 닫기 / 닫기 버튼은 히스토리도 정리
+            c.eval('__toasts.length = 0;')
+            c.eval("switchMenu('clients');")
+            depth_menu = int(c.eval('__hist.length'))
+            c.eval("openModal('client-modal');")
+            check(int(c.eval('__hist.length')) == depth_menu + 1, '모달을 열어도 히스토리에 쌓이지 않습니다')
+            check(c.eval("document.getElementById('client-modal').classList.contains('open') ? 1 : 0") == 1,
+                  '모달이 열리지 않았습니다')
+            c.eval('history.back();')          # 뒤로 가기 → 모달만 닫힘
+            check(c.eval("document.getElementById('client-modal').classList.contains('open') ? 1 : 0") == 0,
+                  '뒤로 가기로 모달이 닫히지 않습니다')
+            check(q24(c.eval('STATE.activeMenu')) == 'clients', '모달을 닫을 때 메뉴까지 바뀌었습니다')
+            check(int(c.eval('__hist.length')) == depth_menu, '모달 히스토리가 정리되지 않았습니다')
+            c.eval("openModal('drug-modal');")
+            check(int(c.eval('__hist.length')) == depth_menu + 1, '두 번째 모달 히스토리가 없습니다')
+            c.eval("closeModal('drug-modal');")     # ✕ 버튼
+            check(c.eval("document.getElementById('drug-modal').classList.contains('open') ? 1 : 0") == 0,
+                  '닫기 버튼으로 모달이 닫히지 않습니다')
+            check(int(c.eval('__hist.length')) == depth_menu, '닫기 버튼을 눌러도 모달 히스토리가 남습니다')
+            check(q24(c.eval('STATE.activeMenu')) == 'clients', '닫기 버튼에서 화면이 바뀌었습니다')
+    except ImportError:
+        print('(quickjs 없음 — 뒤로 가기·세션 검사 생략: pip install quickjs)')
 
     # 3) 정의된 함수 목록
     defined = set(re.findall(r'function\s+([A-Za-z_$][\w$]*)\s*\(', js))
@@ -2203,7 +2338,7 @@ def main():
     run_block = extract_fn(js, 'runServer') or ''
     check('STATE.guestMode' in run_block[:400] and 'Promise.reject' in run_block[:500],
           'runServer 에 비회원 모드 서버 호출 차단이 없습니다')
-    switch_block = extract_fn(js, 'switchMenu') or ''
+    switch_block = extract_fn(js, 'switchMenuCore_') or ''
     check('STATE.guestMode' in switch_block[:400] and switch_block.find('STATE.guestMode') < switch_block.find('APP_MENUS'),
           'switchMenu 에 비회원 모드 분기가 없습니다')
     check('renderGuestMenuPage(menuId)' in switch_block,
@@ -2274,7 +2409,8 @@ def main():
         names15 = ['guestGroups_', 'guestBannerHtml_', 'guestRankHtml_', 'guestNavHtml_',
                    'guestLockedNotice', 'renderGuestPreview', 'setGuestUi_',
                    'enterGuestPreview', 'exitGuestPreview', 'clearLocalSession',
-                   'buildNavMenus', 'canUseMenu', 'switchMenu', 'renderActiveMenu', 'runServer',
+                   'buildNavMenus', 'canUseMenu', 'switchMenu', 'switchMenuCore_',
+                   'syncHistoryToMenu_', 'removeStoredSession', 'renderActiveMenu', 'runServer',
                    'guestPreviewBannerHtml_', 'guestPreviewLocked', 'guestPreviewPageHtml_',
                    'guestPreviewBody_', 'renderGuestMenuPage', 'gpInput_', 'gpSelect_',
                    'gpArea_', 'gpBtn_', 'gpTable_', 'gpKpi_', 'gpForm_', 'gpCard_']
@@ -2322,6 +2458,11 @@ def main():
               getElementById: function (id) { if (!__els[id]) __els[id] = mkEl(id); return __els[id]; } };
             var window = { scrollTo: function () {}, _pinUnlocked: false };
             var sessionStorage = { getItem: function () { return ''; }, setItem: function () {}, removeItem: function () {} };
+            var __ls = {};
+            var localStorage = { getItem: function (k) { return __ls[k] === undefined ? null : __ls[k]; },
+              setItem: function (k, v) { __ls[k] = String(v); },
+              removeItem: function (k) { delete __ls[k]; } };
+            let _suppressHistoryPush = false;
             var APP_MENUS = [
               { id: 'board', label: '공지사항 · 게시판', shortLabel: '공지', icon: '📢' },
               { id: 'clients', label: '거래처 등록/관리', shortLabel: '거래처', icon: '🏥' },
