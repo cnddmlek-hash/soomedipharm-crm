@@ -2394,6 +2394,7 @@
    function showLoginScreen(message) {
      STATE.guestMode = false;      // 로그인 화면으로 돌아오면 비회원 모드는 끝 (v1.18)
      setGuestUi_(false);
+     try { document.title = '수메디팜 미니 CRM ' + APP_VERSION; } catch (e) {}
      document.getElementById('login-overlay').classList.remove('hidden');
      document.getElementById('logout-btn').style.display = 'none';
      document.getElementById('logout-btn-m').style.display = 'none';
