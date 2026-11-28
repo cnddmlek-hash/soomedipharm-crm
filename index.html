@@ -6462,10 +6462,12 @@
      try {
        const res = await runServer('searchGuideIngredients', [{ q: key ? '' : q, 성분키: key, limit: 40 }], { silent: true });
        STATE.guideIngData = res || null;
-       ((res && res.groups) || []).forEach(function (g) {
+       const groups = (res && res.groups) || [];
+       const openAll = groups.length <= 4;      // 결과가 적으면 모두 펌쳐, 많으면 맨 위 성분만
+       groups.forEach(function (g, idx) {
          (g.items || []).forEach(guideCacheProduct_);
          const k = guideIngGroupKey_(g);
-         if (STATE.guideIngOpen[k] === undefined) STATE.guideIngOpen[k] = true;
+         if (STATE.guideIngOpen[k] === undefined) STATE.guideIngOpen[k] = openAll || idx === 0;
        });
      } catch (e) {
        STATE.guideIngData = { groups: [], q: q, total성분: 0, total품목: 0, error: v14ErrorText_(e) };
