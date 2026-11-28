@@ -63,6 +63,32 @@ t('제품 목록: 수수료율이 숫자로 들어옴', function () {
   var rows = readProductRows_();
   ok(rows.some(function (r) { return r.수수료율 > 0; }), '수수료율 0만 있음');
 });
+t('제품 목록: 주사·수액 제약사 = 시트 실제 제조사 (자사(페이서) 아님)', function () {
+  var inj = readProductRows_().filter(function (p) { return p.표 === '주사·수액'; });
+  ok(inj.length >= 200, '주사·수액 품목이 부족함: ' + inj.length);
+  var bad = inj.filter(function (p) { return !p.제약사 || p.제약사 === '자사(페이서)' || p.제약사 === '자사'; });
+  ok(!bad.length, '제약사가 비었거나 자사(페이서)인 품목: ' +
+    bad.slice(0, 5).map(function (p) { return p.품목명; }).join(', '));
+  var makers = {};
+  inj.forEach(function (p) { makers[p.제약사] = 1; });
+  ok(Object.keys(makers).length >= 20, '제조사 종류가 너무 적음: ' + Object.keys(makers).length);
+  var hit = inj.filter(function (p) { return p.보험코드 === '647202372'; })[0];
+  ok(hit, '코러스세프트리악손나트륨주가 없음');
+  eq(hit && hit.제약사, '한국코러스', '코러스세프트리악손나트륨주 제조사 오류');
+  var bye = inj.filter(function (p) { return p.보험코드 === '690300461'; })[0];
+  eq(bye && bye.제약사, '라이트팜텍', '본큐어주 제조사 오류');
+});
+t('제품 목록: 같은 성분 여러 제조사가 실제로 나뉨 (최소 제약사 모드 입력)', function () {
+  var inj = productsOfForm_(readProductRows_(), '주사·수액');
+  var byIng = {};
+  inj.forEach(function (p) { if (p.성분키) (byIng[p.성분키] = byIng[p.성분키] || {})[p.제약사] = 1; });
+  var multi = Object.keys(byIng).filter(function (k) { return Object.keys(byIng[k]).length > 1; });
+  ok(multi.length >= 5, '같은 성분을 여러 제조사가 파는 성분이 ' + multi.length + '개뿐');
+});
+t('제품 목록: 제약사 값이 어디서도 자사(페이서)로 고정되지 않음', function () {
+  var txt = readProductRows_().map(function (p) { return p.제약사; }).join('|');
+  ok(txt.indexOf('자사(페이서)') === -1, '자사(페이서) 가 남아 있음');
+});
 
 // ------------------------------------------------------------------ 3. 통합 검색 · 동일 성분 묶음
 t('검색: 세프트리악손 → 같은 성분으로 묶임', function () {
@@ -404,6 +430,17 @@ t('주사 셋팅: 급여 필터', function () {
   ok(res.picks.length > 0, '추천 없음');
   ok(res.picks.every(function (x) { return x.급여구분 === '급여'; }), '급여 필터 안 됨');
   ok(res.summary.비급여수 === 0, '비급여 섞임');
+});
+t('주사 셋팅: 추천 품목·성분 목록에 실제 제조사(제약사)가 실림', function () {
+  var res = getInjectGuide({ limit: 30 }, TOKEN);
+  ok(res.picks.length > 0, '추천 없음');
+  var bad = res.picks.filter(function (x) { return !x.제약사 || x.제약사 === '자사(페이서)'; });
+  ok(!bad.length, '추천 품목에 제약사가 없음: ' + bad.slice(0, 3).map(function (x) { return x.품목명; }).join(', '));
+  var itemBad = [];
+  (res.items || []).forEach(function (g) {
+    (g.제품 || []).forEach(function (x) { if (!x.제약사 || x.제약사 === '자사(페이서)') itemBad.push(x.품목명); });
+  });
+  ok(!itemBad.length, '성분 목록에 제약사가 없는 품목: ' + itemBad.slice(0, 3).join(', '));
 });
 t('주사 셋팅: 비급여 필터', function () {
   var res = getInjectGuide({ 급여구분: '비급여', limit: 30 }, TOKEN);

@@ -68,7 +68,8 @@ def main():
             got = heads.get(name, [])
             check(got[:len(base)] == base, '%s 기존 열 순서가 바뀌었습니다: %s' % (name, got[:len(base)]))
         check(heads.get('거래처', [])[-3:] == ['원장성함', '원장생일', '취향/특이사항'], '거래처 v1.4 열이 뒤에 붙지 않았습니다')
-        check(heads.get('제품마스터', [])[-2:] == ['성분명', '성분키'], '제품마스터 성분 열이 없습니다')
+        check(heads.get('제품마스터', [])[-3:] == ['성분명', '성분키', '제약사'],
+              '제품마스터 성분·제약사 열이 없습니다: %s' % heads.get('제품마스터'))
         check(heads.get('사용자', [])[-2:] == ['이메일', '요율등급'], '사용자 이메일·요율등급 열 순서가 다릅니다: %s' % heads.get('사용자'))
 
         # v1.6 요율등급 — 서버 상수·기본값
@@ -91,7 +92,7 @@ def main():
         for name in ['looksParenteral_', 'dosageFormOf_', 'productsOfForm_', 'productIndexByIngredient_',
                      'injectCategoryOf_', 'injectPicks_', 'getInjectGuide']:
             check(name in code, 'Code.gs 에 %s 가 없습니다' % name)
-        check("const APP_VERSION = 'v1.14'" in code, 'Code.gs 버전이 v1.14 가 아닙니다')
+        check("const APP_VERSION = 'v1.15'" in code, 'Code.gs 버전이 v1.15 가 아닙니다')
         check(re.search(r'getInjectGuide\s*:\s*getInjectGuide', code) is not None, 'getInjectGuide 가 apiFunctions_ 에 없습니다')
 
     # ---------------- 2-h. v1.8 월별 실적 — 직납(거래내역) + 예상 처방(처방내역) 합산
@@ -355,6 +356,14 @@ def main():
 
         pm = tab_rows('제품마스터')
         el = tab_rows('이엘파마품목')
+        # v1.15 — 제품마스터(주사·수액)도 품목마다 실제 제조사가 있어야 합니다.
+        #          페이서써플라이는 취급 도매상이므로 제약사 칸에 오면 안 됩니다.
+        no_pm_maker = [r.get('제품명') for r in pm if not str(r.get('제약사') or '').strip()]
+        check(not no_pm_maker, '제약사가 빈 주사·수액 품목: %s' % ', '.join(no_pm_maker[:5]))
+        legacy = [r.get('제품명') for r in pm if str(r.get('제약사') or '').strip() in ('자사(페이서)', '자사(휴온스·페이서)', '자사', '기타제조사')]
+        check(not legacy, '제약사가 도매상·기타로 남은 품목: %s' % ', '.join(legacy[:5]))
+        pm_makers = {str(r.get('제약사') or '').strip() for r in pm}
+        check(len(pm_makers) >= 20, '주사·수액 제조사 종류가 %d곳뿐입니다' % len(pm_makers))
         pm_paren = [r for r in pm if looks_paren(r.get('제품명'))]
         el_paren = [r for r in el if looks_paren(r.get('품목명'))]
         check(len(pm) >= 200, '제품마스터가 부족합니다: %d' % len(pm))

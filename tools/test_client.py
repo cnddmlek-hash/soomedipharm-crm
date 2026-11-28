@@ -53,6 +53,28 @@ def extract_fn(js, name):
     return None
 
 
+def extract_maker_map(js):
+    """index.html 의 /* MAKER_MAP_START */ … /* MAKER_MAP_END */ 안의 선언을 그대로 꺼냅니다."""
+    m = re.search(r'/\* MAKER_MAP_START \*/\n(.*?)\n\s*/\* MAKER_MAP_END \*/', js, re.S)
+    return m.group(1) if m else None
+
+
+def load_maker_ctx(ctx, js):
+    """makerOf_ 가 쓰는 '예전 자사 표기 판정 + 앱 내장 제약사 목록' 을 실행 문맥에 넣습니다."""
+    block = extract_maker_map(js)
+    if not block:
+        return False
+    ctx.eval("const LEGACY_MAKER_LABELS = ['자사(휴온스·페이서)', '자사(페이서)', '자사'];")
+    ctx.eval("const DISTRIBUTOR_LABEL = '페이서써플라이(주)';")
+    ctx.eval(block)
+    for name in ['isLegacyMakerLabel_', 'builtinMakerOf_']:
+        fn = extract_fn(js, name)
+        if fn is None:
+            return False
+        ctx.eval(fn)
+    return True
+
+
 def main():
     html = open(INDEX, encoding='utf-8').read()
     scripts = re.findall(r'<script>(.*?)</script>', html, re.S)
@@ -71,9 +93,9 @@ def main():
         print('(esprima 없음 — 문법 검사 생략: pip install esprima)')
 
     # 2) v1.14 요소
-    check("const APP_VERSION = 'v1.14'" in js, 'APP_VERSION 이 v1.14 가 아닙니다')
-    check('<title>수메디팜 미니 CRM v1.14</title>' in html, '브라우저 탭 제목의 버전이 v1.14 가 아닙니다')
-    check('ver-chip">v1.14' in html and 'ver-chip dark">v1.14' in html, '로그인 화면·상단 바의 버전 칩이 v1.14 가 아닙니다')
+    check("const APP_VERSION = 'v1.15'" in js, 'APP_VERSION 이 v1.15 가 아닙니다')
+    check('<title>수메디팜 미니 CRM v1.15</title>' in html, '브라우저 탭 제목의 버전이 v1.15 가 아닙니다')
+    check('ver-chip">v1.15' in html and 'ver-chip dark">v1.15' in html, '로그인 화면·상단 바의 버전 칩이 v1.15 가 아닙니다')
     check('id: \'drug\'' in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
     check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
     # v1.11 — 🧭 처방 셋팅은 경구제 전용 · 💉 주사제 셋팅은 💉 주사제 주문 메뉴 안 탭
@@ -170,7 +192,7 @@ def main():
         used = set(re.findall(r"runServer\('([A-Za-z_$][\w$]*)'", js))
         missing = sorted(u for u in used if u not in api)
         check(not missing, 'Code.gs 에 없는 서버 함수 호출: %s' % ', '.join(missing))
-        check("const APP_VERSION = 'v1.14'" in code, 'Code.gs 버전이 v1.14 가 아닙니다')
+        check("const APP_VERSION = 'v1.15'" in code, 'Code.gs 버전이 v1.15 가 아닙니다')
         check(re.search(r'getHiraPrevisitBriefing\s*:\s*getHiraPrevisitBriefing', code) is not None,
               'Code.gs apiFunctions_ 에 getHiraPrevisitBriefing 이 없습니다')
         check(re.search(r'checkHiraApi\s*:\s*checkHiraApi', code) is not None,
@@ -293,12 +315,14 @@ def main():
                  'guidePendingSet_', 'guidePendingCount_', 'guideSendBtnLabel_', 'guideSyncPendingUI_',
                  'guideRxTargetBadge_', 'guideHospitalBarHtml_', 'guideSetHospital', 'rxOpenFromGuide',
                  'rxApplyGuideRecNow', 'rxOpenGuideFromRx',
-                 'rxCodeNorm_', 'rxCodeKey_', 'rxDedupeRows_']
+                 'rxCodeNorm_', 'rxCodeKey_', 'rxDedupeRows_',
+                 'makerFromName_', 'makerOf_']
         blocks = [extract_fn(js, n) for n in names]
         if any(b is None for b in blocks):
             check(False, '가이드→처방전 함수를 추출하지 못했습니다: %s' % [n for n, b in zip(names, blocks) if b is None])
         else:
             ctx = quickjs.Context()
+            check(load_maker_ctx(ctx, js), '앱 내장 제약사 목록을 실행 문맥에 넣지 못했습니다')
             ctx.eval('''
             var STATE = {
               guideRec: { picks: [
@@ -1013,9 +1037,14 @@ def main():
     # 11) v1.12 — 선택 담기 · 금액 '원' · 거래원장 회전일 · 원장님 안내용 출력/PDF
     raw = open(INDEX, encoding='utf-8').read()   # html 은 위쪽 실행 검사에서 바뀔 수 있어 다시 읽음
     check('function fmtWon' in js, "금액 '원' 표기 헬퍼(fmtWon)가 없습니다")
-    check('makerOf_' in js and 'makerCellHtml_' in js and 'SELF_MAKER_LABEL' in js,
-          '제약사 공통 표기 헬퍼가 없습니다')
-    check("SELF_MAKER_LABEL = '자사(페이서)'" in js, '주사·수액 제약사 기본값이 자사(페이서)가 아닙니다')
+    check('makerOf_' in js and 'makerCellHtml_' in js, '제약사 공통 표기 헬퍼가 없습니다')
+    # v1.15 — 제약사 칸에는 실제 제조사. 페이서(써플라이)는 취급 도매상으로만 표기합니다.
+    check("const LEGACY_MAKER_LABELS = ['자사(휴온스·페이서)', '자사(페이서)', '자사'];" in js,
+          '예전 자사(페이서) 표기를 제약사로 쓰지 않는 규칙이 없습니다')
+    check("const DISTRIBUTOR_LABEL = '페이서써플라이(주)';" in js, '취급 도매상(페이서써플라이) 표기가 없습니다')
+    check('PRODUCT_MAKER_BY_CODE_' in js and 'builtinMakerOf_' in js, '앱 내장 제약사(실제 제조사) 목록이 없습니다')
+    check('return SELF_MAKER_LABEL' not in js and 'const SELF_MAKER_LABEL' not in js,
+          '아직 자사(페이서)를 제약사 기본값으로 씁니다')
     # 11-a) 처방 셋팅 — 품목 체크 + 선택 항목 담기
     for need in ['guidePick', 'guideAddSelected', 'guideToggleProduct', 'guideToggleIngredient',
                  'guideBulkAddLabel_', 'guidePickCodes_', 'guideSyncPickUI_', 'data-guide-pick']:
@@ -1092,7 +1121,7 @@ def main():
         # (A) 금액 '원' · 제약사 표기 규칙
         ctx = quickjs.Context()
         ctx.eval('var STATE = { products: [], guideProductCache: {}, settings: { 부가세율: "10" } };')
-        ctx.eval('const SELF_MAKER_LABEL = "자사(페이서)";')
+        check(load_maker_ctx(ctx, js), '앱 내장 제약사 목록·판정 함수를 실행 문맥에 넣지 못했습니다')
         ctx.eval('function esc(s) { return String(s == null ? "" : s); }')
         if load(ctx, ['fmtNum', 'fmtWon', 'rxCodeNorm_', 'rxCodeKey_', 'makerFromName_', 'makerOf_',
                       'makerCellHtml_', 'perfAmt_', 'pendingOrderRowAmount_'], '금액/제약사'):
@@ -1104,8 +1133,14 @@ def main():
             check('0원' in q12(ctx.eval('perfAmt_(0)')), '금액 0 이 0원으로 표기되지 않습니다')
             check(q12(ctx.eval("makerOf_({ 품목명: '베아셋정', 제약사: '대웅바이오' })")) == '대웅바이오',
                   '제약사 값이 그대로 표기되지 않습니다')
-            check(q12(ctx.eval("makerOf_({ 품목명: '아다셀주' }, 'inject')")) == '자사(페이서)',
-                  '주사·수액 제약사 기본값이 자사(페이서)가 아닙니다')
+            check(q12(ctx.eval("makerOf_({ 품목명: '아다셀주' }, 'inject')")) == '제약사 미확인',
+                  '제약사를 모를 때 자사(페이서)로 채우면 안 됩니다')
+            check(q12(ctx.eval("makerOf_({ 품목명: '코러스세프트리악손나트륨주/1g', 보험코드: '647202372' }, 'inject')")) == '한국코러스',
+                  '앱 내장 목록에서 실제 제조사를 찾지 못합니다')
+            check(q12(ctx.eval("makerOf_({ 품목명: '코러스세프트리악손나트륨주/1g', 보험코드: '647202372', 제약사: '자사(페이서)' }, 'inject')")) == '한국코러스',
+                  '예전 자사(페이서) 값이 실제 제조사를 가립니다')
+            check(q12(ctx.eval("makerOf_({ 품목명: '스카이지플러스겔/15g', 보험코드: '02627' }, 'inject')")) == '성지메디칼',
+                  '도매 리스트의 기타제조사 항목이 실제 제조사로 채워지지 않습니다')
             check(q12(ctx.eval("makerOf_({ 품목명: '대웅바이오 베아셋정' })")) == '대웅바이오',
                   '품목명 앞 제약사명을 살리지 못합니다')
             check(q12(ctx.eval("makerOf_({ 품목명: '베아셋정' })")) == '제약사 미확인',
@@ -1160,9 +1195,9 @@ def main():
           var STATE = {
             injData: { picks: [
               { 보험코드: 'A1', 품목명: '아다셀주', 규격: '1mL', 카테고리: '수액', 성분: '아다셀',
-                급여구분: '급여', 약가: 10000, 수수료율: 40 },
+                급여구분: '급여', 약가: 10000, 수수료율: 40, 제약사: '한국코러스' },
               { 보험코드: 'A2', 품목명: '리도카인주', 규격: '2%', 카테고리: '통증', 성분: '리도카인',
-                급여구분: '급여', 약가: 5000, 수수료율: 30 },
+                급여구분: '급여', 약가: 5000, 수수료율: 30, 제약사: '중외제약' },
               { 보험코드: 'A3', 품목명: '비타민C주', 규격: '10mL', 카테고리: '영양', 성분: '아스코르빈산',
                 급여구분: '비급여', 약가: 8000, 수수료율: 50 }
             ], items: [] },
@@ -1173,7 +1208,7 @@ def main():
           function showToast(m) { __toasts.push(String(m)); }
           function switchMenu(id) { __menus.push(String(id)); }
         ''')
-        c3.eval('const SELF_MAKER_LABEL = "자사(페이서)";')
+        check(load_maker_ctx(c3, js), '앱 내장 제약사 목록을 실행 문맥에 넣지 못했습니다')
         c3.eval('function esc(s) { return String(s == null ? "" : s); }')
         if load(c3, ['rxCodeNorm_', 'rxCodeKey_', 'makerFromName_', 'makerOf_', 'injPickedProducts_',
                      'mergePendingOrderProducts_', 'injBulkOrderLabel_', 'injectSendSelectedToOrder'],
@@ -1184,8 +1219,8 @@ def main():
                   '선택 항목 매출 등록이 담은 품목을 모두 담지 않았습니다')
             check(q12(c3.eval('STATE.orderTab')) == 'entry', '매출 등록은 주문(매출) 등록 탭으로 가야 합니다')
             check(q12(c3.eval('__menus[__menus.length - 1]')) == 'order', '주사제 주문 메뉴로 이동하지 않았습니다')
-            check(q12(c3.eval("STATE.pendingOrderProducts.map(function (r) { return r.제약사; }).join(',')")) == '자사(페이서),자사(페이서)',
-                  '담은 품목에 제약사가 없습니다')
+            check(q12(c3.eval("STATE.pendingOrderProducts.map(function (r) { return r.제약사; }).join(',')")) == '한국코러스,중외제약',
+                  '담은 품목에 실제 제조사가 없습니다')
             c3.eval('injectSendSelectedToOrder();')
             check(int(c3.eval('STATE.pendingOrderProducts.length')) == 2, '같은 품목이 중복으로 담겼습니다')
 
@@ -1222,7 +1257,7 @@ def main():
             guideSelected: {}, guidePick: { '073001620': true }, guideRec: null, guideProductCache: {},
             injData: { picks: [
               { 보험코드: 'A1', 품목명: '아다셀주', 규격: '1mL', 카테고리: '수액', 성분: '아다셀',
-                급여구분: '급여', 약가: 10000, 수수료율: 40 } ] },
+                급여구분: '급여', 약가: 10000, 수수료율: 40, 제약사: '한국코러스' } ] },
             injSelected: {}, injProto: null, orderClientCode: '',
             rxClient: 'S001', rxMonth: '2026-11', rxDate: '2026-11-28',
             rxRows: [ { 품목명: '베아셋정', 보험코드: '073001620', 규격: '10정', 제약사: '대웅바이오',
@@ -1236,7 +1271,7 @@ def main():
           function showToast(m) {}
           function findClient(code) { return { 거래처코드: 'S001', 거래처명: '푸른정의원' }; }
         ''')
-        c5.eval('const SELF_MAKER_LABEL = "자사(페이서)";')
+        check(load_maker_ctx(c5, js), '앱 내장 제약사 목록을 실행 문맥에 넣지 못했습니다')
         c5.eval('function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;"); }')
         names5 = ['fmtNum', 'rxCodeNorm_', 'rxCodeKey_', 'makerFromName_', 'makerOf_', 'makerCellHtml_',
                   'guidePickCodes_', 'guideCacheProduct_', 'guideFindProduct_', 'printItemRows_',
@@ -1255,7 +1290,7 @@ def main():
             c5.eval('printInjectSheet();')
             ihtml = q12(c5.eval('__printed'))
             check('주사·수액 셋팅 안내' in ihtml, '주사제 셋팅 출력물 제목이 없습니다')
-            check('자사(페이서)' in ihtml, '주사제 셋팅 출력물에 제약사(자사(페이서))가 없습니다')
+            check('한국코러스' in ihtml, '주사제 셋팅 출력물에 실제 제조사가 없습니다')
             check('수수료율' not in ihtml and '40%' not in ihtml, '주사제 안내용 출력물에 내부 수수료율이 들어갑니다')
             # v1.13 — 내부용: 수수료율·예상수수료 포함
             c5.eval("printRxSheet('internal');")
@@ -1292,7 +1327,7 @@ def main():
             guideSelected: {}, guidePick: {}, guideMode: 'maxrate', guideMaxMakers: 3,
             guideRec: null, guideDept: '내과', guideProductCache: {}, products: [], clients: [],
             injData: { mode: 'maxrate', summary: { 추천품목수: 1, 카테고리수: 1, 평균수수료율: 40, 수수료액합계: 4000, 평균약가: 10000, 후보수: 1, 급여수: 1, 비급여수: 0 },
-                       picks: [ { 보험코드: 'A1', 품목명: '아다셀주', 규격: '1mL', 카테고리: '수액', 성분: '아다셀', 급여구분: '급여', 약가: 10000, 수수료율: 40, 수수료액: 4000 } ],
+                       picks: [ { 보험코드: 'A1', 품목명: '아다셀주', 규격: '1mL', 카테고리: '수액', 성분: '아다셀', 급여구분: '급여', 약가: 10000, 수수료율: 40, 수수료액: 4000, 제약사: '한국코러스' } ],
                        items: [], categories: [] },
             injSelected: {}, injProto: null, orderClientCode: ''
           };
@@ -1307,7 +1342,7 @@ def main():
           function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
           function payTypeBadge(v) { return v ? '<span>' + v + '</span>' : ''; }
         ''')
-        c6.eval('const SELF_MAKER_LABEL = "자사(페이서)";')
+        check(load_maker_ctx(c6, js), '앱 내장 제약사 목록을 실행 문맥에 넣지 못했습니다')
         names6 = ['fmtNum', 'rxCodeNorm_', 'rxCodeKey_', 'makerFromName_', 'makerOf_', 'makerCellHtml_',
                   'guideCodesOfIngredient_', 'guidePickCodes_', 'guidePickCount_', 'guideBulkAddLabel_',
                   'guidePendingSet_',
@@ -1325,7 +1360,8 @@ def main():
             c6.eval('renderInjectRecommend();')
             ibody = q12(c6.eval('__els["inj-recommend"].innerHTML'))
             check('<th>제약사</th>' in ibody, '주사제 셋팅 표에 제약사 열이 없습니다')
-            check('자사(페이서)' in ibody, '주사제 셋팅 표에 제약사 값이 없습니다')
+            check('한국코러스' in ibody, '주사제 셋팅 표에 실제 제조사가 없습니다')
+            check('페이서써플라이' in ibody, '주사제 셋팅 표에 취급 도매상 안내가 없습니다')
             check('🛒 선택 항목 매출 등록' in ibody, '주사제 셋팅에 선택 항목 매출 등록 버튼이 없습니다')
     except ImportError:
         print('(quickjs 없음 — v1.12 실행 검사 생략: pip install quickjs)')
@@ -1616,7 +1652,7 @@ def main():
                 function runServer(fn, args) { __calls.push({ fn: fn, args: args }); return __RESULT[fn]; }
                 var __RESULT = {};
                 """)
-                c.eval('const SELF_MAKER_LABEL = "자사(페이서)";')
+                check(load_maker_ctx(c, js), '앱 내장 제약사 목록을 실행 문맥에 넣지 못했습니다')
                 for b in blocks14:
                     c.eval(b)
                 return c
