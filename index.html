@@ -2019,6 +2019,7 @@
    /* v1.20 — 메뉴 미리보기: 메뉴에는 들어가 보되 실제 기능은 모두 잠깁니다 */
    const GUEST_PREVIEW_NOTICE = '🔒 비회원 미리보기 화면 — 실제 데이터·수수료율·입력·검색·저장 기능은 회원 가입 승인 후 이용 가능합니다';
    const GUEST_PREVIEW_LOCK_MSG = '🔒 회원 가입 승인 후 이용 가능합니다';
+   const GUEST_MASTER_MSG = '🔒 MASTER 전용 메뉴입니다 — 마스터 계정에서만 열 수 있습니다';
    const GUEST_PREVIEW_ROW = '회원 가입 승인 후 실제 자료가 표시됩니다';
    /* GUEST_RX_START */
    const GUEST_INTERNAL_RX_ = [
@@ -2256,7 +2257,7 @@
      const items = APP_MENUS.map(function (m) {
        /* MASTER 전용(설정·발송이력)은 맛보기에서도 열지 않고 잠금 표시만 */
        if (!canUseMenu(m)) {
-         return '<button class="' + cls + ' guest-locked" title="' + esc(GUEST_LOCK_MSG) + '" onclick="guestLockedNotice()">' +
+         return '<button class="' + cls + ' guest-locked" title="' + esc(GUEST_MASTER_MSG) + '" onclick="guestLockedNotice(GUEST_MASTER_MSG)">' +
            icon(m) + '<span>🔒 ' + esc(mobile ? m.shortLabel : m.label) + '</span></button>';
        }
        return '<button class="' + cls + ' guest-preview-nav' + (STATE.activeMenu === m.id ? ' active' : '') +
@@ -2546,7 +2547,7 @@
        const guestMenu = APP_MENUS.filter(function (m) { return m.id === menuId; })[0];
        if (!guestMenu) { guestLockedNotice(); return; }
        if (!canUseMenu(guestMenu)) {
-         guestLockedNotice('🔒 MASTER 전용 메뉴입니다 — 마스터 계정에서만 열 수 있습니다');
+         guestLockedNotice(GUEST_MASTER_MSG);
          return;
        }
        STATE.activeMenu = menuId;

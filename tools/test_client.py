@@ -2132,6 +2132,7 @@ def main():
             c.eval("const GUEST_LOCK_MSG = '🔒 승인된 회원 전용 기능입니다';")
             c.eval("const GUEST_PREVIEW_NOTICE = '🔒 비회원 미리보기 화면 — 실제 데이터·수수료율·입력·검색·저장 기능은 회원 가입 승인 후 이용 가능합니다';")
             c.eval("const GUEST_PREVIEW_LOCK_MSG = '🔒 회원 가입 승인 후 이용 가능합니다';")
+            c.eval("const GUEST_MASTER_MSG = '🔒 MASTER 전용 메뉴입니다 — 마스터 계정에서만 열 수 있습니다';")
             c.eval("const GUEST_PREVIEW_ROW = '회원 가입 승인 후 실제 자료가 표시됩니다';")
             c.eval("const GUEST_INTERNAL_RX_ = " + _json.dumps(guest_rows, ensure_ascii=False) + ";")
             for b in blocks15:
