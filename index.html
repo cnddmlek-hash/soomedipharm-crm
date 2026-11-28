@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
- <title>수메디팜 미니 CRM v1.15</title>
+ <title>수메디팜 미니 CRM v1.16</title>
 
  <!-- ---------------- PWA (홈 화면 앱) 설정 ---------------- -->
  <meta name="description" content="수메디팜 미니 CRM — 거래처·주문·수금·회전일을 구글 시트로 실시간 관리하는 영업 앱" />
@@ -770,7 +770,7 @@
  <div id="login-overlay" class="login-overlay">
    <div class="login-card">
      <div class="login-brand">
-       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.15</span></div>
+       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.16</span></div>
        <div class="s">담당자 아이디로 로그인해 주세요</div>
      </div>
      <div class="form-group" style="margin-bottom:10px;">
@@ -1152,7 +1152,7 @@
    <!-- PC 사이드바 -->
    <aside class="sidebar">
      <div class="sidebar-brand">
-       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.15</span></h1>
+       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.16</span></h1>
        <div class="sub" id="brand-sub">로딩 중...</div>
      </div>
      <nav class="sidebar-nav" id="sidebar-nav"></nav>
@@ -1168,7 +1168,7 @@
 
    <!-- 모바일 상단 헤더 -->
    <header class="mobile-header">
-     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.15</span></h1>
+     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.16</span></h1>
      <div style="display:flex;gap:6px;align-items:center;">
        <span id="m-user" class="ver-chip" style="display:none;" onclick="openPasswordModal()" title="내 계정 · 비밀번호 변경"></span>
        <button class="btn btn-sm" id="pw-btn-m" title="비밀번호 변경" aria-label="비밀번호 변경" style="display:none;background:rgba(255,255,255,0.16);color:#fff;" onclick="openPasswordModal()">🔑</button>
@@ -1188,7 +1188,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.15';
+   const APP_VERSION = 'v1.16';
 
    const STATE = {
      // 로그인/권한
@@ -1205,12 +1205,16 @@
      userEmail: '',
      userList: null,          // MASTER 설정 탭 — 사용자 목록·가입 승인 (getUsersList)
      serverVersion: '',       // 시트 서버(Code.gs) 버전 — v1.4 함수 사용 가능 여부 판단
-     // 📢 공지사항 · 게시판 (v1.14)
-     boardTab: 'notice',          // 'notice' 공지사항 | 'free' 자유 게시판
-     boardCategory: '',           // '' 면 전체
-     boardQuery: '',              // 제목·내용·작성자·카테고리 검색어
+     // 📢 공지사항 · 게시판 (v1.16 — 한 화면 위아래 분리)
+     boardNoticeCat: '',          // 위 공지 영역 말머리 필터 ('' 면 전체)
+     boardNoticeQuery: '',        // 위 공지 영역 검색어
+     boardNoticeOpen: {},         // 번호 → 펼침 여부 (공지)
+     boardNoticeMore: false,      // 공지 기본 표시(BOARD_NOTICE_SHOW) 넘은 글 더 보기
+     boardNoticeFolded: false,    // 위 공지 영역 접기/펼치기
+     boardFreeCat: '',            // 아래 소통 · 특이사항 게시판 말머리 필터
+     boardFreeQuery: '',          // 아래 게시판 검색어
+     boardFreeOpen: {},           // 번호 → 펼침 여부 (소통 글)
      boardData: null,             // boardList 응답
-     boardOpen: {},               // 번호 → 펼침 여부
      boardDraft: null,            // 작성/수정 중인 글 { 구분, 카테고리, 제목, 내용 }
      boardEditNo: 0,              // 0 이면 새 글, 번호가 있으면 그 글 수정
      boardSaving: false,
@@ -8862,19 +8866,29 @@
    }
 
    // =========================================================================
-   // 8-C. MODULE: 📢 공지사항 · 게시판 (v1.14)
-   //   · 📌 공지사항 — 미지급 사유 / 특별 수수료율 / 일반 공지 · MASTER 만 작성·수정·삭제·상단 고정
-   //   · 💬 자유 게시판 — 로그인한 모든 직원 글쓰기 · 본인 글 수정·삭제(MASTER 는 모든 글 삭제)
+   // 8-C. MODULE: 📢 공지사항 · 게시판 (v1.16 — 한 화면 위아래 분리)
+   //   · 위   📌 공지사항 — 미지급 사유 / 특별 수수료율 / 일반 공지
+   //          MASTER 만 작성·수정·삭제·상단 고정 (STAFF 는 읽기)
+   //   · 아래 💬 소통 · 특이사항 게시판 — 로그인한 모든 직원(STAFF·MASTER) 글쓰기
+   //          본인 글 수정·삭제, MASTER 는 모든 글 삭제
+   //   · 두 영역을 한 화면에 함께 그립니다 (탭 전환 없음)
    // =========================================================================
    const BOARD_NOTICE_CATS = ['전체', '미지급 사유', '특별 수수료율', '일반 공지'];
-   const BOARD_FREE_CATS = ['전체', '일반', '질문', '공유', '건의'];
+   const BOARD_FREE_CATS = ['전체', '소통', '특이사항', '정보공유', '질문'];
+   const BOARD_NOTICE_SHOW = 4;        // 공지 영역 기본 표시 건수 — 아래 게시판이 너무 밀리지 않게
    const BOARD_CONTENT_MAX = 45000;
 
-   function boardCurTab_() { return STATE.boardTab === 'free' ? 'free' : 'notice'; }
-   function boardKindOf_(tab) { return (tab || boardCurTab_()) === 'free' ? '자유' : '공지'; }
+   function boardSectionKind_(sec) { return sec === 'notice' ? '공지' : '자유'; }
+   function boardItems_() { return (STATE.boardData && STATE.boardData.items) || []; }
+   function boardCatOf_(sec) { return String((sec === 'notice' ? STATE.boardNoticeCat : STATE.boardFreeCat) || ''); }
+   function boardQueryOf_(sec) { return String((sec === 'notice' ? STATE.boardNoticeQuery : STATE.boardFreeQuery) || ''); }
+   function boardOpenMap_(sec) { return sec === 'notice' ? STATE.boardNoticeOpen : STATE.boardFreeOpen; }
+   function boardDraftOf_(sec) {
+     return (STATE.boardDraft && STATE.boardDraft.구분 === boardSectionKind_(sec)) ? STATE.boardDraft : null;
+   }
    function boardFindItem_(no) {
      const want = Number(no);
-     const items = (STATE.boardData && STATE.boardData.items) || [];
+     const items = boardItems_();
      for (let i = 0; i < items.length; i++) if (Number(items[i].번호) === want) return items[i];
      return null;
    }
@@ -8895,94 +8909,149 @@
 
    function reloadBoard() { loadBoardModule(); }
 
-   function renderBoardPage(container) {
-     container.innerHTML =
-       '<div class="page-header">' +
+   function boardErrorHtml_() {
+     if (!STATE.boardError) return '';
+     return '<div class="card" style="border-color:#fecaca;"><p style="margin:0;font-size:13px;color:var(--danger);">' + esc(STATE.boardError) + '</p></div>';
+   }
+
+   /** 한 화면 — 위 공지사항 카드 + 아래 소통 · 특이사항 게시판 카드 */
+   function boardPageHtml_() {
+     return '<div class="page-header">' +
          '<h2 class="page-title">📢 공지사항 · 게시판</h2>' +
          '<span style="display:flex;gap:6px;flex-wrap:wrap;">' +
-           '<span class="badge badge-blue">' + (STATE.isMaster ? 'MASTER · 공지 작성 가능' : '직원 · 자유 게시판 글쓰기') + '</span>' +
-           '<span class="badge badge-muted">회사 공지 + 자유 게시판</span>' +
+           '<span class="badge badge-blue">' + (STATE.isMaster ? 'MASTER · 공지 작성 가능' : 'STAFF · 소통 게시판 글쓰기') + '</span>' +
+           '<span class="badge badge-muted">한 화면 · 위 공지 / 아래 소통</span>' +
          '</span>' +
        '</div>' +
-       boardTabBar_() +
-       '<div class="card">' + boardToolbarHtml_() + '</div>' +
-       '<div id="board-list"></div>';
-     renderBoardList_();
+       boardErrorHtml_() +
+       boardNoticeCardHtml_() +
+       boardFreeCardHtml_();
    }
 
-   function boardTabBar_() {
-     const t = boardCurTab_();
+   function renderBoardPage(container) {
+     container.innerHTML = boardPageHtml_();
+   }
+
+   function boardSectionHeadHtml_(sec) {
      const c = (STATE.boardData && STATE.boardData.counts) || null;
-     return '<div class="subtabs">' +
-       '<button class="subtab ' + (t === 'notice' ? 'active' : '') + '" onclick="switchBoardTab(\'notice\')">📌 공지사항' + (c ? ' (' + fmtNum(c['공지'] || 0) + ')' : '') + '</button>' +
-       '<button class="subtab ' + (t === 'free' ? 'active' : '') + '" onclick="switchBoardTab(\'free\')">💬 자유 게시판' + (c ? ' (' + fmtNum(c['자유'] || 0) + ')' : '') + '</button>' +
-     '</div>';
-   }
-
-   function switchBoardTab(tab) {
-     STATE.boardTab = tab === 'free' ? 'free' : 'notice';
-     STATE.boardCategory = '';
-     STATE.boardOpen = {};
-     STATE.boardDraft = null;
-     STATE.boardEditNo = 0;
-     renderActiveMenu();
-   }
-
-   function boardCatCount_(value) {
-     const items = (STATE.boardData && STATE.boardData.items) || [];
-     const kind = boardKindOf_();
-     let n = 0;
-     for (let i = 0; i < items.length; i++) {
-       if (items[i].구분 !== kind) continue;
-       if (value && items[i].카테고리 !== value) continue;
-       n++;
+     if (sec === 'notice') {
+       const folded = Boolean(STATE.boardNoticeFolded);
+       return '<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:' + (folded ? '0' : '8px') + ';">' +
+           '<h3 class="card-title" style="margin:0;">📌 공지사항' +
+             (c ? ' <span class="badge badge-blue">' + fmtNum(c['공지'] || 0) + '건</span>' : '') +
+           '</h3>' +
+           '<button class="btn btn-outline btn-sm" onclick="toggleBoardNoticeFold()">' + (folded ? '공지 펼치기 ▼' : '공지 접기 ▲') + '</button>' +
+         '</div>';
      }
+     return '<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:6px;">' +
+         '<h3 class="card-title" style="margin:0;">💬 소통 · 특이사항 게시판' +
+           (c ? ' <span class="badge badge-muted">' + fmtNum(c['자유'] || 0) + '건</span>' : '') +
+         '</h3>' +
+         '<span class="badge badge-blue">' + (STATE.isMaster ? 'MASTER · 직원 글 모두 관리' : '로그인한 직원 모두 글쓰기') + '</span>' +
+       '</div>' +
+       '<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px;">소통 · 특이사항 · 정보공유 · 질문 — 직원 누구나 여기에 바로 적어 공유합니다.</div>';
+   }
+
+   function boardNoticeCardHtml_() {
+     const folded = Boolean(STATE.boardNoticeFolded);
+     const body = folded
+       ? '<div style="font-size:12px;color:var(--muted);margin-top:6px;">공지를 접었습니다. 위 <b>공지 펼치기 ▼</b> 를 누르면 다시 보입니다.</div>'
+       : boardComposerHtml_('notice') +
+         boardToolbarHtml_('notice') +
+         '<div id="board-notice-list">' + boardListHtml_('notice') + '</div>';
+     return '<div class="card" data-board-section="notice">' + boardSectionHeadHtml_('notice') + body + '</div>';
+   }
+
+   function boardFreeCardHtml_() {
+     return '<div class="card" data-board-section="free">' +
+         boardSectionHeadHtml_('free') +
+         boardComposerHtml_('free') +
+         boardToolbarHtml_('free') +
+         '<div id="board-free-list">' + boardListHtml_('free') + '</div>' +
+       '</div>';
+   }
+
+   /** 말머리 목록 — 기본 목록에 없는 예전 말머리(일반·공유·건의)도 글에 있으면 함께 보여 줍니다 */
+   function boardCatsOf_(sec) {
+     const base = (sec === 'notice' ? BOARD_NOTICE_CATS : BOARD_FREE_CATS).slice();
+     const kind = boardSectionKind_(sec);
+     boardItems_().forEach(function (it) {
+       if (it.구분 !== kind) return;
+       const c = String(it.카테고리 || '');
+       if (c && base.indexOf(c) === -1) base.push(c);
+     });
+     return base;
+   }
+
+   function boardCatCount_(sec, value) {
+     const kind = boardSectionKind_(sec);
+     let n = 0;
+     boardItems_().forEach(function (it) {
+       if (it.구분 !== kind) return;
+       if (value && it.카테고리 !== value) return;
+       n++;
+     });
      return n;
    }
 
-   function boardToolbarHtml_() {
-     const tab = boardCurTab_();
-     const cats = tab === 'free' ? BOARD_FREE_CATS : BOARD_NOTICE_CATS;
+   function boardToolbarHtml_(sec) {
+     const cats = boardCatsOf_(sec);
+     const cur = boardCatOf_(sec);
      const chips = cats.map(function (c) {
        const v = c === '전체' ? '' : c;
-       const active = String(STATE.boardCategory || '') === v;
-       return '<button class="btn btn-sm ' + (active ? 'btn-primary' : 'btn-outline') + '" onclick="setBoardCategory(\'' + esc(v) + '\')">' +
-         esc(c) + ' ' + fmtNum(boardCatCount_(v)) + '</button>';
+       const active = cur === v;
+       return '<button class="btn btn-sm ' + (active ? 'btn-primary' : 'btn-outline') + '" onclick="setBoardCategory(\'' + sec + '\', \'' + esc(v) + '\')">' +
+         esc(c) + ' ' + fmtNum(boardCatCount_(sec, v)) + '</button>';
      }).join('');
-     const canCompose = tab === 'free' || STATE.isMaster;
-     return '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">' +
-         '<input id="board-search" style="flex:1 1 170px;min-width:140px;" placeholder="🔍 제목·내용·작성자 검색" value="' + esc(STATE.boardQuery) + '" oninput="onBoardSearch(this.value)" />' +
+     const composeBtn = sec === 'notice'
+       ? (STATE.isMaster
+           ? '<button class="btn btn-primary btn-sm" onclick="openBoardComposer(\'notice\')">✏️ 공지 쓰기</button>'
+           : '<span style="font-size:11.5px;color:var(--muted);">공지 작성은 MASTER만</span>')
+       : '<button class="btn btn-outline btn-sm" title="맨 위 입력란으로" onclick="focusBoardComposer(\'free\')">✏️ 새 글</button>';
+     return '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0 8px;">' +
+         '<input id="board-' + sec + '-search" style="flex:1 1 150px;min-width:130px;" placeholder="🔍 제목·내용·작성자 검색" value="' + esc(boardQueryOf_(sec)) + '" oninput="onBoardSearch(\'' + sec + '\', this.value)" />' +
+         composeBtn +
          '<button class="btn btn-outline btn-sm" title="새로고침" onclick="reloadBoard()">🔄</button>' +
-         (canCompose
-           ? '<button class="btn btn-primary btn-sm" onclick="openBoardComposer()">✏️ 새 글</button>'
-           : '<span style="font-size:11.5px;color:var(--muted);">공지 작성은 MASTER만</span>') +
        '</div>' +
-       '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + chips + '</div>';
+       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">' + chips + '</div>';
    }
 
    /** 검색어를 칠 때는 목록만 다시 그립니다 (입력 커서·포커스 유지) */
-   function onBoardSearch(value) {
-     STATE.boardQuery = String(value || '');
+   function onBoardSearch(sec, value) {
+     if (sec === 'notice') STATE.boardNoticeQuery = String(value || '');
+     else STATE.boardFreeQuery = String(value || '');
      renderBoardList_();
    }
 
-   function setBoardCategory(cat) {
-     STATE.boardCategory = String(cat || '');
+   function setBoardCategory(sec, cat) {
+     if (sec === 'notice') STATE.boardNoticeCat = String(cat || '');
+     else STATE.boardFreeCat = String(cat || '');
      renderActiveMenu();
    }
 
-   function renderBoardList_() {
-     const el = document.getElementById('board-list');
-     if (!el) return;
-     el.innerHTML = boardListHtml_();
+   function toggleBoardNoticeFold() {
+     STATE.boardNoticeFolded = !STATE.boardNoticeFolded;
+     renderActiveMenu();
    }
 
-   function boardFiltered_() {
-     const items = (STATE.boardData && STATE.boardData.items) || [];
-     const kind = boardKindOf_();
-     const q = String(STATE.boardQuery || '').trim().toLowerCase();
-     const cat = String(STATE.boardCategory || '');
-     const out = items.filter(function (it) {
+   function toggleBoardNoticeMore() {
+     STATE.boardNoticeMore = !STATE.boardNoticeMore;
+     renderBoardList_();
+   }
+
+   /** 목록 본문만 다시 그림 (카드 머리·검색창은 그대로) */
+   function renderBoardList_() {
+     const n = document.getElementById('board-notice-list');
+     if (n) n.innerHTML = boardListHtml_('notice');
+     const f = document.getElementById('board-free-list');
+     if (f) f.innerHTML = boardListHtml_('free');
+   }
+
+   function boardFiltered_(sec) {
+     const kind = boardSectionKind_(sec);
+     const q = boardQueryOf_(sec).trim().toLowerCase();
+     const cat = boardCatOf_(sec);
+     const out = boardItems_().filter(function (it) {
        if (it.구분 !== kind) return false;
        if (cat && it.카테고리 !== cat) return false;
        if (q) {
@@ -8998,56 +9067,61 @@
      });
    }
 
-   function boardListHtml_() {
-     const tab = boardCurTab_();
-     let head = '';
-     if (STATE.boardError) {
-       head = '<div class="card" style="border-color:#fecaca;"><p style="margin:0;font-size:13px;color:var(--danger);">' + esc(STATE.boardError) + '</p></div>';
-     }
+   function boardListHtml_(sec) {
      if (!STATE.boardData) {
-       return head + '<div class="card"><p style="margin:0;color:var(--muted);font-size:13px;">불러오는 중…</p></div>';
+       return '<div style="padding:14px 4px;color:var(--muted);font-size:13px;">불러오는 중…</div>';
      }
-     const items = boardFiltered_();
-     const composer = boardComposerHtml_();
+     const items = boardFiltered_(sec);
      if (!items.length) {
-       return head + composer +
-         '<div class="card"><div style="padding:20px 6px;text-align:center;color:var(--muted);font-size:13px;">' +
-           (STATE.boardQuery || STATE.boardCategory
-             ? '조건에 맞는 글이 없습니다.'
-             : (tab === 'free' ? '아직 올라온 글이 없습니다. ✏️ 새 글로 첫 글을 남겨 보세요.' : '공지사항이 없습니다.')) +
-         '</div></div>';
+       const filtered = Boolean(boardQueryOf_(sec) || boardCatOf_(sec));
+       return '<div style="padding:18px 6px;text-align:center;color:var(--muted);font-size:13px;">' +
+         (filtered
+           ? '조건에 맞는 글이 없습니다.'
+           : (sec === 'notice' ? '공지사항이 없습니다.' : '아직 올라온 글이 없습니다. 위 입력란에 첫 글을 남겨 보세요.')) +
+       '</div>';
      }
-     return head + composer + items.map(boardItemHtml_).join('');
+     if (sec !== 'notice') return items.map(boardItemHtml_).join('');
+     // 공지 — 기본은 앞의 몇 건만 컴팩트하게 (아래 게시판이 너무 밑으로 밀리지 않게)
+     const more = Boolean(STATE.boardNoticeMore);
+     const shown = more ? items : items.slice(0, BOARD_NOTICE_SHOW);
+     let html = shown.map(boardItemHtml_).join('');
+     const rest = items.length - shown.length;
+     if (rest > 0) {
+       html += '<button class="btn btn-outline btn-sm" style="width:100%;" onclick="toggleBoardNoticeMore()">＋ 공지 ' + fmtNum(rest) + '건 더 보기</button>';
+     } else if (more && items.length > BOARD_NOTICE_SHOW) {
+       html += '<button class="btn btn-outline btn-sm" style="width:100%;" onclick="toggleBoardNoticeMore()">공지 접기 ▲</button>';
+     }
+     return html;
    }
 
    function boardPreview_(text) {
      const s = String(text || '').replace(/\s+/g, ' ').trim();
-     return s.length > 140 ? s.slice(0, 140) + '…' : s;
+     return s.length > 120 ? s.slice(0, 120) + '…' : s;
    }
 
    function boardItemHtml_(it) {
-     const open = Boolean(STATE.boardOpen[it.번호]);
+     const no = Number(it.번호) || 0;
+     const open = Boolean(boardOpenMap_(it.구분 === '공지' ? 'notice' : 'free')[no]);
      const isNotice = it.구분 === '공지';
      const canEdit = it.수정가능 !== undefined ? Boolean(it.수정가능) : STATE.isMaster;
      const canDelete = it.삭제가능 !== undefined ? Boolean(it.삭제가능) : STATE.isMaster;
      const canPin = Boolean(it.고정가능) && isNotice;
 
-     const no = Number(it.번호) || 0;
      const btns = [];
      btns.push('<button class="btn btn-outline btn-sm" onclick="toggleBoardPost(' + no + ')">' + (open ? '접기 ▲' : '펼치기 ▼') + '</button>');
      if (canPin) btns.push('<button class="btn btn-outline btn-sm" title="상단 고정" onclick="toggleBoardPin(' + no + ')">' + (it.고정여부 === 'Y' ? '📌 해제' : '📌 고정') + '</button>');
-     if (canEdit) btns.push('<button class="btn btn-outline btn-sm" onclick="openBoardEdit(' + no + ')">✏️</button>');
-     if (canDelete) btns.push('<button class="btn btn-danger-soft btn-sm" onclick="boardDeletePost(' + no + ')">🗑️</button>');
+     if (canEdit) btns.push('<button class="btn btn-outline btn-sm" title="수정" onclick="openBoardEdit(' + no + ')">✏️</button>');
+     if (canDelete) btns.push('<button class="btn btn-danger-soft btn-sm" title="삭제" onclick="boardDeletePost(' + no + ')">🗑️</button>');
 
      return '<div class="card" data-board-no="' + no + '"' + (it.고정여부 === 'Y' ? ' style="border-left:3px solid var(--primary);"' : '') + '>' +
          '<div style="display:flex;gap:8px;align-items:flex-start;justify-content:space-between;">' +
            '<div style="flex:1 1 auto;min-width:0;">' +
-             '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">' +
+             '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">' +
                (it.고정여부 === 'Y' ? '<span title="상단 고정">📌</span>' : '') +
                '<span class="badge ' + (isNotice ? 'badge-blue' : 'badge-muted') + '">' + esc(it.카테고리 || (isNotice ? '일반 공지' : '일반')) + '</span>' +
-               '<strong style="font-size:14px;line-height:1.4;">' + esc(it.제목) + '</strong>' +
+               '<strong style="font-size:13.5px;line-height:1.4;">' + esc(it.제목) + '</strong>' +
              '</div>' +
-             '<div style="font-size:11.5px;color:var(--muted);">' +
+             '<div style="font-size:11px;color:var(--muted);margin-top:2px;">' +
                esc(it.작성자명 || it.작성자아이디 || '-') + ' · ' + esc(String(it.작성일시 || '').slice(0, 16)) +
                (it.수정일시 ? ' · 수정 ' + esc(String(it.수정일시).slice(0, 16)) : '') +
              '</div>' +
@@ -9055,50 +9129,71 @@
            '<div style="display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">' + btns.join('') + '</div>' +
          '</div>' +
          (open
-           ? '<div style="margin-top:10px;border-top:1px dashed var(--border);padding-top:10px;white-space:pre-wrap;font-size:13px;line-height:1.65;word-break:break-word;">' + esc(it.내용) + '</div>'
-           : '<div style="margin-top:8px;font-size:12.5px;color:var(--muted);">' + esc(boardPreview_(it.내용)) + '</div>') +
+           ? '<div style="margin-top:8px;border-top:1px dashed var(--border);padding-top:8px;white-space:pre-wrap;font-size:13px;line-height:1.65;word-break:break-word;">' + esc(it.내용) + '</div>'
+           : '<div style="margin-top:4px;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(boardPreview_(it.내용)) + '</div>') +
        '</div>';
    }
 
    function toggleBoardPost(no) {
      const key = Number(no);
-     STATE.boardOpen[key] = !STATE.boardOpen[key];
+     const it = boardFindItem_(key);
+     const sec = it && it.구분 === '공지' ? 'notice' : (it ? 'free' : (STATE.boardNoticeOpen[key] !== undefined ? 'notice' : 'free'));
+     const map = boardOpenMap_(sec);
+     map[key] = !map[key];
      renderBoardList_();
    }
 
-   function boardComposerHtml_() {
-     const d = STATE.boardDraft;
-     if (!d) return '';
-     const kind = d.구분 === '공지' ? '공지' : '자유';
-     const cats = kind === '공지' ? ['미지급 사유', '특별 수수료율', '일반 공지'] : ['일반', '질문', '공유', '건의'];
+   /** 글쓰기 폼 — 소통 게시판은 늘 열려 있고(직원 누구나), 공지는 MASTER 가 열 때만 보입니다 */
+   function boardComposerHtml_(sec) {
+     const kind = boardSectionKind_(sec);
+     const d = boardDraftOf_(sec);
+     if (!d && sec === 'notice') return '';
+     const editing = Boolean(d && STATE.boardEditNo);
+     const cats = (kind === '공지' ? ['미지급 사유', '특별 수수료율', '일반 공지'] : ['소통', '특이사항', '정보공유', '질문']).slice();
+     const cur = d ? String(d.카테고리 || '') : cats[0];
+     if (cur && cats.indexOf(cur) === -1) cats.unshift(cur);
      const opts = cats.map(function (c) {
-       return '<option value="' + esc(c) + '"' + (c === d.카테고리 ? ' selected' : '') + '>' + esc(c) + '</option>';
+       return '<option value="' + esc(c) + '"' + (c === cur ? ' selected' : '') + '>' + esc(c) + '</option>';
      }).join('');
-     return '<div class="card" id="board-composer" style="border-color:var(--primary);">' +
-         '<h3 class="card-title">' + (STATE.boardEditNo ? '✏️ 글 수정 (#' + fmtNum(STATE.boardEditNo) + ')' : (kind === '공지' ? '📌 공지 쓰기' : '💬 글쓰기')) + '</h3>' +
+     const idp = 'board-' + sec + '-';
+     const title = editing
+       ? '✏️ 글 수정 (#' + fmtNum(STATE.boardEditNo) + ')'
+       : (kind === '공지' ? '📌 공지 쓰기' : '💬 소통 · 특이사항 남기기');
+     return '<div class="card" id="board-' + sec + '-composer" style="border-color:var(--primary);">' +
+         '<h4 style="margin:0 0 8px;font-size:13.5px;">' + title + '</h4>' +
          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">' +
-           '<select id="board-cat" style="flex:0 0 auto;min-width:130px;">' + opts + '</select>' +
-           '<input id="board-title" style="flex:1 1 200px;min-width:150px;" maxlength="200" placeholder="제목" value="' + esc(d.제목) + '" />' +
+           '<select id="' + idp + 'cat" style="flex:0 0 auto;min-width:120px;">' + opts + '</select>' +
+           '<input id="' + idp + 'title" style="flex:1 1 200px;min-width:150px;" maxlength="200" placeholder="제목" value="' + esc(d ? d.제목 : '') + '" />' +
          '</div>' +
-         '<textarea id="board-content" rows="12" style="width:100%;font-size:13px;line-height:1.6;" placeholder="내용을 입력하세요">' + esc(d.내용) + '</textarea>' +
+         '<textarea id="' + idp + 'content" rows="3" style="width:100%;font-size:13px;line-height:1.6;" placeholder="내용을 입력하세요">' + esc(d ? d.내용 : '') + '</textarea>' +
          '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px;">' +
-           '<button class="btn btn-outline btn-sm" onclick="cancelBoardComposer()">취소</button>' +
-           '<button class="btn btn-primary btn-sm" onclick="submitBoardPost()">💾 저장</button>' +
+           (editing ? '<button class="btn btn-outline btn-sm" onclick="cancelBoardComposer(\'' + sec + '\')">취소</button>' : '') +
+           '<button class="btn btn-primary btn-sm" onclick="submitBoardPost(\'' + sec + '\')">💾 저장</button>' +
          '</div>' +
        '</div>';
    }
 
+   function focusBoardComposer(sec) {
+     const el = document.getElementById('board-' + (sec === 'notice' ? 'notice' : 'free') + '-title');
+     if (el && el.focus) el.focus();
+   }
+
    function openBoardComposer(kind) {
-     const k = kind === '공지' || kind === '자유' ? kind : boardKindOf_();
+     const k = kind === '공지' || kind === 'notice' ? '공지' : '자유';
      if (k === '공지' && !STATE.isMaster) {
-       showToast('공지사항은 MASTER만 쓸 수 있습니다. 자유 게시판에 남겨 주세요.');
+       showToast('공지사항은 MASTER만 쓸 수 있습니다. 아래 소통 게시판에 남겨 주세요.');
        return;
      }
-     STATE.boardDraft = { 구분: k, 카테고리: (k === '공지' ? '일반 공지' : '일반'), 제목: '', 내용: '' };
+     STATE.boardDraft = { 구분: k, 카테고리: (k === '공지' ? '일반 공지' : '소통'), 제목: '', 내용: '' };
      STATE.boardEditNo = 0;
-     renderBoardList_();
-     const el = document.getElementById('board-title');
-     if (el && el.focus) el.focus();
+     if (k === '공지') {
+       STATE.boardNoticeFolded = false;
+       renderActiveMenu();
+       focusBoardComposer('notice');
+       return;
+     }
+     renderActiveMenu();
+     focusBoardComposer('free');
    }
 
    function openBoardEdit(no) {
@@ -9110,44 +9205,55 @@
      }
      STATE.boardDraft = { 구분: it.구분, 카테고리: it.카테고리, 제목: it.제목, 내용: it.내용 };
      STATE.boardEditNo = Number(it.번호);
-     STATE.boardOpen[STATE.boardEditNo] = true;
-     renderBoardList_();
-     const el = document.getElementById('board-title');
-     if (el && el.focus) el.focus();
+     const sec = it.구분 === '공지' ? 'notice' : 'free';
+     if (sec === 'notice') STATE.boardNoticeFolded = false;
+     renderActiveMenu();
+     focusBoardComposer(sec);
    }
 
-   function cancelBoardComposer() {
+   function cancelBoardComposer(sec) {
+     const d = STATE.boardDraft;
+     const cur = (sec === 'notice' || sec === 'free') ? sec : (d && d.구분 === '공지' ? 'notice' : 'free');
      STATE.boardDraft = null;
      STATE.boardEditNo = 0;
-     renderBoardList_();
+     if (cur === 'notice') STATE.boardNoticeOpen = STATE.boardNoticeOpen || {};
+     renderActiveMenu();
    }
 
-   async function submitBoardPost() {
-     const d = STATE.boardDraft;
-     if (!d || STATE.boardSaving) return;
-     const titleEl = document.getElementById('board-title');
-     const contentEl = document.getElementById('board-content');
-     const catEl = document.getElementById('board-cat');
-     const title = (titleEl ? titleEl.value : d.제목 || '').trim();
-     const content = contentEl ? contentEl.value : (d.내용 || '');
-     const category = catEl ? catEl.value : d.카테고리;
-     if (!title) { showToast('제목을 입력해 주세요.'); if (titleEl) titleEl.focus(); return; }
-     if (!content.trim()) { showToast('내용을 입력해 주세요.'); if (contentEl) contentEl.focus(); return; }
+   async function submitBoardPost(sec) {
+     const section = sec === 'notice' ? 'notice' : 'free';
+     const kind = boardSectionKind_(section);
+     const draft = boardDraftOf_(section);
+     if (!draft && section === 'notice') return;          // 공지 폼이 열려 있지 않음
+     if (STATE.boardSaving) return;
+     const idp = 'board-' + section + '-';
+     const titleEl = document.getElementById(idp + 'title');
+     const contentEl = document.getElementById(idp + 'content');
+     const catEl = document.getElementById(idp + 'cat');
+     const title = String(titleEl ? titleEl.value : ((draft && draft.제목) || '')).trim();
+     const content = String(contentEl ? contentEl.value : ((draft && draft.내용) || ''));
+     const category = String(catEl ? catEl.value : ((draft && draft.카테고리) || ''));
+     if (!title) { showToast('제목을 입력해 주세요.'); if (titleEl && titleEl.focus) titleEl.focus(); return; }
+     if (!content.trim()) { showToast('내용을 입력해 주세요.'); if (contentEl && contentEl.focus) contentEl.focus(); return; }
      if (content.length > BOARD_CONTENT_MAX) { showToast('내용이 너무 깁니다. 45,000자까지 저장됩니다.'); return; }
+     // 수정 중인 글이 이 영역의 글일 때만 수정 — 다른 영역의 수정 상태를 건드리지 않습니다
+     const editingNo = (draft && STATE.boardEditNo) ? Number(STATE.boardEditNo) : 0;
 
      STATE.boardSaving = true;
      try {
-       if (STATE.boardEditNo) {
-         await runServer('boardUpdate', [{ 번호: STATE.boardEditNo, 제목: title, 내용: content, 카테고리: category }], { silent: true });
+       if (editingNo) {
+         await runServer('boardUpdate', [{ 번호: editingNo, 제목: title, 내용: content, 카테고리: category }], { silent: true });
          showToast('수정했습니다.');
        } else {
-         await runServer('boardCreate', [{ 구분: d.구분, 제목: title, 내용: content, 카테고리: category }], { silent: true });
-         showToast('올렸습니다.');
+         await runServer('boardCreate', [{ 구분: kind, 제목: title, 내용: content, 카테고리: category }], { silent: true });
+         showToast(kind === '공지' ? '공지를 올렸습니다.' : '올렸습니다.');
        }
-       STATE.boardDraft = null;
-       STATE.boardEditNo = 0;
-       STATE.boardOpen = {};
+       if (draft || editingNo) { STATE.boardDraft = null; STATE.boardEditNo = 0; }
+       if (section === 'notice') STATE.boardNoticeOpen = {};
+       else STATE.boardFreeOpen = {};
        await loadBoardModule();
+       const anchor = document.getElementById('board-' + section + '-composer');
+       if (anchor && anchor.scrollIntoView) anchor.scrollIntoView({ block: 'start' });
      } catch (e) {
        showToast('저장하지 못했습니다: ' + String((e && e.message) || e));
      } finally {
@@ -9175,7 +9281,8 @@
      try {
        await runServer('boardDelete', [{ 번호: Number(no) }], { silent: true });
        showToast('삭제했습니다.');
-       delete STATE.boardOpen[Number(no)];
+       delete STATE.boardNoticeOpen[Number(no)];
+       delete STATE.boardFreeOpen[Number(no)];
        if (STATE.boardEditNo === Number(no)) { STATE.boardDraft = null; STATE.boardEditNo = 0; }
        await loadBoardModule();
      } catch (e) {

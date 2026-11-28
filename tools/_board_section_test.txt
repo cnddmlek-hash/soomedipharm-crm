@@ -1,0 +1,335 @@
+    # 13) v1.16 — 📢 공지사항 · 게시판 (한 화면 위아래 분리: 위 공지 / 아래 소통 게시판)
+    check("id: 'board'" in js and 'renderBoardPage' in js and 'loadBoardModule' in js,
+          '📢 공지사항 · 게시판 메뉴가 없습니다')
+    check("label: '공지사항 · 게시판'" in js and "shortLabel: '공지'" in js,
+          '메뉴 이름이 공지사항 · 게시판이 아닙니다')
+    check("activeMenu: 'board'" in js, '로그인 후 첫 진입 화면이 공지사항이 아닙니다')
+    check("STATE.activeMenu = 'board';" in js, '로그아웃 후 기본 메뉴가 공지사항이 아닙니다')
+    check("icon: '📢'" in js, '공지사항 메뉴 아이콘이 없습니다')
+    # v1.16 — 탭 전환 없이 한 화면 위아래
+    check('boardTabBar_' not in js and 'switchBoardTab' not in js and 'boardTab:' not in js,
+          '게시판에 공지/자유 탭 전환이 남아 있습니다(한 화면 위아래로 바뀌어야 함)')
+    check('💬 자유 게시판' not in js, '아래 영역이 아직 자유 게시판 탭 이름입니다')
+    check('💬 소통 · 특이사항 게시판' in js and '📌 공지사항' in js,
+          '한 화면의 위 공지사항 · 아래 소통 · 특이사항 게시판 제목이 없습니다')
+    for need in ['boardPageHtml_', 'boardNoticeCardHtml_', 'boardFreeCardHtml_', 'boardSectionHeadHtml_',
+                 'boardToolbarHtml_', 'onBoardSearch', 'setBoardCategory', 'toggleBoardNoticeFold',
+                 'toggleBoardNoticeMore', 'boardFiltered_', 'boardListHtml_', 'boardItemHtml_',
+                 'boardComposerHtml_', 'focusBoardComposer', 'openBoardComposer', 'openBoardEdit',
+                 'submitBoardPost', 'cancelBoardComposer', 'toggleBoardPin', 'boardDeletePost',
+                 'toggleBoardPost', 'boardPreview_']:
+        check(need in js, '공지사항·게시판에 %s 가 없습니다' % need)
+    check("'미지급 사유'" in js and "'특별 수수료율'" in js and "'일반 공지'" in js,
+          '공지사항 카테고리(미지급 사유·특별 수수료율·일반 공지)가 없습니다')
+    check("BOARD_FREE_CATS = ['전체', '소통', '특이사항', '정보공유', '질문']" in js,
+          '소통 게시판 말머리(소통·특이사항·정보공유·질문)가 없습니다')
+    check('board-notice-search' in js and 'board-free-search' in js,
+          '위·아래 두 영역의 검색창이 없습니다')
+    check('oninput="onBoardSearch(\\'notice\\', this.value)"' in js and
+          'oninput="onBoardSearch(\\'free\\', this.value)"' in js,
+          '검색창이 각 영역 목록에 연결되지 않았습니다')
+    check('제목·내용·작성자 검색' in js, '게시판 검색 안내가 없습니다')
+    check("runServer('boardList'" in js and "runServer('boardCreate'" in js and
+          "runServer('boardUpdate'" in js and "runServer('boardDelete'" in js,
+          '게시판 서버 호출이 빠졌습니다')
+    check('공지 작성은 MASTER만' in js, 'STAFF 에게 공지 작성 불가 안내가 없습니다')
+    check('boardDraft' in js and 'boardEditNo' in js, '게시판 작성/수정 상태가 없습니다')
+    check('data-board-no' in js, '게시판 글 카드 식별자가 없습니다')
+    check('data-board-section' in js and 'board-notice-list' in js and 'board-free-list' in js,
+          '한 화면 두 영역(공지·소통)의 자리가 없습니다')
+    check('BOARD_NOTICE_SHOW' in js and '＋ 공지 ' in js, '공지 영역 컴팩트 표시(더 보기)가 없습니다')
+    # 메뉴가 실제로 가장 첫 번째인지
+    first_menu = re.search(r"const APP_MENUS = \[\s*\{\s*\n\s*id: '([a-z]+)'", js)
+    check(bool(first_menu) and first_menu.group(1) == 'board', 'APP_MENUS 첫 메뉴가 board 가 아닙니다')
+
+    # 13-a) 화면을 실제로 그려 보기 — 한 화면에 위(공지) · 아래(소통)가 동시에, STAFF·MASTER 모두 글쓰기
+    try:
+        import quickjs
+
+        def q13(v):
+            return v.decode() if isinstance(v, bytes) else v
+
+        names13 = ['boardSectionKind_', 'boardItems_', 'boardCatOf_', 'boardQueryOf_', 'boardOpenMap_',
+                   'boardDraftOf_', 'boardFindItem_', 'boardErrorHtml_', 'boardPageHtml_',
+                   'boardSectionHeadHtml_', 'boardNoticeCardHtml_', 'boardFreeCardHtml_',
+                   'boardCatsOf_', 'boardCatCount_', 'boardToolbarHtml_', 'onBoardSearch',
+                   'setBoardCategory', 'toggleBoardNoticeFold', 'toggleBoardNoticeMore',
+                   'boardFiltered_', 'boardListHtml_', 'boardPreview_', 'boardItemHtml_',
+                   'toggleBoardPost', 'boardComposerHtml_', 'focusBoardComposer',
+                   'openBoardComposer', 'openBoardEdit', 'cancelBoardComposer', 'submitBoardPost']
+        blocks13 = [extract_fn(js, n) for n in names13]
+        missing13 = [n for n, b in zip(names13, blocks13) if b is None]
+        check(not missing13, '게시판 렌더 함수를 추출하지 못했습니다: %s' % missing13)
+        if not missing13:
+            NOTICE_PINNED = {
+                '번호': 3, '구분': '공지', '카테고리': '미지급 사유',
+                '제목': '이엘파마 소액처 기준', '내용': '국제약품 소액처 정산 가능\n라온파마 직전 3개월',
+                '작성자아이디': 'master', '작성자명': '마스터', '고정여부': 'Y',
+                '작성일시': '2026-11-28 09:10:00', '수정일시': '',
+                '수정가능': True, '삭제가능': True, '고정가능': True,
+            }
+            NOTICE_NEW = {
+                '번호': 4, '구분': '공지', '카테고리': '특별 수수료율',
+                '제목': '<b>2026.12 EDI</b> 캠페인', '내용': '371품목 추가 수수료',
+                '작성자아이디': 'master', '작성자명': '마스터', '고정여부': 'N',
+                '작성일시': '2026-11-28 09:07:00', '수정일시': '2026-11-28 09:30:00',
+                '수정가능': True, '삭제가능': True, '고정가능': True,
+            }
+            NOTICE_OLD = {
+                '번호': 1, '구분': '공지', '카테고리': '일반 공지', '제목': '게시판 사용 안내',
+                '내용': '직원 모두 소통 게시판에 글을 남길 수 있습니다.', '작성자아이디': 'master',
+                '작성자명': '마스터', '고정여부': 'N', '작성일시': '2026-11-27 09:00:00',
+                '수정일시': '', '수정가능': True, '삭제가능': True, '고정가능': True,
+            }
+            FREE_MINE = {
+                '번호': 5, '구분': '자유', '카테고리': '특이사항', '제목': '수아의원 단가 문의',
+                '내용': '이번 달 단가 확인 부탁드립니다.', '작성자아이디': 'choi', '작성자명': '최충의',
+                '고정여부': 'N', '작성일시': '2026-11-28 10:00:00', '수정일시': '',
+                '수정가능': True, '삭제가능': True, '고정가능': False,
+            }
+            FREE_OTHER = {
+                '번호': 2, '구분': '자유', '카테고리': '정보공유', '제목': '타사 단가표 공유',
+                '내용': '받은 자료 올려 둡니다.', '작성자아이디': 'gii4', '작성자명': '정아름',
+                '고정여부': 'N', '작성일시': '2026-11-27 15:00:00', '수정일시': '',
+                '수정가능': False, '삭제가능': False, '고정가능': False,
+            }
+
+            def items_for(is_master, extra=()):
+                out = []
+                base = [FREE_OTHER, FREE_MINE, NOTICE_NEW, NOTICE_PINNED] + list(extra)
+                for it in base:
+                    r = dict(it)
+                    if not is_master:
+                        if r['구분'] == '공지':
+                            r.update({'수정가능': False, '삭제가능': False, '고정가능': False})
+                        elif r['작성자아이디'] != 'choi':
+                            r.update({'수정가능': False, '삭제가능': False, '고정가능': False})
+                    out.append(r)
+                return out
+
+            def build_ctx(is_master, items):
+                c = quickjs.Context()
+                counts = {'공지': 0, '자유': 0}
+                for it in items:
+                    counts[it['구분']] = counts.get(it['구분'], 0) + 1
+                c.eval("""
+                var STATE = {
+                  boardNoticeCat: '', boardNoticeQuery: '', boardNoticeOpen: {}, boardNoticeMore: false,
+                  boardNoticeFolded: false, boardFreeCat: '', boardFreeQuery: '', boardFreeOpen: {},
+                  boardDraft: null, boardEditNo: 0, boardSaving: false, boardError: '',
+                  isMaster: %s, user: { 아이디: 'choi', 담당자명: '최충의' },
+                  boardData: { items: %s, total: %d, counts: %s,
+                               categories: { '공지': [{ 카테고리: '미지급 사유', 개수: 1 },
+                                                      { 카테고리: '특별 수수료율', 개수: 1 }],
+                                             '자유': [{ 카테고리: '특이사항', 개수: 1 }, { 카테고리: '정보공유', 개수: 1 }] },
+                               isMaster: %s, me: { 아이디: 'choi', 담당자명: '최충의' } }
+                };
+                var __toasts = [], __els = {}, __calls = [], __renders = 0;
+                function showToast(m) { __toasts.push(String(m)); }
+                function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+                function fmtNum(n) { return String(Math.round(Number(n || 0))); }
+                function renderActiveMenu() { __renders++; }
+                function loadBoardModule() { __calls.push({ fn: 'loadBoardModule', args: [] }); }
+                function runServer(fn, args) { __calls.push({ fn: fn, args: args }); return __RESULT[fn] || { success: true }; }
+                var __RESULT = {};
+                var window = { confirm: function () { return true; } };
+                var document = { getElementById: function (id) {
+                  if (!__els[id]) __els[id] = { _h: '', value: '', focus: function () {},
+                    scrollIntoView: function () {},
+                    set innerHTML(v) { this._h = v; }, get innerHTML() { return this._h; } };
+                  return __els[id];
+                } };
+                """ % ('true' if is_master else 'false', json.dumps(items, ensure_ascii=False),
+                       len(items), json.dumps(counts, ensure_ascii=False),
+                       'true' if is_master else 'false'))
+                c.eval("const BOARD_NOTICE_CATS = ['전체', '미지급 사유', '특별 수수료율', '일반 공지'];"
+                       " const BOARD_FREE_CATS = ['전체', '소통', '특이사항', '정보공유', '질문'];"
+                       " const BOARD_NOTICE_SHOW = 4; const BOARD_CONTENT_MAX = 45000;")
+                for b in blocks13:
+                    c.eval(b)
+                return c
+
+            def section_html(html, sec):
+                """data-board-section="sec" 카드만 잘라 냅니다."""
+                head = 'data-board-section="%s"' % sec
+                if head not in html:
+                    return ''
+                rest = html.split(head, 1)[1]
+                other = 'data-board-section="'
+                return rest.split(other, 1)[0]
+
+            # (A) MASTER — 한 화면에 위 공지 · 아래 소통 게시판이 동시에
+            cm = build_ctx(True, items_for(True))
+            page_m = q13(cm.eval('boardPageHtml_()'))
+            check('data-board-section="notice"' in page_m and 'data-board-section="free"' in page_m,
+                  '한 화면에 공지·소통 두 영역이 함께 그려지지 않았습니다')
+            check(page_m.index('📌 공지사항') < page_m.index('💬 소통 · 특이사항 게시판'),
+                  '공지사항이 소통 게시판보다 위에 있지 않습니다')
+            check(page_m.count('data-board-no') == 4, '두 영역의 글이 한 화면에 다 그려지지 않았습니다')
+            top = section_html(page_m, 'notice')
+            bottom = section_html(page_m, 'free')
+            check('data-board-no="3"' in top and 'data-board-no="4"' in top and 'data-board-no="5"' not in top,
+                  '위 공지 영역에 공지만 그려지지 않았습니다')
+            check('data-board-no="5"' in bottom and 'data-board-no="2"' in bottom and 'data-board-no="3"' not in bottom,
+                  '아래 소통 영역에 소통 글만 그려지지 않았습니다')
+            check('📌 공지사항' in top and '💬 소통 · 특이사항 게시판' in bottom,
+                  '위아래 영역 제목이 없습니다')
+            check(top.index('data-board-no="3"') < top.index('data-board-no="4"'), '고정 글이 맨 위가 아닙니다')
+            for label in ['📌', '미지급 사유', '이엘파마 소액처 기준', '마스터', '2026-11-28 09:10',
+                          '펼치기 ▼', '📌 해제', '✏️', '🗑️']:
+                check(label in top, 'MASTER 공지 카드에 %s 가 없습니다' % label)
+            check('수정 2026-11-28 09:30' in top, '수정일시가 표시되지 않습니다')
+            check('&lt;b&gt;2026.12 EDI&lt;/b&gt;' in top, '제목이 이스케이프되지 않았습니다(XSS)')
+            check('white-space:pre-wrap' not in top, '접힌 글의 본문 상자가 그대로 그려집니다')
+            check('371품목 추가 수수료' in top, '미리보기 본문이 없습니다')
+            check('공지 접기 ▲' in top, '공지 영역 접기 버튼이 없습니다')
+
+            # 펼치기 — 본문 줄바꿈 유지
+            cm.eval('toggleBoardPost(3);')
+            page_open = q13(cm.eval('boardPageHtml_()'))
+            check('라온파마 직전 3개월' in page_open, '펼쳐도 본문이 나오지 않습니다')
+            check('white-space:pre-wrap' in page_open, '본문 줄바꿈 처리가 없습니다')
+            check('접기 ▲' in section_html(page_open, 'notice'), '펼친 글의 접기 버튼이 없습니다')
+            cm.eval('toggleBoardPost(3);')
+
+            # (B) 위 공지 툴바 — 카테고리 칩·검색·MASTER 공지 쓰기
+            bar_m = q13(cm.eval('boardToolbarHtml_("notice")'))
+            for label in ['🔍 제목·내용·작성자 검색', '✏️ 공지 쓰기', '미지급 사유 1', '특별 수수료율 1',
+                          '전체 2', '일반 공지 1']:
+                check(label in bar_m, 'MASTER 공지 툴바에 %s 가 없습니다' % label)
+            check('onclick="setBoardCategory(\'notice\', \'미지급 사유\')"' in bar_m, '카테고리 필터 버튼이 없습니다')
+
+            # (C) 아래 소통 게시판 — 늘 열린 글쓰기 폼(MASTER) + 말머리 4종
+            check('💬 소통 · 특이사항 남기기' in bottom, '아래 게시판 글쓰기 폼이 없습니다')
+            for label in ['board-free-cat', 'board-free-title', 'board-free-content',
+                          "submitBoardPost('free')", '소통', '특이사항', '정보공유', '질문']:
+                check(label in bottom, '소통 게시판 글쓰기 폼에 %s 가 없습니다' % label)
+            check('💾 저장' in bottom, '저장 버튼이 없습니다')
+            bar_free = q13(cm.eval('boardToolbarHtml_("free")'))
+            for label in ['🔍 제목·내용·작성자 검색', '특이사항 1', '정보공유 1', '전체 2']:
+                check(label in bar_free, '소통 게시판 툴바에 %s 가 없습니다' % label)
+
+            # 검색·말머리 거르기 (두 영역이 서로 영향 없이)
+            cm.eval("STATE.boardNoticeQuery = 'EDI';")
+            top_q = section_html(q13(cm.eval('boardPageHtml_()')), 'notice')
+            check(top_q.count('data-board-no') == 1 and 'data-board-no="4"' in top_q, '공지 검색이 동작하지 않습니다')
+            free_q = section_html(q13(cm.eval('boardPageHtml_()')), 'free')
+            check(free_q.count('data-board-no') == 2, '공지 검색이 소통 게시판까지 걸렀습니다')
+            cm.eval("STATE.boardNoticeQuery = ''; STATE.boardNoticeCat = '미지급 사유';")
+            check(section_html(q13(cm.eval('boardPageHtml_()')), 'notice').count('data-board-no') == 1,
+                  '공지 카테고리 필터가 동작하지 않습니다')
+            cm.eval("STATE.boardNoticeCat = '일반 공지';")
+            check('조건에 맞는 글이 없습니다' in section_html(q13(cm.eval('boardPageHtml_()')), 'notice'),
+                  '조건에 맞는 글이 없을 때 안내가 없습니다')
+            cm.eval("STATE.boardNoticeCat = '';")
+            cm.eval("STATE.boardFreeQuery = '정아름';")
+            check(section_html(q13(cm.eval('boardPageHtml_()')), 'free').count('data-board-no') == 1,
+                  '소통 게시판 작성자 검색이 동작하지 않습니다')
+            cm.eval("STATE.boardFreeQuery = ''; STATE.boardFreeCat = '특이사항';")
+            free_cat = section_html(q13(cm.eval('boardPageHtml_()')), 'free')
+            check(free_cat.count('data-board-no') == 1 and 'data-board-no="5"' in free_cat,
+                  '소통 게시판 말머리 필터가 동작하지 않습니다')
+            cm.eval("STATE.boardFreeCat = '';")
+
+            # (D) MASTER 공지 쓰기 — 위 영역에만 폼이 열리고, 접혀 있었으면 펴집니다
+            cm.eval('STATE.boardNoticeFolded = true; openBoardComposer("notice");')
+            page_c = q13(cm.eval('boardPageHtml_()'))
+            top_c = section_html(page_c, 'notice')
+            check('📌 공지 쓰기' in top_c, 'MASTER 공지 작성 폼이 없습니다')
+            for label in ['board-notice-cat', 'board-notice-title', 'board-notice-content',
+                          "submitBoardPost('notice')"]:
+                check(label in top_c, '공지 작성 폼에 %s 가 없습니다' % label)
+            check(cm.eval('STATE.boardNoticeFolded') is False or cm.eval('STATE.boardNoticeFolded') == 0,
+                  '공지 쓰기를 열어도 접힌 공지 영역이 펴지지 않았습니다')
+            check('value="일반 공지" selected' in top_c, '공지 기본 말머리가 일반 공지가 아닙니다')
+            cm.eval("STATE.boardDraft = null; STATE.boardEditNo = 0;")
+
+            # 접기/펼치기 — 접어도 아래 게시판은 그대로
+            cm.eval('toggleBoardNoticeFold();')
+            page_fold = q13(cm.eval('boardPageHtml_()'))
+            top_fold = section_html(page_fold, 'notice')
+            check('data-board-no' not in top_fold and '공지 펼치기 ▼' in top_fold, '공지 영역 접기가 동작하지 않습니다')
+            check(section_html(page_fold, 'free').count('data-board-no') == 2, '공지를 접으면 아래 게시판도 사라집니다')
+            cm.eval('toggleBoardNoticeFold();')
+            check('data-board-no' in section_html(q13(cm.eval('boardPageHtml_()')), 'notice'),
+                  '공지 영역 다시 펼치기가 동작하지 않습니다')
+
+            # (E) STAFF — 아래 글쓰기 폼은 보이고, 위 공지 작성·수정·삭제는 없다
+            cs = build_ctx(False, items_for(False))
+            page_s = q13(cs.eval('boardPageHtml_()'))
+            top_s = section_html(page_s, 'notice')
+            bottom_s = section_html(page_s, 'free')
+            check('data-board-section="notice"' in page_s and 'data-board-section="free"' in page_s,
+                  'STAFF 화면에 두 영역이 함께 그려지지 않았습니다')
+            check('💬 소통 · 특이사항 남기기' in bottom_s and 'board-free-title' in bottom_s,
+                  'STAFF 에게 소통 게시판 글쓰기 폼이 보이지 않습니다')
+            check("submitBoardPost('free')" in bottom_s, 'STAFF 소통 글 저장 버튼이 없습니다')
+            check('🗑️' not in top_s and '📌 해제' not in top_s and '✏️' not in top_s,
+                  'STAFF 공지 카드에 관리 버튼이 보입니다')
+            bar_s = q13(cs.eval('boardToolbarHtml_("notice")'))
+            check('공지 작성은 MASTER만' in bar_s and '✏️ 공지 쓰기' not in bar_s,
+                  'STAFF 에게 공지 작성 버튼이 보입니다')
+            cs.eval('openBoardComposer("notice");')
+            check(q13(cs.eval('__toasts[__toasts.length - 1]')).find('MASTER') != -1,
+                  'STAFF 가 공지를 쓰려 하면 안내가 없습니다')
+            check(cs.eval('STATE.boardDraft === null'), 'STAFF 인데 공지 작성 폼이 열렸습니다')
+            check('📌 공지 쓰기' not in q13(cs.eval('boardPageHtml_()')), 'STAFF 화면에 공지 작성 폼이 그려졌습니다')
+
+            # STAFF — 소통 글: 내 글만 수정·삭제
+            card_mine = bottom_s.split('data-board-no="5"')[1].split('data-board-no=')[0]
+            check('✏️' in card_mine and '🗑️' in card_mine, '내 소통 글에 수정·삭제 버튼이 없습니다')
+            card_other = bottom_s.split('data-board-no="2"')[1]
+            check('✏️' not in card_other and '🗑️' not in card_other, '남의 소통 글에 수정·삭제 버튼이 보입니다')
+
+            # STAFF — 소통 글 저장은 그대로 boardCreate(자유)
+            cs.eval("openBoardComposer('free');")
+            check(q13(cs.eval('STATE.boardDraft.구분')) == '자유', '소통 게시판 작성 구분이 자유가 아닙니다')
+            check(q13(cs.eval('STATE.boardDraft.카테고리')) == '소통', '소통 게시판 기본 말머리가 소통이 아닙니다')
+            cs.eval("__els['board-free-title'].value = '오후 방문 결과'; __els['board-free-content'].value = '수아의원 방문 완료'; "
+                    "__els['board-free-cat'].value = '특이사항';")
+            cs.eval("submitBoardPost('free');")
+            for _ in range(40):
+                try:
+                    if not cs.execute_pending_job():
+                        break
+                except Exception:  # noqa: BLE001
+                    break
+            calls_s = json.loads(q13(cs.eval('JSON.stringify(__calls)')))
+            creates = [c for c in calls_s if c['fn'] == 'boardCreate']
+            check(len(creates) == 1, 'STAFF 소통 글 저장이 서버로 가지 않았습니다: %s' % calls_s)
+            if creates:
+                arg = creates[0]['args'][0]
+                check(arg['구분'] == '자유' and arg['카테고리'] == '특이사항',
+                      '소통 글 저장 값이 다릅니다: %s' % arg)
+                check(arg['제목'] == '오후 방문 결과' and arg['내용'] == '수아의원 방문 완료',
+                      '소통 글 제목·내용이 서버로 전달되지 않았습니다: %s' % arg)
+            check(q13(cs.eval('__toasts[__toasts.length - 1]')) == '올렸습니다.', '소통 글 저장 안내가 없습니다')
+
+            # (F) 공지가 많으면 위 영역은 컴팩트하게, 더 보기로 펼침
+            extra = []
+            for k in range(5):
+                extra.append({'번호': 10 + k, '구분': '공지', '카테고리': '일반 공지',
+                              '제목': '공지 %d' % (k + 1), '내용': '내용 %d' % (k + 1),
+                              '작성자아이디': 'master', '작성자명': '마스터', '고정여부': 'N',
+                              '작성일시': '2026-11-27 09:%02d:00' % (10 + k), '수정일시': '',
+                              '수정가능': True, '삭제가능': True, '고정가능': True})
+            c_many = build_ctx(True, items_for(True, extra))
+            many_top = section_html(q13(c_many.eval('boardPageHtml_()')), 'notice')
+            check(many_top.count('data-board-no') == 4, '공지 영역이 기본 4건으로 접히지 않았습니다')
+            check('＋ 공지 3건 더 보기' in many_top, '공지 더 보기 버튼이 없습니다')
+            c_many.eval('toggleBoardNoticeMore();')
+            many_all = section_html(q13(c_many.eval('boardPageHtml_()')), 'notice')
+            check(many_all.count('data-board-no') == 7, '공지 더 보기가 동작하지 않습니다')
+            check('공지 접기 ▲' in many_all, '공지 더 보기 접기가 없습니다')
+
+            # (G) 서버 오류(재배포 전) 안내 · 불러오는 중
+            c = build_ctx(True, items_for(True))
+            c.eval("STATE.boardError = 'SERVER_HINT'; STATE.boardData = null;")
+            err_html = q13(c.eval('boardPageHtml_()'))
+            check('SERVER_HINT' in err_html and '불러오는 중' in err_html,
+                  '게시판 서버 오류 안내가 없습니다')
+            check('data-board-section="free"' in err_html, '오류가 나도 아래 소통 게시판 자리가 없습니다')
+    except ImportError:
+        print('(quickjs 없음 — 공지사항·게시판 실행 검사 생략: pip install quickjs)')
+
