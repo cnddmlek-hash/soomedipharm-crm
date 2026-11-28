@@ -81,18 +81,23 @@
         w.__QA.mock = (p.docType === 'notice') ? MOCK_GOSI : MOCK_CUT;
         return new Promise(function (resolve) { setTimeout(function () { resolve(w.__QA.mock); }, 120); });
       }
+      if (fn === 'sendDocumentEmail') {
+        w.__QA.mailPayload = (args && args[0]) || null;
+        return Promise.resolve({ success: true, message: '이메일이 정상 발송되었습니다.', logs: [] });
+      }
       if (fn === 'guideMakers') return Promise.resolve({ makers: [] });
       if (fn === 'getDeptGuide') return Promise.resolve({ depts: [] });
       if (fn === 'getCoverageNotes') return Promise.resolve({ items: [], categories: [], total: 0 });
       return Promise.resolve({});
     };
 
+    w.print = function () { w.__QA.printed = (w.__QA.printed || 0) + 1; };   // 인쇄 대화상자 대신 호출만 셈
     try {
       w.eval([
         "STATE.user = { 아이디: 'qa', 담당자명: 'QA', 권한: 'MASTER' };",
         "STATE.authToken = 'qa-token'; STATE.isMaster = true; STATE.guestMode = false;",
         "STATE.settings = { '회사명': '수메디팜' }; STATE.today = '2026-11-29';",
-        "STATE.clients = [{ 거래처코드: 'S001', 거래처명: '서울연세내과의원', 사용여부: 'Y' },",
+        "STATE.clients = [{ 거래처코드: 'S001', 거래처명: '서울연세내과의원', 사용여부: 'Y', 이메일: 'doctor@example.com' },",
         "                 { 거래처코드: 'S002', 거래처명: '마포튼튼약국', 사용여부: 'Y' }];",
         "STATE.products = [{ 제품명: '케토롤락 트로메타민 주 30mg' }, { 제품명: '리투아민 주' }];",
         "document.getElementById('login-overlay').classList.add('hidden');",
@@ -208,8 +213,64 @@
       setTimeout(function () {
         var toast = String(d.getElementById('toast').textContent || '');
         check('복사 버튼이 안내 문구를 보여 줌', toast.length > 0, toast);
-        step5();
+        w.eval("noticeReanalyzeAs('cut')");     // PDF·메일은 삭감통보서 초안으로 확인
+        setTimeout(step4b, 700);
       }, 250);
+    }
+
+    function step4b() {
+      var d = frame.contentDocument;
+      var res = d.getElementById('notice-result');
+      function btn(text) {
+        return Array.prototype.filter.call(res.querySelectorAll('button'), function (b) {
+          return String(b.textContent).indexOf(text) !== -1;
+        })[0];
+      }
+      var printBtn = btn('🖨️ PDF 저장 / 인쇄');
+      var mailBtn = btn('✉️ 이메일 발송');
+      check('PDF 저장 / 인쇄 버튼이 있다', !!printBtn);
+      check('이메일 발송 버튼이 있다', !!mailBtn);
+
+      if (printBtn) printBtn.click();
+      var area = d.getElementById('print-area');
+      var html = area ? String(area.innerHTML) : '';
+      check('인쇄(A4) 문서가 만들어지고 print() 호출됨', (w.__QA.printed || 0) === 1, 'printed=' + w.__QA.printed);
+      check('인쇄 문서에 사유서 제목·병원·초안', html.indexOf('이의신청 / 재심사조정청구 사유서 초안') !== -1 &&
+        html.indexOf('서울연세내과의원') !== -1 && html.indexOf('[환자 상병/진료내역 기재]') !== -1);
+      check('인쇄 문서에 핵심 요약·코드', html.indexOf('핵심 요약') !== -1 && html.indexOf('조정코드 0231') !== -1);
+
+      if (mailBtn) mailBtn.click();
+      setTimeout(function () {
+        var modal = d.getElementById('email-modal');
+        var open = !!(modal && /(^|\s)open(\s|$)/.test(String(modal.className)));
+        check('이메일 발송 모달이 열린다', open, modal ? modal.className : '없음');
+        var to = d.getElementById('em-to');
+        var subj = d.getElementById('em-subject');
+        var prev = d.getElementById('em-preview');
+        check('거래처 이메일이 자동으로 채워짐', !!to && to.value === 'doctor@example.com', to ? to.value : '');
+        check('수신 이메일 직접 수정 가능', !!to && !to.disabled && !to.readOnly);
+        check('제목에 병원명·문서 종류', !!subj && subj.value.indexOf('서울연세내과의원') !== -1 && subj.value.indexOf('삭감통보서') !== -1,
+          subj ? subj.value : '');
+        check('미리보기에 사유서 초안', !!prev && String(prev.textContent).indexOf('[환자 상병/진료내역 기재]') !== -1);
+        var sendBtn = Array.prototype.filter.call(modal.querySelectorAll('button'), function (b) {
+          return String(b.textContent).indexOf('최종 발송하기') !== -1;
+        })[0];
+        check('최종 발송 버튼이 있다', !!sendBtn);
+        if (sendBtn) sendBtn.click();
+        setTimeout(function () {
+          var pay = w.__QA.mailPayload || {};
+          check('sendDocumentEmail 로 발송 요청', !!pay.to, JSON.stringify({ to: pay.to, docType: pay.docType, fileName: pay.fileName }));
+          check('발송 문서 종류 = 고시·삭감분석', pay.docType === '고시·삭감분석', String(pay.docType));
+          check('첨부 PDF 내용에 초안·요약', String(pay.pdfHtml || '').indexOf('이의신청 / 재심사조정청구 사유서 초안') !== -1 &&
+            String(pay.pdfHtml || '').indexOf('조정코드 0231') !== -1);
+          check('파일명에 병원명·pdf', String(pay.fileName || '').indexOf('서울연세내과의원') !== -1 && /\.pdf$/.test(String(pay.fileName || '')),
+            String(pay.fileName));
+          check('거래처명이 함께 전달됨', pay.clientName === '서울연세내과의원', String(pay.clientName));
+          var toast = String(d.getElementById('toast').textContent || '');
+          check('발송 완료 안내', toast.indexOf('이메일') !== -1, toast);
+          step5();
+        }, 500);
+      }, 300);
     }
 
     function step5() {

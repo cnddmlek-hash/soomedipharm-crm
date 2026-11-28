@@ -8813,6 +8813,8 @@
                '<textarea id="notice-draft" style="width:100%;min-height:280px;font-size:12.5px;line-height:1.7;font-family:inherit;box-sizing:border-box;">' + esc(draft) + '</textarea>' +
                '<div class="toolbar" style="gap:6px;flex-wrap:wrap;margin-top:6px;">' +
                  '<button class="btn btn-primary btn-sm" onclick="noticeCopyDraft()">📋 초안 복사</button>' +
+                 '<button class="btn btn-outline btn-sm" onclick="noticePrintPdf()">🖨️ PDF 저장 / 인쇄</button>' +
+                 '<button class="btn btn-outline btn-sm" onclick="noticeOpenEmail()">✉️ 이메일 발송</button>' +
                  '<button class="btn btn-outline btn-sm" onclick="noticeReanalyzeAs(\'' + (key === 'cut' ? 'notice' : 'cut') + '\')">' +
                    (key === 'cut' ? '고시·공지로 다시 읽기' : '삭감통보서로 다시 읽기') + '</button>' +
                '</div>' +
@@ -8860,6 +8862,97 @@
        } catch (e2) { ok = false; }
      }
      showToast(ok ? '초안을 복사했습니다. 원장님께 붙여넣어 보내세요.' : '복사하지 못했습니다. 초안 상자를 길게 눌러 직접 복사해 주세요.');
+   }
+
+   /** 인쇄·이메일용 A4 문서 — 초안 상자에 지금 적혀 있는 글자를 그대로 씁니다 */
+   function noticeDocHtml_() {
+     const r = NOTICE_DOC.last;
+     if (!r) return '';
+     const ta = document.getElementById('notice-draft');
+     const rawDraft = String(ta ? ta.value : (r.appealDraft || ''));
+     const lines = rawDraft.replace(/\r\n?/g, '\n').split('\n');
+     let heading = '';
+     if (lines.length && /^\s*\[.+\]\s*$/.test(lines[0])) {
+       heading = String(lines[0]).trim().replace(/^\[/, '').replace(/\]$/, '');
+       lines.shift();
+       while (lines.length && !String(lines[0]).trim()) lines.shift();
+     }
+     const client = NOTICE_DOC.meta.clientCode ? findClient(NOTICE_DOC.meta.clientCode) : null;
+     const st = STATE.settings || {};
+     const comp = st['회사명'] || '수메디팜';
+     const rep = st['담당자명'] || '';
+     const phone = st['담당자연락처'] || '';
+     const now = new Date();
+     const pad = function (n) { return (n < 10 ? '0' : '') + n; };
+     const today = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+     const pairs = [
+       ['문서 종류', r.docKind || '미확인'],
+       ['병원(거래처)', client ? client.거래처명 + ' (' + client.거래처코드 + ')' : '[병원명 기재]'],
+       ['대상 품목', NOTICE_DOC.meta.itemName || '[품목명 기재]'],
+       ['문서번호·코드', (r.codes || []).join(', ') || '-'],
+       ['시행일·적용일', (r.dates || []).join(', ') || '-'],
+       ['작성', comp + (rep ? ' · ' + rep : '') + (phone ? ' · ' + phone : '')]
+     ];
+     const rows = [];
+     for (let i = 0; i < pairs.length; i += 2) {
+       const a = pairs[i];
+       const b = pairs[i + 1];
+       rows.push('<tr><td class="lbl">' + esc(a[0]) + '</td><td>' + esc(a[1]) + '</td>' +
+         (b ? '<td class="lbl">' + esc(b[0]) + '</td><td>' + esc(b[1]) + '</td>' : '<td class="lbl"></td><td></td>') + '</tr>');
+     }
+     const summary = (r.summaryLines || []).map(function (x) { return '<div>· ' + esc(x) + '</div>'; }).join('');
+     const body = lines.map(function (l) {
+       const t = String(l).replace(/\s+$/, '');
+       return t.trim() ? '<div>' + esc(t) + '</div>' : '<div style="height:7px;"></div>';
+     }).join('');
+     return '<h1>' + esc(heading || '고시문·삭감통보서 분석 요약') + '</h1>' +
+       '<div class="print-brand-line"><span>' + esc(comp) + (rep ? ' · ' + esc(rep) : '') + '</span>' +
+         '<span>작성일 ' + esc(today) + '</span></div>' +
+       '<table class="meta">' + rows.join('') + '</table>' +
+       (summary
+         ? '<div style="font-weight:700;color:#1e3a5f;font-size:12px;margin:2px 0 4px;">■ 문서 핵심 요약</div>' +
+           '<div style="font-size:11px;line-height:1.75;color:#111;margin-bottom:12px;">' + summary + '</div>'
+         : '') +
+       '<div style="font-weight:700;color:#1e3a5f;font-size:12px;margin:0 0 6px;">■ ' + esc(heading || '문서 요약') + '</div>' +
+       '<div style="font-size:11px;line-height:1.85;color:#111;border:1px solid #cbd5e1;padding:10px 12px;">' + body + '</div>' +
+       '<div class="print-note-line">※ 이 문서는 올린 사진·PDF에서 읽은 내용으로 만든 분석 요약입니다. 상병·진료내역·첨부서류는 원장님이 확인해 주세요.</div>';
+   }
+
+   /** 🖨️ PDF 저장 / 인쇄 — 기존 처방전·거래원장과 같은 A4 인쇄 틀을 씁니다 */
+   function noticePrintPdf() {
+     if (!NOTICE_DOC.last) { showToast('먼저 문서를 읽어 주세요.'); return; }
+     const html = noticeDocHtml_();
+     if (!html) { showToast('인쇄할 내용이 없습니다.'); return; }
+     printArea_(html);
+   }
+
+   /** ✉️ 이메일 발송 — 기존 문서 발송 모달(sendDocumentEmail)을 그대로 씁니다 */
+   function noticeOpenEmail() {
+     if (!NOTICE_DOC.last) { showToast('먼저 문서를 읽어 주세요.'); return; }
+     const r = NOTICE_DOC.last;
+     const client = NOTICE_DOC.meta.clientCode ? findClient(NOTICE_DOC.meta.clientCode) : null;
+     const st = STATE.settings || {};
+     const comp = st['회사명'] || '수메디팜';
+     const rep = st['담당자명'] || '';
+     const phone = st['담당자연락처'] || '';
+     const clinicName = client ? String(client.거래처명 || '') : '';
+     const docType = '고시·삭감분석';
+     const now = new Date();
+     const pad = function (n) { return (n < 10 ? '0' : '') + n; };
+     const today = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+
+     STATE.emailDraft = { docType: docType, clientName: clinicName, pdfHtml: noticeDocHtml_() };
+     document.getElementById('email-modal-title').textContent = '✉️ ' + (r.docKind || '문서') + ' 분석 요약 이메일 발송';
+     document.getElementById('em-to').value = (client && client.이메일) ? String(client.이메일) : '';
+     document.getElementById('em-filename').value = docType + '_' + (clinicName || '미지정') + '_' + today + '.pdf';
+     document.getElementById('em-subject').value = '[' + comp + '] ' + (clinicName ? clinicName + ' ' : '') + (r.docKind || '문서') + ' 분석 요약 송부';
+     document.getElementById('em-body').value =
+       '안녕하세요, ' + comp + ' ' + rep + '입니다.\n\n' +
+       (clinicName ? clinicName + ' ' : '') + (r.docKind || '문서') + '를 읽어 정리한 핵심 요약과 이의신청 사유서 초안을 PDF로 첨부드립니다.\n' +
+       '[환자 상병/진료내역 기재]처럼 표시된 부분은 확인 후 채워 주세요.\n\n' +
+       '감사합니다.\n' + comp + ' ' + rep + (phone ? ' (' + phone + ')' : '');
+     document.getElementById('em-preview').innerHTML = noticeDocHtml_();
+     openModal('email-modal');
    }
 
    // ---------------------------------------------------------------- 급여·삭감 가이드 (v1.5)
