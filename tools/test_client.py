@@ -1043,6 +1043,8 @@ def main():
           '예전 자사(페이서) 표기를 제약사로 쓰지 않는 규칙이 없습니다')
     check("const DISTRIBUTOR_LABEL = '페이서써플라이(주)';" in js, '취급 도매상(페이서써플라이) 표기가 없습니다')
     check('PRODUCT_MAKER_BY_CODE_' in js and 'builtinMakerOf_' in js, '앱 내장 제약사(실제 제조사) 목록이 없습니다')
+    check('<th>보험코드</th><th>제품명</th><th>성분</th><th>제약사</th>' in js, '제품마스터 목록에 제약사 열이 없습니다')
+    check("'<td>' + makerCellHtml_(p, 'inject') + '</td>'" in js, '제품마스터 목록 행에 제약사 값이 없습니다')
     check('return SELF_MAKER_LABEL' not in js and 'const SELF_MAKER_LABEL' not in js,
           '아직 자사(페이서)를 제약사 기본값으로 씁니다')
     # 11-a) 처방 셋팅 — 품목 체크 + 선택 항목 담기
