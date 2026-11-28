@@ -831,7 +831,7 @@
      </div>
      <div class="form-group" style="margin-bottom:10px;">
        <label>아이디</label>
-       <input type="text" id="login-id" autocomplete="username" placeholder="예: choi" onkeydown="if(event.key==='Enter')document.getElementById('login-pw').focus()" />
+       <input type="text" id="login-id" autocomplete="username" placeholder="아이디" onkeydown="if(event.key==='Enter')document.getElementById('login-pw').focus()" />
      </div>
      <div class="form-group">
        <label>비밀번호</label>
@@ -1248,7 +1248,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.24';
+   const APP_VERSION = 'v1.25';
 
    const STATE = {
      // 로그인/권한
@@ -1408,10 +1408,11 @@
    // -------------------------------------------------------------------------
    const SERVER_URL_KEY = 'crm_server_url';
 
-   // 기본 시트 서버 주소 — 새 기기·새 브라우저(localStorage 비어 있음)에서도
-   // '시트 서버 연결하기' 화면 없이 바로 로그인 화면으로 들어가도록 미리 고정해 둡니다.
-   // 설정 탭에서 주소를 바꾸면 localStorage 값이 이 기본값보다 우선합니다.
-   const DEFAULT_SERVER_URL = 'https://script.google.com/macros/s/AKfycbwUsVA1XUyCTVRxHOma-umbixyb3ctObwWwiQEwFR_qlOvgJ-NXTTSjjKs3P9mJFctoQQ/exec';
+   // 기본 시트 서버 주소 — 보안을 위해 화면에 고정하지 않습니다(빈 값).
+   //  · 새 기기·새 브라우저(localStorage 비어 있음)에서는 '시트 서버 연결하기' 화면에서
+   //    웹앱 주소를 한 번 입력받아 localStorage 에만 저장합니다.
+   //  · 이미 등록한 기기는 localStorage 값으로 그대로 연결됩니다.
+   const DEFAULT_SERVER_URL = '';
 
    function isAppsScriptHost() {
      return Boolean(typeof google !== 'undefined' && google.script && google.script.run);
