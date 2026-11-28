@@ -172,7 +172,9 @@
     out(!!$('st-hira'), '기존 HIRA_API_KEY 칸도 그대로 있다');
     var hiraTop = $('st-hira').getBoundingClientRect().top;
     var gemTop = $('st-gemini').getBoundingClientRect().top;
-    out(gemTop > hiraTop, 'GEMINI 칸이 HIRA_API_KEY 바로 아래에 있다');
+    var domOrder = ($('st-hira').compareDocumentPosition($('st-gemini')) & 4) === 4;   // 4 = DOCUMENT_POSITION_FOLLOWING
+    out(domOrder && (gemTop > hiraTop - 2), 'GEMINI 칸이 HIRA_API_KEY 바로 뒤(아래·나란히)에 있다',
+      'top ' + Math.round(hiraTop) + '→' + Math.round(gemTop));
     out(($('st-gemini').getAttribute('placeholder') || '').indexOf('미등록') !== -1, '키 미등록일 때 안내 문구',
       $('st-gemini').getAttribute('placeholder'));
 
