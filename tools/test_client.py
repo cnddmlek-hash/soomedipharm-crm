@@ -70,10 +70,10 @@ def main():
     except ImportError:
         print('(esprima 없음 — 문법 검사 생략: pip install esprima)')
 
-    # 2) v1.11 요소
-    check("const APP_VERSION = 'v1.11'" in js, 'APP_VERSION 이 v1.11 이 아닙니다')
-    check('<title>수메디팜 미니 CRM v1.11</title>' in html, '브라우저 탭 제목의 버전이 v1.11 이 아닙니다')
-    check('ver-chip">v1.11' in html and 'ver-chip dark">v1.11' in html, '로그인 화면·상단 바의 버전 칩이 v1.11 이 아닙니다')
+    # 2) v1.12 요소
+    check("const APP_VERSION = 'v1.12'" in js, 'APP_VERSION 이 v1.12 가 아닙니다')
+    check('<title>수메디팜 미니 CRM v1.12</title>' in html, '브라우저 탭 제목의 버전이 v1.12 가 아닙니다')
+    check('ver-chip">v1.12' in html and 'ver-chip dark">v1.12' in html, '로그인 화면·상단 바의 버전 칩이 v1.12 가 아닙니다')
     check('id: \'drug\'' in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
     check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
     # v1.11 — 🧭 처방 셋팅은 경구제 전용 · 💉 주사제 셋팅은 💉 주사제 주문 메뉴 안 탭
@@ -1004,6 +1004,303 @@ def main():
         check('감기 몸살' not in p_none, '모두 접기가 동작하지 않습니다')
     except ImportError:
         print('(quickjs 없음 — 접기·펼치기 실행 검사 생략: pip install quickjs)')
+
+    # 11) v1.12 — 선택 담기 · 금액 '원' · 거래원장 회전일 · 원장님 안내용 출력/PDF
+    raw = open(INDEX, encoding='utf-8').read()   # html 은 위쪽 실행 검사에서 바뀔 수 있어 다시 읽음
+    check('function fmtWon' in js, "금액 '원' 표기 헬퍼(fmtWon)가 없습니다")
+    check('makerOf_' in js and 'makerCellHtml_' in js and 'SELF_MAKER_LABEL' in js,
+          '제약사 공통 표기 헬퍼가 없습니다')
+    check("SELF_MAKER_LABEL = '자사(페이서)'" in js, '주사·수액 제약사 기본값이 자사(페이서)가 아닙니다')
+    # 11-a) 처방 셋팅 — 품목 체크 + 선택 항목 담기
+    for need in ['guidePick', 'guideAddSelected', 'guideToggleProduct', 'guideToggleIngredient',
+                 'guideBulkAddLabel_', 'guidePickCodes_', 'guideSyncPickUI_', 'data-guide-pick']:
+        check(need in js, '처방 셋팅 선택 담기에 %s 가 없습니다' % need)
+    check('💊 선택 항목 담기' in js, '처방 셋팅에 선택 항목 담기 버튼이 없습니다')
+    check('data-guide-ing' in js and 'data-guide-codes' in js, '성분 체크가 품목 체크와 함께 움직이지 않습니다')
+    check("'✓ 담김'" in js and 'guideAddItem' in js, '개별 + 담기(✓ 담김)가 남아 있지 않습니다')
+    # 11-b) 주사제 셋팅 — 선택 항목 매출 등록 (여러 품목 한 번에)
+    for need in ['pendingOrderProducts', 'pendingOrderCardHtml_', 'submitPendingOrderProducts',
+                 'injectSendSelectedToOrder', 'injBulkOrderLabel_', 'mergePendingOrderProducts_',
+                 'pendingOrderRowAmount_', 'changePendingOrderQty']:
+        check(need in js, '주사제 셋팅 일괄 매출 등록에 %s 가 없습니다' % need)
+    check('🛒 선택 항목 매출 등록' in js, '주사제 셋팅에 선택 항목 매출 등록 버튼이 없습니다')
+    check('💾 선택 품목 매출 일괄 등록' in js, '담은 품목 일괄 등록 버튼이 없습니다')
+    check('🛒 주사제 셋팅에서 담은 품목' in js, '주문 화면에 담은 품목 카드가 없습니다')
+    check('🛒 매출 등록' in js, '개별 매출 등록 버튼이 남아 있지 않습니다')
+    # 11-c) 금액 '원' — 금액 열에 '원'이 빠진 곳이 없는지 (핵심 화면)
+    for label, pattern in [
+        ('거래원장 이월잔액', "fmtNum(d.carryOver) + '원"),
+        ('거래명세서 단가', "fmtNum(s.단가) + '원"),
+        ('월별 실적 합계 수금', "fmtNum(sum.수금합계) + '원"),
+        ('처방 요약 처방금액', "fmtNum(b.처방금액) + '원"),
+        ('처방 상세 예상수수료', "fmtNum(r.예상수수료) + '원"),
+    ]:
+        check(pattern in js, '금액 원 표기가 빠졌습니다: %s' % label)
+    check("const main = has ? fmtNum(v) + '원'" in js, '월별 실적 금액 셀에 원 표기가 없습니다')
+    # 11-d) 거래원장 · 명세서 — 회전일 함께 표기
+    for need in ['ledgerTurnoverHtml_', 'loadLedgerTurnover_', 'ledgerTurnoverText_', 'ledgerTurnover']:
+        check(need in js, '거래원장 회전일 표기에 %s 가 없습니다' % need)
+    check("'회전일 ' + (days >= 999" in js, '회전일 표기 문구가 없습니다')
+    check('경고기준 ' in js, '회전일 경고기준 표기가 없습니다')
+    # 11-e) 출력/PDF — 처방 셋팅 · 주사제 셋팅(원장님 안내용) + 처방전 입력
+    for need in ['printGuideSheet', 'printInjectSheet', 'printRxSheet', 'printDocHtml_',
+                 'guidePrintRows_', 'injectPrintRows_', 'rxPrintRows_', 'printStamp_']:
+        check(need in js, '출력/PDF 기능에 %s 가 없습니다' % need)
+    check('🖨️ 원장님 안내용 출력 / PDF' in js, '원장님 안내용 출력 버튼이 없습니다')
+    check('🖨️ 출력 / PDF 저장' in js, '처방전 입력 출력 / PDF 저장 버튼이 없습니다')
+    for fn_name in ['printGuideSheet', 'printInjectSheet']:
+        body = re.search(r'function %s\(\)\s*\{(.*?)\n   \}' % fn_name, js, re.S)
+        check(bool(body), '%s 를 찾지 못했습니다' % fn_name)
+        if body:
+            check('수수료율' not in body.group(1) and '예상수수료' not in body.group(1),
+                  '%s 출력물에 내부 수수료율이 들어갑니다' % fn_name)
+    rx_body = re.search(r'function printRxSheet\(\)\s*\{(.*?)\n   \}', js, re.S)
+    check(bool(rx_body) and '예상수수료' in rx_body.group(1), '처방전 출력물에 예상수수료가 없습니다')
+    check('#print-area thead' in raw and 'page-break-inside: avoid' in raw, '인쇄용 페이지 나눔 스타일이 없습니다')
+    check('window.print()' in js, 'window.print() 호출이 없습니다')
+
+    # 12) v1.12 실행 검사 — 금액 '원' · 제약사 · 선택 담기 · 일괄 매출 · 회전일 · 출력물
+    try:
+        import quickjs
+
+        def q12(v):
+            return v.decode() if isinstance(v, bytes) else v
+
+        def load(ctx, names, label):
+            blocks = []
+            for n in names:
+                b = extract_fn(js, n)
+                check(b is not None, '%s: %s 를 추출하지 못했습니다' % (label, n))
+                blocks.append(b)
+            if any(b is None for b in blocks):
+                return False
+            for b in blocks:
+                ctx.eval(b)
+            return True
+
+        # (A) 금액 '원' · 제약사 표기 규칙
+        ctx = quickjs.Context()
+        ctx.eval('var STATE = { products: [], guideProductCache: {}, settings: { 부가세율: "10" } };')
+        ctx.eval('const SELF_MAKER_LABEL = "자사(페이서)";')
+        ctx.eval('function esc(s) { return String(s == null ? "" : s); }')
+        if load(ctx, ['fmtNum', 'fmtWon', 'rxCodeNorm_', 'rxCodeKey_', 'makerFromName_', 'makerOf_',
+                      'makerCellHtml_', 'perfAmt_', 'pendingOrderRowAmount_'], '금액/제약사'):
+            check(q12(ctx.eval('fmtWon(1234567)')) == '1,234,567원', "fmtWon 천단위 오류: %s" % q12(ctx.eval('fmtWon(1234567)')))
+            check(q12(ctx.eval('fmtWon(0)')) == '0원', "0원 표기 오류: %s" % q12(ctx.eval('fmtWon(0)')))
+            check(q12(ctx.eval('fmtWon("-")')) == '-', '대시(-)는 그대로 두어야 합니다')
+            check(q12(ctx.eval('fmtWon("12,000원")')) == '12,000원', "'원'이 중복됩니다")
+            check('1,020,000원' in q12(ctx.eval('perfAmt_(1020000, 3)')), '월별 실적 금액에 원이 없습니다')
+            check('0원' in q12(ctx.eval('perfAmt_(0)')), '금액 0 이 0원으로 표기되지 않습니다')
+            check(q12(ctx.eval("makerOf_({ 품목명: '베아셋정', 제약사: '대웅바이오' })")) == '대웅바이오',
+                  '제약사 값이 그대로 표기되지 않습니다')
+            check(q12(ctx.eval("makerOf_({ 품목명: '아다셀주' }, 'inject')")) == '자사(페이서)',
+                  '주사·수액 제약사 기본값이 자사(페이서)가 아닙니다')
+            check(q12(ctx.eval("makerOf_({ 품목명: '대웅바이오 베아셋정' })")) == '대웅바이오',
+                  '품목명 앞 제약사명을 살리지 못합니다')
+            check(q12(ctx.eval("makerOf_({ 품목명: '베아셋정' })")) == '제약사 미확인',
+                  '제약사 미상일 때 - 대신 안내가 없습니다')
+            amt = json.loads(q12(ctx.eval('JSON.stringify(pendingOrderRowAmount_({ 수량: 3, 기준단가: 10000 }))')))
+            check(amt['공급가액'] == 30000 and amt['부가세'] == 3000 and amt['합계'] == 33000,
+                  '담은 품목 금액 계산이 다릅니다: %s' % amt)
+
+        # (B) 처방 셋팅 — 성분 체크 + 선택 항목 담기
+        c2 = quickjs.Context()
+        c2.eval('''
+          var STATE = {
+            guideData: { dept: '내과', items: [
+              { 영문키: 'k1', 성분명: '아세트아미노펜', 우리제품: [
+                { 보험코드: '073001620', 품목명: '베아셋정', 제약사: '대웅바이오', 약가: 1063, 수수료율: 54 },
+                { 보험코드: '073001480', 품목명: '아토타틴정', 제약사: '(주)일화', 약가: 1971, 수수료율: 34 } ] },
+              { 영문키: 'k2', 성분명: '아토르바스타틴', 우리제품: [
+                { 보험코드: 'E300', 품목명: '아토르정', 제약사: '한미약품', 약가: 500, 수수료율: 20 } ] }
+            ] },
+            guideSelected: {}, guidePick: {}, guidePending: [], rxGuideCodes: [],
+            rxClient: '', guideProductCache: {}, guideRec: null, products: [], rxFrequent: [], clients: []
+          };
+          var __toasts = [];
+          function showToast(m) { __toasts.push(String(m)); }
+          function findClient() { return null; }
+          var document = { querySelectorAll: function () { return []; }, getElementById: function () { return null; } };
+        ''')
+        c2.eval('function esc(s) { return String(s == null ? "" : s); }')
+        if load(c2, ['rxCodeNorm_', 'rxCodeKey_', 'guideCacheProduct_', 'guideFindProduct_',
+                     'guideCodesOfIngredient_', 'guidePickCodes_', 'guidePickCount_',
+                     'guideBulkAddLabel_', 'guidePendingSet_', 'guidePendingCount_',
+                     'guideSyncPickUI_', 'guideSyncPendingUI_', 'guideToggleIngredient', 'guideToggleProduct',
+                     'guideAddSelected'], '처방 셋팅 선택 담기'):
+            check('073001620,073001480' in q12(c2.eval('guideCodesOfIngredient_(STATE.guideData.items[0])')),
+                  '성분 체크가 제품 보험코드를 함께 기억하지 않습니다')
+            c2.eval("guideToggleIngredient('k1', true);")
+            check(int(c2.eval('guidePickCount_()')) == 2, '성분 체크로 2개 품목이 체크되지 않았습니다')
+            check('(2)' in q12(c2.eval('guideBulkAddLabel_()')), '선택 항목 담기 버튼에 개수가 없습니다')
+            c2.eval('guideAddSelected();')
+            check(q12(c2.eval('STATE.guidePending.join(",")')) == '073001620,073001480',
+                  '선택 항목 담기 결과가 다릅니다: %s' % q12(c2.eval('STATE.guidePending.join(",")')))
+            check(int(c2.eval('STATE.rxGuideCodes.length')) == 2, '담은 품목이 처방전 유지목록에 없습니다')
+            c2.eval("guideToggleIngredient('k1', false); guideToggleProduct('E300', true); guideAddSelected();")
+            check(q12(c2.eval('STATE.guidePending.join(",")')) == '073001620,073001480,E300',
+                  '두 번째 선택 담기가 합쳐지지 않았습니다: %s' % q12(c2.eval('STATE.guidePending.join(",")')))
+            c2.eval('guideAddSelected();')
+            check(int(c2.eval('STATE.guidePending.length')) == 3, '같은 품목이 중복으로 담겼습니다')
+
+        # (C) 주사제 셋팅 — 체크한 품목을 한 번에 매출 등록으로
+        c3 = quickjs.Context()
+        c3.eval('''
+          var STATE = {
+            injData: { picks: [
+              { 보험코드: 'A1', 품목명: '아다셀주', 규격: '1mL', 카테고리: '수액', 성분: '아다셀',
+                급여구분: '급여', 약가: 10000, 수수료율: 40 },
+              { 보험코드: 'A2', 품목명: '리도카인주', 규격: '2%', 카테고리: '통증', 성분: '리도카인',
+                급여구분: '급여', 약가: 5000, 수수료율: 30 },
+              { 보험코드: 'A3', 품목명: '비타민C주', 규격: '10mL', 카테고리: '영양', 성분: '아스코르빈산',
+                급여구분: '비급여', 약가: 8000, 수수료율: 50 }
+            ], items: [] },
+            injSelected: { A1: true, A2: true }, pendingOrderProducts: [], orderTab: 'inject',
+            orderClientCode: '', guideProductCache: {}, products: [], clients: []
+          };
+          var __menus = [], __toasts = [];
+          function showToast(m) { __toasts.push(String(m)); }
+          function switchMenu(id) { __menus.push(String(id)); }
+        ''')
+        c3.eval('const SELF_MAKER_LABEL = "자사(페이서)";')
+        c3.eval('function esc(s) { return String(s == null ? "" : s); }')
+        if load(c3, ['rxCodeNorm_', 'rxCodeKey_', 'makerFromName_', 'makerOf_', 'injPickedProducts_',
+                     'mergePendingOrderProducts_', 'injBulkOrderLabel_', 'injectSendSelectedToOrder'],
+                '주사제 선택 매출'):
+            check('(2)' in q12(c3.eval('injBulkOrderLabel_()')), '주사제 선택 매출 버튼에 개수가 없습니다')
+            c3.eval('injectSendSelectedToOrder();')
+            check(int(c3.eval('STATE.pendingOrderProducts.length')) == 2,
+                  '선택 항목 매출 등록이 담은 품목을 모두 담지 않았습니다')
+            check(q12(c3.eval('STATE.orderTab')) == 'entry', '매출 등록은 주문(매출) 등록 탭으로 가야 합니다')
+            check(q12(c3.eval('__menus[__menus.length - 1]')) == 'order', '주사제 주문 메뉴로 이동하지 않았습니다')
+            check(q12(c3.eval("STATE.pendingOrderProducts.map(function (r) { return r.제약사; }).join(',')")) == '자사(페이서),자사(페이서)',
+                  '담은 품목에 제약사가 없습니다')
+            c3.eval('injectSendSelectedToOrder();')
+            check(int(c3.eval('STATE.pendingOrderProducts.length')) == 2, '같은 품목이 중복으로 담겼습니다')
+
+        # (D) 거래원장 — 회전일 표기
+        c4 = quickjs.Context()
+        c4.eval('var STATE = { ledgerTurnover: null };')
+        c4.eval('function esc(s) { return String(s == null ? "" : s); }')
+        if load(c4, ['fmtNum', 'ledgerTurnoverText_', 'ledgerTurnoverHtml_'], '거래원장 회전일'):
+            c4.eval("""
+              STATE.ledgerTurnover = { 거래처코드: 'S001', 회전일: 30, 경고여부: false, 회전일경고기준: 100 };
+              var __d = { client: { 거래처코드: 'S001', 거래처명: '푸른정의원', 유통구분: '직납', 진료과: '내과', 담당자: '최충의' }, endingBalance: 1234567 };
+            """)
+            strip = q12(c4.eval('ledgerTurnoverHtml_(__d)'))
+            check('회전일 30일' in strip, '거래원장 상단에 회전일이 없습니다: %s' % strip[:300])
+            check('경고기준 100일' in strip, '거래원장 상단에 회전일 경고기준이 없습니다')
+            check('1,234,567원' in strip, '거래원장 상단 기말잔액에 원 표기가 없습니다')
+            check('미수 관리 필요' not in strip, '정상 거래처에 경고가 나옵니다')
+            c4.eval("STATE.ledgerTurnover = { 회전일: 120, 경고여부: true, 회전일경고기준: 100 };")
+            warn = q12(c4.eval('ledgerTurnoverHtml_(__d)'))
+            check('⚠️' in warn and '미수 관리 필요' in warn, '회전일 경고 상태가 표시되지 않습니다')
+            check('회전일 120일' in warn, '경고 회전일 숫자가 없습니다')
+            c4.eval('STATE.ledgerTurnover = null;')
+            none = q12(c4.eval('ledgerTurnoverHtml_(__d)'))
+            check('회전일 확인 중' in none, '회전일을 못 받았을 때 안내가 없습니다')
+
+        # (E) 출력물 — 원장님 안내용(수수료율 제외) · 처방전(수수료 포함)
+        c5 = quickjs.Context()
+        c5.eval('''
+          var STATE = {
+            settings: { 회사명: '수메디팜', 담당자명: '최충의', 담당자연락처: '010-2227-8668', 부가세율: '10' },
+            guideData: { dept: '내과', items: [
+              { 영문키: 'k1', 성분명: '아세트아미노펜', 우리제품: [
+                { 보험코드: '073001620', 품목명: '베아셋정', 규격: '10정', 제약사: '대웅바이오', 약가: 1063, 수수료율: 54 } ] } ] },
+            guideSelected: {}, guidePick: { '073001620': true }, guideRec: null, guideProductCache: {},
+            injData: { picks: [
+              { 보험코드: 'A1', 품목명: '아다셀주', 규격: '1mL', 카테고리: '수액', 성분: '아다셀',
+                급여구분: '급여', 약가: 10000, 수수료율: 40 } ] },
+            injSelected: {}, injProto: null, orderClientCode: '',
+            rxClient: 'S001', rxMonth: '2026-11', rxDate: '2026-11-28',
+            rxRows: [ { 품목명: '베아셋정', 보험코드: '073001620', 규격: '10정', 제약사: '대웅바이오',
+                        약가: 1063, 수수료율: 54, 수량: 10 } ],
+            rxSaved: null, products: [], clients: []
+          };
+          var __printed = '', __printCalls = 0;
+          var document = { querySelectorAll: function () { return []; },
+            getElementById: function () { return { set innerHTML(v) { __printed = v; } }; } };
+          var window = { print: function () { __printCalls++; } };
+          function showToast(m) {}
+          function findClient(code) { return { 거래처코드: 'S001', 거래처명: '푸른정의원' }; }
+        ''')
+        c5.eval('const SELF_MAKER_LABEL = "자사(페이서)";')
+        c5.eval('function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;"); }')
+        names5 = ['fmtNum', 'rxCodeNorm_', 'rxCodeKey_', 'makerFromName_', 'makerOf_', 'makerCellHtml_',
+                  'guidePickCodes_', 'guideCacheProduct_', 'guideFindProduct_', 'printItemRows_',
+                  'guidePrintRows_', 'injectPrintRows_', 'injPickedProducts_', 'rxPrintRows_',
+                  'printStamp_', 'printDocHtml_', 'printArea_', 'printGuideSheet', 'printInjectSheet',
+                  'printRxSheet']
+        if load(c5, names5, '출력물'):
+            c5.eval('printGuideSheet();')
+            ghtml = q12(c5.eval('__printed'))
+            check('처방 셋팅 안내' in ghtml, '처방 셋팅 출력물 제목이 없습니다')
+            check('수메디팜' in ghtml and '출력일시' in ghtml, '출력물에 수메디팜 헤더·출력일시가 없습니다')
+            check('대웅바이오' in ghtml, '처방 셋팅 출력물에 제약사가 없습니다')
+            check('1,063원' in ghtml, '처방 셋팅 출력물 약가에 원이 없습니다')
+            check('수수료율' not in ghtml and '54%' not in ghtml, '원장님 안내용 출력물에 내부 수수료율이 들어갑니다')
+            check(int(c5.eval('__printCalls')) >= 1, 'window.print() 가 호출되지 않았습니다')
+            c5.eval('printInjectSheet();')
+            ihtml = q12(c5.eval('__printed'))
+            check('주사·수액 셋팅 안내' in ihtml, '주사제 셋팅 출력물 제목이 없습니다')
+            check('자사(페이서)' in ihtml, '주사제 셋팅 출력물에 제약사(자사(페이서))가 없습니다')
+            check('수수료율' not in ihtml and '40%' not in ihtml, '주사제 안내용 출력물에 내부 수수료율이 들어갑니다')
+            c5.eval('printRxSheet();')
+            rhtml = q12(c5.eval('__printed'))
+            check('처방 내역' in rhtml and '푸른정의원' in rhtml, '처방전 출력물에 병원 정보가 없습니다')
+            check('2026-11' in rhtml, '처방전 출력물에 기준월이 없습니다')
+            check('10,630원' in rhtml, '입력한 수량이 출력물 처방금액에 반영되지 않았습니다')
+            check('5,740원' in rhtml, '예상수수료(54%)가 출력물에 없습니다')
+            check('대웅바이오' in rhtml, '처방전 출력물에 제약사가 없습니다')
+        # (F) 처방 셋팅 · 주사제 셋팅 화면에 제약사·선택 담기 버튼이 실제로 그려지는지
+        c6 = quickjs.Context()
+        c6.eval('''
+          var STATE = {
+            guideData: { dept: '내과', stats: { 매칭성분: 1, 성분수: 1 }, items: [
+              { 영문키: 'k1', 성분명: '아세트아미노펜', 처방포인트: '공복', 우리제품: [
+                { 보험코드: '073001620', 품목명: '베아셋정', 규격: '10정', 제약사: '대웅바이오', 약가: 1063, 수수료율: 54 } ], 경구제수: 1, 주사제수: 0 }
+            ] },
+            guideSelected: {}, guidePick: {}, guideMode: 'maxrate', guideMaxMakers: 3,
+            guideRec: null, guideDept: '내과', guideProductCache: {}, products: [], clients: [],
+            injData: { mode: 'maxrate', summary: { 추천품목수: 1, 카테고리수: 1, 평균수수료율: 40, 수수료액합계: 4000, 평균약가: 10000, 후보수: 1, 급여수: 1, 비급여수: 0 },
+                       picks: [ { 보험코드: 'A1', 품목명: '아다셀주', 규격: '1mL', 카테고리: '수액', 성분: '아다셀', 급여구분: '급여', 약가: 10000, 수수료율: 40, 수수료액: 4000 } ],
+                       items: [], categories: [] },
+            injSelected: {}, injProto: null, orderClientCode: ''
+          };
+          var __els = {};
+          var document = {
+            querySelectorAll: function () { return []; },
+            getElementById: function (id) {
+              if (!__els[id]) __els[id] = { _h: '', textContent: '', style: {}, set innerHTML(v) { this._h = v; }, get innerHTML() { return this._h; } };
+              return __els[id];
+            }
+          };
+          function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+          function payTypeBadge(v) { return v ? '<span>' + v + '</span>' : ''; }
+        ''')
+        c6.eval('const SELF_MAKER_LABEL = "자사(페이서)";')
+        names6 = ['fmtNum', 'rxCodeNorm_', 'rxCodeKey_', 'makerFromName_', 'makerOf_', 'makerCellHtml_',
+                  'guideCodesOfIngredient_', 'guidePickCodes_', 'guidePickCount_', 'guideBulkAddLabel_',
+                  'guidePendingSet_',
+                  'guidePendingCount_', 'guideSendBtnLabel_', 'guideCacheProduct_', 'guideFindProduct_',
+                  'guideRxTargetBadge_', 'renderGuideRecommend', 'renderGuideBody',
+                  'injPickedProducts_', 'injBulkOrderLabel_', 'injWarnHtml_', 'injectPickTable_',
+                  'renderInjectRecommend']
+        if load(c6, names6, '셋팅 화면'):
+            c6.eval('renderGuideBody();')
+            gbody = q12(c6.eval('__els["guide-body"].innerHTML'))
+            check('data-guide-pick' in gbody, '처방 셋팅 표에 품목 체크박스가 없습니다')
+            check('대웅바이오' in gbody, '처방 셋팅 표에 제약사가 없습니다: %s' % gbody[:400])
+            check('💊 선택 항목 담기' in gbody, '처방 셋팅에 선택 항목 담기 버튼이 없습니다')
+            check('🖨️ 원장님 안내용 출력 / PDF' in gbody, '처방 셋팅에 원장님 안내용 출력 버튼이 없습니다')
+            c6.eval('renderInjectRecommend();')
+            ibody = q12(c6.eval('__els["inj-recommend"].innerHTML'))
+            check('<th>제약사</th>' in ibody, '주사제 셋팅 표에 제약사 열이 없습니다')
+            check('자사(페이서)' in ibody, '주사제 셋팅 표에 제약사 값이 없습니다')
+            check('🛒 선택 항목 매출 등록' in ibody, '주사제 셋팅에 선택 항목 매출 등록 버튼이 없습니다')
+    except ImportError:
+        print('(quickjs 없음 — v1.12 실행 검사 생략: pip install quickjs)')
 
     print('=' * 62)
     if fails:
