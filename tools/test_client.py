@@ -75,6 +75,45 @@ def load_maker_ctx(ctx, js):
     return True
 
 
+
+ING_FUNCS = ['ingKoSyl_', 'ingKoAscii_', 'ingKoIsVowelAt_', 'ingKoTranslit_', 'ingKoKey_', 'ingKoWord_',
+             'ingKoBaseToken_', 'ingKoTokenKo_', 'ingKoOf_', 'ingLabel_', 'ingText_']
+ING_CONSTS = ['ING_KO_SALT_', 'ING_KO_FORM_', 'ING_KO_ONSET_', 'ING_KO_CODA_', 'ING_KO_VOWELS_',
+              'ING_KO_O_IDX_', 'ING_KO_V_IDX_', 'ING_KO_C_IDX_']
+
+
+def load_ing_ctx(ctx, js):
+    """v1.22 — 영문 성분명 → 한글 발음 병기(사전·음차 함수)를 QuickJS 문맥에 넣습니다."""
+    m = re.search(r'/\* ING_KO_START \*/\n(.*?)\n\s*/\* ING_KO_END \*/', js, re.S)
+    if not m:
+        return False
+    ctx.eval(m.group(1))
+    for name in ING_CONSTS:
+        mm = re.search(r'\n   const %s = (.*?);\n' % name, js, re.S)
+        if not mm:
+            return False
+        ctx.eval('const %s = %s;' % (name, mm.group(1)))
+    for name in ING_FUNCS:
+        block = extract_fn(js, name)
+        if block is None:
+            return False
+        ctx.eval(block)
+    ctx.eval("if (typeof esc !== 'function') {"
+             " function esc(s) { return String(s == null ? '' : s)"
+             ".replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); } }")
+    return True
+
+
+def ing_dict(js):
+    """index.html 에 심은 성분 사전(영문 → 한글)을 dict 로."""
+    m = re.search(r'/\* ING_KO_START \*/\n(.*?)\n\s*/\* ING_KO_END \*/', js, re.S)
+    if not m:
+        return {}
+    out = {}
+    for k, v in re.findall(r'"((?:[^"\\]|\\.)*)"\s*:\s*"((?:[^"\\]|\\.)*)"', m.group(1)):
+        out[k] = v
+    return out
+
 def main():
     html = open(INDEX, encoding='utf-8').read()
     scripts = re.findall(r'<script>(.*?)</script>', html, re.S)
@@ -93,9 +132,9 @@ def main():
         print('(esprima 없음 — 문법 검사 생략: pip install esprima)')
 
     # 2) v1.14 요소
-    check("const APP_VERSION = 'v1.21'" in js, 'APP_VERSION 이 v1.21 이 아닙니다')
-    check('<title>수메디팜 미니 CRM v1.21</title>' in html, '브라우저 탭 제목의 버전이 v1.21 이 아닙니다')
-    check('ver-chip">v1.21' in html and 'ver-chip dark">v1.21' in html, '로그인 화면·상단 바의 버전 칩이 v1.21 이 아닙니다')
+    check("const APP_VERSION = 'v1.22'" in js, 'APP_VERSION 이 v1.22 가 아닙니다')
+    check('<title>수메디팜 미니 CRM v1.22</title>' in html, '브라우저 탭 제목의 버전이 v1.22 가 아닙니다')
+    check('ver-chip">v1.22' in html and 'ver-chip dark">v1.22' in html, '로그인 화면·상단 바의 버전 칩이 v1.22 가 아닙니다')
     check('id: \'drug\'' in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
     check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
     # v1.11 — 🧭 처방 셋팅은 경구제 전용 · 💉 주사제 셋팅은 💉 주사제 주문 메뉴 안 탭
@@ -134,6 +173,82 @@ def main():
     check('saveClientProfile' in js and 'submitClientProfile' in js, '원장 정보 저장이 없습니다')
     check('loadBirthdaySettings' in js and 'installBirthdayTrigger' in js, '생일 알림 설정이 없습니다')
     check('applyGuidePending' in js, '처방전으로 보내기 연결이 없습니다')
+
+    # 2-d) v1.22 — 영문 성분명 한글 발음 병기
+    check('/* ING_KO_START */' in js and '/* ING_KO_END */' in js, '성분 한글 발음 사전 구역이 없습니다')
+    _dict = ing_dict(js)
+    check(len(_dict) >= 600, '성분 한글 발음 사전이 너무 작습니다: %d개' % len(_dict))
+    for en, ko in [('amlodipine', '암로디핀'), ('acetylcysteine', '아세틸시스테인'),
+                   ('acebrophylline', '아세브로필린'), ('ambroxol', '암브록솔'),
+                   ('atorvastatin', '아토르바스타틴'), ('rosuvastatin', '로수바스타틴'),
+                   ('rabeprazole', '라베프라졸'), ('esomeprazole', '에소메프라졸'),
+                   ('rebamipide', '레바미피드'), ('mosapride', '모사프리드'),
+                   ('metformin', '메트포르민'), ('losartan', '로사르탄'),
+                   ('valsartan', '발사르탄'), ('telmisartan', '텔미사르탄'),
+                   ('sitagliptin', '시타글립틴'), ('dapagliflozin', '다파글리플로진'),
+                   ('empagliflozin', '엠파글리플로진'), ('celecoxib', '셀레콕시브'),
+                   ('loxoprofen', '록소프로펜'), ('aceclofenac', '아세클로페낙'),
+                   ('acetaminophen', '아세트아미노펜'), ('pregabalin', '프레가발린'),
+                   ('gabapentin', '가바펜틴'), ('levofloxacin', '레보플록사신'),
+                   ('cefaclor', '세파클러'), ('choline alfoscerate', '콜린알포세레이트')]:
+        check(_dict.get(en) == ko, '성분 사전 %s → %s 가 아닙니다(%s)' % (en, ko, _dict.get(en)))
+    # 화면 적용 — 한글 발음 병기를 거치는 자리
+    for label, needle in [
+        ('처방 셋팅 제약사 성분 칩', "ingLabel_(g.성분명) + ' <small>' + fmtNum(g.품목수)"),
+        ('처방 셋팅 성분 품목 표 제목', "'<div class=\"card-title\"><span>💊 ' + ingLabel_(g.성분명)"),
+        ('처방 셋팅 성분 검색 그룹 머리', "ingLabel_(g.성분명 || key)"),
+        ('담은 품목 목록 성분 열', "(r.성분 ? ingLabel_(r.성분) : '-')"),
+        ('주사제 셋팅 카테고리 성분', "ingLabel_(g.성분명) + '</strong>"),
+        ('약 검색 성분 묶음', "ingLabel_(g.성분명 || '성분 미등록')"),
+        ('약학정보원 상세 성분', "it.성분한글 ? esc(it.성분한글) : ingLabel_(it.성분명)"),
+        ('타사단가표 성분', "(p.성분명 ? ingLabel_(p.성분명) : '-')"),
+    ]:
+        check(needle in js, '%s 에 한글 발음 병기가 없습니다' % label)
+    check('function ingLabel_' in js and 'function ingText_' in js and 'function ingKoOf_' in js,
+          '한글 발음 병기 함수(ingLabel_·ingText_·ingKoOf_)가 없습니다')
+    check('.ing-ko' in html, '한글 발음 표시용 CSS(.ing-ko)가 없습니다')
+    check('guideMakerKoQ' in js and 'koFilter' in js, '한글 발음으로 제약사 성분을 거르는 처리가 없습니다')
+
+    try:
+        import quickjs
+        ctx22 = quickjs.Context()
+        check(load_ing_ctx(ctx22, js), '성분 한글 발음 함수를 실행 문맥에 넣지 못했습니다')
+
+        def q22(expr):
+            v = ctx22.eval(expr)
+            return v.decode() if isinstance(v, bytes) else v
+
+        def ing22(name):
+            return q22('ingKoOf_(%s)' % json.dumps(name, ensure_ascii=False))
+
+        cases = [
+            ('Acebrophylline 100mg', '아세브로필린'),
+            ('Acetylcysteine 200mg', '아세틸시스테인'),
+            ('Ambroxol HCl 30mg', '암브록솔'),
+            ('Amlodipine Besylate 5mg', '암로디핀'),
+            ('Acetaminophen 325mg+Tramadol hydrochloride 37.5mg', '아세트아미노펜+트라마돌'),
+            ('Valsartan 80mg+Hydrochlorothiazide 12.5mg', '발사르탄+히드로클로로티아지드'),
+            ('Atorvastatin calcium trihydrate 10.85mg (10mg as atorvastatin)', '아토르바스타틴'),
+            ('S-amlodipine besylate 2.5mg', '에스암로디핀'),
+            ('라베프라졸 10mg', ''),
+            ('글루타치온', ''),
+            ('중 Hyaluronate 20mg', '히알루론산'),
+            ('Ezetimibe 10mg+Rosuvastatin calcium 10.4mg (Rosuvastatin으로서 10mg)', '에제티미브+로수바스타틴'),
+        ]
+        for name, want in cases:
+            got = ing22(name)
+            check(got == want, '성분 한글 발음 %r → %r (기대 %r)' % (name, got, want))
+        check(ing22('Xyzabepine 10mg') != '', '사전에 없는 영문 성분이 빈 발음으로 나옵니다')
+
+        label = q22('ingLabel_("Acebrophylline 100mg")')
+        check('Acebrophylline 100mg' in label and '(아세브로필린)' in label and 'ing-ko' in label,
+              '성분 표시 형식이 영문+(한글) 이 아닙니다: %s' % label)
+        label_ko = q22('ingLabel_("라베프라졸 10mg")')
+        check(label_ko == '라베프라졸 10mg', '한글 성분명에 괄호가 겹쳐 붙었습니다: %s' % label_ko)
+        txt = q22('ingText_("Acetylcysteine 200mg")')
+        check(txt == 'Acetylcysteine 200mg (아세틸시스테인)', '출력물용 글자 형식이 다릅니다: %s' % txt)
+    except ImportError:
+        print('(quickjs 없음 — 성분 한글 발음 실행 검사 생략: pip install quickjs)')
 
     # 2-c) v1.7 — 비거래처 사전조회(심평원 HIRA)
     check('renderHiraPage' in js and '비거래처 심평원(HIRA) 사전조회' in js, '비거래처 사전조회 화면이 없습니다')
@@ -289,6 +404,7 @@ def main():
     try:
         import quickjs
         ctx = quickjs.Context()
+        load_ing_ctx(ctx, js)
         fn = re.search(r'(function birthDday_\(.*?\n   \})', js, re.S)
         if fn:
             ctx.eval('var STATE = { today: "2026-11-27" };')
@@ -324,6 +440,7 @@ def main():
             check(False, '가이드→처방전 함수를 추출하지 못했습니다: %s' % [n for n, b in zip(names, blocks) if b is None])
         else:
             ctx = quickjs.Context()
+            load_ing_ctx(ctx, js)
             check(load_maker_ctx(ctx, js), '앱 내장 제약사 목록을 실행 문맥에 넣지 못했습니다')
             ctx.eval('''
             var STATE = {
@@ -456,6 +573,7 @@ def main():
     try:
         import quickjs
         ctx = quickjs.Context()
+        load_ing_ctx(ctx, js)
         ctx.eval('var STATE = { rxMonth: "2026-11" };')
         ctx.eval('var __CACHE = { products: {}, byClient: {} };')
         ctx.eval('function rxCacheRead() { return JSON.parse(JSON.stringify(__CACHE)); }')
@@ -517,6 +635,7 @@ def main():
         check(rowfn is not None, 'renderRxRows 를 추출하지 못했습니다')
         if rowfn:
             q = quickjs.Context()
+            load_ing_ctx(q, js)
             q.eval('''
             var STATE = { rxClient: 'C0001', rxRows: [
               { 보험코드: '073001620', 품목명: '건피드정', 규격: '', 제약사: '건일바이오팜㈜',
@@ -541,6 +660,7 @@ def main():
     try:
         import quickjs
         ctx = quickjs.Context()
+        load_ing_ctx(ctx, js)
 
         def q(v):
             return v.decode() if isinstance(v, bytes) else v
@@ -597,6 +717,7 @@ def main():
 
             def render(server_version, metric):
                 ctx = quickjs.Context()
+                load_ing_ctx(ctx, js)
                 ctx.eval("""
                 var STATE = {
                   perfManager: '', perfShowClients: true, perfMatrixMetric: '%s',
@@ -716,6 +837,7 @@ def main():
     try:
         import quickjs
         ctx = quickjs.Context()
+        load_ing_ctx(ctx, js)
 
         def qz(v):
             return v.decode() if isinstance(v, bytes) else v
@@ -798,6 +920,7 @@ def main():
         check(not missing, '화면 렌더 함수를 추출하지 못했습니다: %s' % missing)
         if not missing:
             ctx = quickjs.Context()
+            load_ing_ctx(ctx, js)
             ctx.eval("""
               var STATE = { today: '2026-11-28', orderClientCode: '', collectionClientCode: '',
                             collectionBalances: {}, pendingOrderProduct: null, products: [],
@@ -874,6 +997,7 @@ def main():
     try:
         import quickjs
         ctx = quickjs.Context()
+        load_ing_ctx(ctx, js)
         ctx.eval('''
           var STATE = { orderTab: 'entry', orderClientCode: '', injPay: '', injMode: 'maxrate',
                         guideIngQ: '', guideIngKey: '', guideIngData: null, guideIngOpen: {},
@@ -950,6 +1074,7 @@ def main():
     try:
         import quickjs
         ctx = quickjs.Context()
+        load_ing_ctx(ctx, js)
         ctx.eval('function esc(s) { return String(s == null ? "" : s); }')
         ctx.eval('function fmtNum(n) { return String(Math.round(Number(n || 0))); }')
         ctx.eval('function payTypeBadge() { return ""; }')
@@ -1131,6 +1256,7 @@ def main():
 
         # (A) 금액 '원' · 제약사 표기 규칙
         ctx = quickjs.Context()
+        load_ing_ctx(ctx, js)
         ctx.eval('var STATE = { products: [], guideProductCache: {}, settings: { 부가세율: "10" } };')
         check(load_maker_ctx(ctx, js), '앱 내장 제약사 목록·판정 함수를 실행 문맥에 넣지 못했습니다')
         ctx.eval('function esc(s) { return String(s == null ? "" : s); }')
@@ -1162,6 +1288,7 @@ def main():
 
         # (B) 처방 셋팅 — 성분 체크 + 선택 항목 담기
         c2 = quickjs.Context()
+        load_ing_ctx(c2, js)
         c2.eval('''
           var STATE = {
             guideData: { dept: '내과', items: [
@@ -1202,6 +1329,7 @@ def main():
 
         # (C) 주사제 셋팅 — 체크한 품목을 한 번에 매출 등록으로
         c3 = quickjs.Context()
+        load_ing_ctx(c3, js)
         c3.eval('''
           var STATE = {
             injData: { picks: [
@@ -1237,6 +1365,7 @@ def main():
 
         # (D) 거래원장 — 회전일 표기
         c4 = quickjs.Context()
+        load_ing_ctx(c4, js)
         c4.eval('var STATE = { ledgerTurnover: null };')
         c4.eval('function esc(s) { return String(s == null ? "" : s); }')
         if load(c4, ['fmtNum', 'ledgerTurnoverText_', 'ledgerTurnoverHtml_'], '거래원장 회전일'):
@@ -1259,6 +1388,7 @@ def main():
 
         # (E) 출력물 — 원장님 안내용(수수료율 제외) · 처방전(수수료 포함)
         c5 = quickjs.Context()
+        load_ing_ctx(c5, js)
         c5.eval('''
           var STATE = {
             settings: { 회사명: '수메디팜', 담당자명: '최충의', 담당자연락처: '010-2227-8668', 부가세율: '10' },
@@ -1329,6 +1459,7 @@ def main():
             check('예상수수료' not in ohtml and '요율등급' not in ohtml, '원장님용 출력물에 내부 영업 수치가 들어갑니다')
         # (F) 처방 셋팅 · 주사제 셋팅 화면에 제약사·선택 담기 버튼이 실제로 그려지는지
         c6 = quickjs.Context()
+        load_ing_ctx(c6, js)
         c6.eval('''
           var STATE = {
             guideData: { dept: '내과', stats: { 매칭성분: 1, 성분수: 1 }, items: [
@@ -1495,6 +1626,7 @@ def main():
 
             def build_ctx(is_master, items):
                 c = quickjs.Context()
+                load_ing_ctx(c, js)
                 counts = {'공지': 0, '자유': 0}
                 for it in items:
                     counts[it['구분']] = counts.get(it['구분'], 0) + 1
@@ -1809,6 +1941,7 @@ def main():
 
             def new_ctx():
                 c = quickjs.Context()
+                load_ing_ctx(c, js)
                 c.eval("""
                 var STATE = {
                   guideIngQ: '', guideIngKey: '', guideIngData: null, guideIngOpen: {},
@@ -2086,6 +2219,7 @@ def main():
 
         if not missing15 and guest_rows:
             c = quickjs.Context()
+            load_ing_ctx(c, js)
             c.eval("""
             var STATE = { guestMode: false, activeMenu: 'board', authToken: '', user: null,
               isMaster: false, clients: [], products: [], turnoverData: null, ledgerData: null,
@@ -2255,6 +2389,7 @@ def main():
         blocks15b = [extract_fn(js, n) for n in names15b]
         if all(blocks15b):
             c = quickjs.Context()
+            load_ing_ctx(c, js)
             c.eval("""
             var APP_VERSION = 'v1.21';
             var STATE = { guestMode: false, isMaster: false,
@@ -2351,6 +2486,7 @@ def main():
 
         if not missing16:
             c = quickjs.Context()
+            load_ing_ctx(c, js)
             c.eval("""
             var STATE = {
               guideIngQ: '아토르', guideIngKey: '', guideIngOpen: {}, guideIngLoading: false,
@@ -2482,6 +2618,7 @@ def main():
         check(not missing17, '제약사 성분 칩 함수를 추출하지 못했습니다: %s' % missing17)
         if not missing17:
             c = quickjs.Context()
+            load_ing_ctx(c, js)
             ings = [{'성분키': 'k%02d' % i, '성분명': '성분%02d' % i, '품목수': i + 1} for i in range(25)]
             c.eval("""
             var STATE = { guideMaker: '한화제약', guideMakerQ: '한화제약', guideMakerMore: false,

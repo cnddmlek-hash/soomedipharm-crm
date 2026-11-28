@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
- <title>수메디팜 미니 CRM v1.21</title>
+ <title>수메디팜 미니 CRM v1.22</title>
 
  <!-- ---------------- PWA (홈 화면 앱) 설정 ---------------- -->
  <meta name="description" content="수메디팜 미니 CRM — 거래처·주문·수금·회전일을 구글 시트로 실시간 관리하는 영업 앱" />
@@ -777,6 +777,11 @@
      font-size: 13px; cursor: pointer; color: var(--text); white-space: nowrap;
    }
    .v14-chip small { color: var(--muted); font-size: 11px; }
+   /* v1.22 — 영문 성분명 옆 한글 발음 병기 */
+   .ing-ko { color: #0f766e; font-size: 11.5px; font-weight: 600; letter-spacing: -0.2px; }
+   .v14-chip.on .ing-ko { color: #ccfbf1; }
+   .v14-chip[data-guide-maker-ing] { white-space: normal; text-align: left; line-height: 1.45; }
+   @media print { .ing-ko { color: #111; font-weight: 500; font-size: 10px; } }
    .v14-chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
    .v14-chip.on small { color: #dbeafe; }
    .v14-ing-row { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px dashed var(--border); flex-wrap: wrap; }
@@ -816,7 +821,7 @@
  <div id="login-overlay" class="login-overlay">
    <div class="login-card">
      <div class="login-brand">
-       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.21</span></div>
+       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.22</span></div>
        <div class="s">담당자 아이디로 로그인해 주세요</div>
      </div>
      <div class="form-group" style="margin-bottom:10px;">
@@ -1200,7 +1205,7 @@
    <!-- PC 사이드바 -->
    <aside class="sidebar">
      <div class="sidebar-brand">
-       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.21</span></h1>
+       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.22</span></h1>
        <div class="sub" id="brand-sub">로딩 중...</div>
      </div>
      <nav class="sidebar-nav" id="sidebar-nav"></nav>
@@ -1217,7 +1222,7 @@
 
    <!-- 모바일 상단 헤더 -->
    <header class="mobile-header">
-     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.21</span></h1>
+     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.22</span></h1>
      <div style="display:flex;gap:6px;align-items:center;">
        <span id="m-user" class="ver-chip" style="display:none;" onclick="openPasswordModal()" title="내 계정 · 비밀번호 변경"></span>
        <button class="btn btn-sm" id="guest-login-btn" style="display:none;background:rgba(255,255,255,0.16);color:#fff;" onclick="exitGuestPreview()">🔑 로그인</button>
@@ -1238,7 +1243,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.21';
+   const APP_VERSION = 'v1.22';
 
    const STATE = {
      // 로그인/권한
@@ -1773,6 +1778,427 @@
        .replace(/>/g, '&gt;')
        .replace(/"/g, '&quot;')
        .replace(/'/g, '&#39;');
+   }
+
+   // ---------------------------------------------------------------- v1.22: 영문 성분명 한글 발음 병기
+   //   · 성분명이 영문이면 옆에 통용 한글 발음을 괄호로 붙입니다.
+   //       예) 'Acebrophylline 100mg' → Acebrophylline 100mg (아세브로필린)
+   //           'Acetaminophen 325mg+Tramadol HCl 37.5mg' → … (아세트아미노펜+트라마돌)
+   //   · 사전(ING_KO_DICT_)에 없으면 규칙 기반 음차 변환으로 채웁니다(빈 괄호 없음).
+   //   · 이미 한글이 들어 있는 성분명('라베프라졸', '중 Amoxicillin')에는 붙이지 않습니다.
+   //   · 검색 필터·title 속성은 영문 그대로 두어 기존 검색이 깨지지 않습니다.
+
+   /* ING_KO_START */
+   // 영문 성분명 → 한글 발음 (tools/build_ing_dict.py 가 만듭니다. 손으로 고치지 마세요)
+   const ING_KO_DICT_ = {
+     "acanthopanax+achyranthis+ledebouriella dried ext": "오가피·우슬·방풍 등 복합엑스", "acebrophylline": "아세브로필린", "aceclofenac": "아세클로페낙", "acetaminophen": "아세트아미노펜",
+     "acetaminophen+tramadol": "아세트아미노펜+트라마돌", "acetylcysteine": "아세틸시스테인", "acyclovir": "아시클로버", "adapalene": "아다팔렌",
+     "adefovir": "아데포비르", "adefovir dipivoxil": "아데포비르디피복실", "adenosine triphosphate disodium": "아데노신삼인산", "afloqualone": "아플로쿠알론",
+     "alendronate": "알렌드로네이트", "alfacalcidol": "알파칼시돌", "alfuzosin": "알푸조신", "alginate": "알긴산",
+     "alginic acid": "알긴산", "alitretinoin": "알리트레티노인", "allopurinol": "알로푸리놀", "almagate": "알마게이트",
+     "aloe extract": "알로에엑스", "alogliptin": "알로글립틴", "alogliptin benzoate": "알로글립틴", "alprazolam": "알프라졸람",
+     "aluminum gel": "알루미늄겔", "aluminum magnesium silicate": "알루미늄규산마그네슘", "aluminum silicate": "알루미늄규산염", "alverine": "알베린",
+     "amantadine": "아만타딘", "ambroxol": "암브록솔", "amikacin": "아미카신", "amisulpride": "아미설프라이드",
+     "amlodipine": "암로디핀", "amlodipine+telmisartan": "암로디핀+텔미사르탄", "amlodipine+valsartan": "암로디핀+발사르탄", "ammonium": "암모늄",
+     "ammonium chloride": "염화암모늄", "ammonium chloride+chlorpheniramine+dihydrocodeine+dl-methylephedrine": "암모늄염화물+클로르페니라민+디히드로코데인+메틸에페드린", "ammonium chloride+chlorpheniramine+dihydrocodeine+dl-methylephedrine+pelargonium sidoides ethanol extract": "암모늄염화물+클로르페니라민+디히드로코데인+메틸에페드린+펠라르고니움엑스", "amorolfine": "아모롤핀",
+     "amoxicillin": "아목시실린", "amoxicillin+clavulanate": "아목시실린+클라불란산", "ampicillin": "암피실린", "apixaban": "아픽사반",
+     "apremilast": "아프레밀라스트", "aripiprazole": "아리피프라졸", "artemisia asiatica": "애엽엑스", "artemisia asiatica ethanol extract": "애엽엑스",
+     "artemisia herb isopropanol soft extract": "애엽엑스", "ascorbic acid": "아스코르브산", "aspirin": "아스피린", "atenolol": "아테놀롤",
+     "atomoxetine": "아토목세틴", "atorvastatin": "아토르바스타틴", "atropine": "아트로핀", "avocado soya unsaponifiables": "아보카도소야불검화물",
+     "azelastine": "아젤라스틴", "azelnidipine": "아젤니디핀", "azithromycin": "아지트로마이신", "bacillus licheniformis": "바실루스리케니포르미스",
+     "bacillus subtilis": "바실루스서브틸리스", "baclofen": "바클로펜", "bambuterol": "밤부테롤", "basic fuchsin": "염기성푸크신",
+     "bazedoxifene": "바제독시펜", "beclomethasone": "베클로메타손", "beclomethasone dipropionate": "베클로메타손", "benfotiamine": "벤포티아민",
+     "benidipine": "베니디핀", "benzonatate": "벤조나테이트", "benzoyl peroxide": "벤조일퍼옥사이드", "benzydamine": "벤지다민",
+     "bepotastine": "베포타스틴", "bepotastine besilate": "베포타스틴베실레이트", "bepotastine nicotinate": "베포타스틴", "bepotastine salicylate": "베포타스틴",
+     "beraprost": "베라프로스트", "betahistine": "베타히스틴", "betamethasone": "베타메타손", "betamethasone dipropionate": "베타메타손",
+     "bicalutamide": "비칼루타미드", "bilberry fruit dried ext": "빌베리엑스", "biodiastase": "비오디아스타제", "biotin": "비오틴",
+     "biphenyl dimethyl dicarboxylate": "비페닐디메틸디카르복실레이트", "bisacodyl": "비사코딜", "bisbenthiamine": "비스벤티아민", "bisbentiamine": "비스벤티아민",
+     "bismuth subsalicylate": "비스무트살리실레이트", "bisoprolol": "비소프롤롤", "brimonidine": "브리모니딘", "bromelain": "브로멜라인",
+     "bromfenac": "브롬페낙", "budesonide": "부데소니드", "bupivacaine": "부피바카인", "bupropion": "부프로피온",
+     "buspirone": "부스피론", "butenafine": "부테나핀", "caffeine": "카페인", "calcipotriol": "칼시포트리올",
+     "calcitriol": "칼시트리올", "calcium carbonate": "탄산칼슘", "calcium chloride": "염화칼슘", "calcium citrate": "구연산칼슘",
+     "calcium citrate hydrate": "구연산칼슘", "calcium gluconate": "글루콘산칼슘", "calcium pantothenate": "판토텐산칼슘", "camostat": "카모스타트",
+     "candesartan": "칸데사르탄", "candesartan cilexetil": "칸데사르탄", "captopril": "캡토프릴", "carbidopa": "카르비도파",
+     "carbinoxamine": "카비녹사민", "carboxymethylcellulose": "카르복시메틸셀룰로오스", "carteolol": "카르테올롤", "carvedilol": "카르베딜롤",
+     "cefaclor": "세파클러", "cefadroxil": "세파드록실", "cefazedone": "세파제돈", "cefazolin": "세파졸린",
+     "cefdinir": "세프디니르", "cefditoren": "세프디토렌", "cefditoren pivoxil": "세프디토렌피복실", "cefixime": "세픽심",
+     "cefmetazole": "세프메타졸", "cefotaxime": "세포탁심", "cefotetan": "세포테탄", "cefpodoxime": "세프포독심",
+     "cefpodoxime proxetil": "세프포독심프록세틸", "cefprozil": "세프프로질", "ceftazidime": "세프타지딤", "ceftriaxone": "세프트리악손",
+     "cefuroxime": "세푸록심", "cefuroxime axetil": "세푸록심악세틸", "celecoxib": "셀레콕시브", "cellulase": "셀룰라아제",
+     "cephradine": "세프라딘", "cetirizine": "세티리진", "chenodesoxycholic acid": "케노데옥시콜산", "chlorhexidine": "클로르헥시딘",
+     "chlorhexidine solution": "클로르헥시딘 액", "chlorphenesin carbamate": "클로르페네신카바메이트", "chlorpheniramine": "클로르페니라민", "chlorthalidone": "클로르탈리돈",
+     "cholecalciferol": "콜레칼시페롤", "cholecalciferol concentrated": "콜레칼시페롤", "cholecalciferol concentrated granule": "콜레칼시페롤", "cholecalciferol concentrated powder": "콜레칼시페롤",
+     "cholecalciferol granule": "콜레칼시페롤", "choline alfoscerate": "콜린알포세레이트", "choline fenofibrate": "페노피브레이트", "chondroitin": "콘드로이친",
+     "chromic chloride": "염화크롬", "chromium": "크롬", "chromium in dried yeast": "크롬", "ciclopirox": "시클로피록스",
+     "ciclopirox olamine": "시클로피록스", "cilazapril": "실라자프릴", "cilnidipine": "실니디핀", "cilostazol": "실로스타졸",
+     "cimetidine": "시메티딘", "cimetropium bromide": "시메트로피움", "cimicifuga fluid extract": "승마엑스", "cinacalcet": "시나칼셋",
+     "ciprofloxacin": "시프로플록사신", "citrulline malate": "시트룰린", "clarithromycin": "클래리트로마이신", "clavulanate": "클라불란산",
+     "clavulanate diluted": "클라불란산", "clematis root+trichosanthes root+prunella spike ext": "위령선·과루근·하고초엑스", "clenbuterol": "클렌부테롤", "clindamycin": "클린다마이신",
+     "clobetasol": "클로베타솔", "clobetasol propionate": "클로베타솔", "clomiphene": "클로미펜", "clomipramine": "클로미프라민",
+     "clopidogrel": "클로피도그렐", "clopidogrel bisulfate": "클로피도그렐", "clopidogrel camsylate": "클로피도그렐", "clostridium botulinum toxin type a": "보툴리눔톡신 A형",
+     "clostridium butyricum": "클로스트리디움부티리쿰", "clostridium butyricum toa": "클로스트리디움부티리쿰", "clotrimazole": "클로트리마졸", "cnidium rhizome dried extract": "천궁엑스",
+     "coptidis rhizoma": "황련엑스", "coptidis rhizoma butanol dried ext+ivy leaf ethanol dry ext": "황련엑스+아이비엽엑스", "cosmetic base": "화장품 베이스", "cromoglicate": "크로모글리케이트",
+     "cyanocobalamin": "시아노코발라민", "cyclosporine": "사이클로스포린", "d-biotin": "비오틴", "d-sorbitol": "D-솔비톨",
+     "dapagliflozin": "다파글리플로진", "dapagliflozin bis l-proline": "다파글리플로진", "dapagliflozin citric acid": "다파글리플로진", "dapagliflozin lactose mixture": "다파글리플로진",
+     "dapagliflozin propanediol": "다파글리플로진", "dapoxetine": "다포세틴", "deferasirox": "데페라시록스", "deflazacort": "데플라자코르트",
+     "desmopressin": "데스모프레신", "desonide": "데소니드", "desoxymethasone": "데속시메타손", "desvenlafaxine": "데스벤라팍신",
+     "desvenlafaxine benzoate": "데스벤라팍신", "dexamethasone": "덱사메타손", "dexamethasone palmitate": "덱사메타손 팔미테이트", "dexibuprofen": "덱시부프로펜",
+     "dexmedetomidine": "덱스메데토미딘", "dexpanthenol": "덱스판테놀", "dextromethorphan": "덱스트로메토르판", "diacerein": "디아세레인",
+     "diacerhein": "디아세레인", "diastase protease cellulase": "소화효소제", "diazepam": "디아제팜", "diclofenac": "디클로페낙",
+     "dienogest": "디에노게스트", "diethylpropion": "디에틸프로피온", "diflucortolone": "디플루코르톨론", "diflucortolone valerate": "디플루코르톨론",
+     "difluprednate": "디플루프레드네이트", "dihydrocodeine": "디히드로코데인", "dihydroergotamine": "디히드로에르고타민", "diltiazem": "딜티아젬",
+     "dimenhydrinate": "디멘히드리네이트", "dimethicone": "디메티콘", "dimethyl fumarate": "디메틸푸마레이트", "dioctahedral smectite": "디옥타헤드랄스멕타이트",
+     "diosmin": "디오스민", "diphenhydramine": "디펜히드라민", "diphtheria toxoid": "디프테리아 톡소이드", "diquafosol": "디쿠아포솔",
+     "dizet": "디젯", "dl methylephedrine": "메틸에페드린", "dl-methylephedrine": "메틸에페드린", "dobesilate": "도베실레이트",
+     "docusate": "도큐세이트", "domperidone": "돔페리돈", "donepezil": "도네페질", "dopamine": "도파민",
+     "dorzolamide": "도르졸아미드", "doxazosin": "독사조신", "doxofylline": "독소필린", "doxycycline": "독시사이클린",
+     "doxycycline hyclate": "독시사이클린", "doxylamine": "독실아민", "drospirenone": "드로스피레논", "duloxetine": "둘록세틴",
+     "dutasteride": "두타스테리드", "dydrogesterone": "디드로게스테론", "ebastine": "에바스틴", "edetate disodium": "EDTA",
+     "edoxaban": "에독사반", "efinaconazole": "에피나코나졸", "eicosapent": "이코사펜트", "empagliflozin": "엠파글리플로진",
+     "enalapril": "에날라프릴", "enavogliflozin": "에나보글리플로진", "entacapone": "엔타카폰", "entecavir": "엔테카비르",
+     "enterococcus faecium": "엔테로코쿠스페시움", "enzalutamide": "엔잘루타미드", "eperisone": "에페리손", "eperisone+aceclofenac": "아세클로페낙+에페리손",
+     "ephedrine": "에페드린", "epinastine": "에피나스틴", "epinastine hcl": "에피나스틴", "epinephrine": "에피네프린",
+     "epinephrine bitartrate": "에피네프린", "erdosteine": "에르도스테인", "escitalopram": "에스시탈로프람", "escitalopram oxalate": "에스시탈로프람옥살산염",
+     "esomeprazole": "에소메프라졸", "esomeprazole+naproxen": "에소메프라졸+나프록센", "estradiol": "에스트라디올", "estradiol valerate": "에스트라디올",
+     "eszopiclone": "에스조피클론", "ethanol": "에탄올", "ethinyl estradiol": "에티닐에스트라디올", "etomidate": "에토미데이트",
+     "etonogestrel": "에토노게스트렐", "etonogestrel /inplant": "에토노게스트렐", "etoricoxib": "에토리콕시브", "ezetimibe": "에제티미브",
+     "ezetimibe+rosuvastatin": "에제티미브+로수바스타틴칼슘", "famciclovir": "팜시클로비르", "famotidine": "파모티딘", "febuxostat": "펙부스타트",
+     "felodipine": "펠로디핀", "fenofibrate": "페노피브레이트", "fenofibrate granule": "페노피브레이트", "fenofibric acid": "페노피브린산",
+     "fentanyl": "펜타닐", "ferric hydroxide carboxymaltose complex": "철", "ferric hydroxide sucrose complex": "철", "fexofenadine": "펙소페나딘",
+     "fexuprazan": "펙수프라잔", "fimasartan": "피마사르탄", "finasteride": "피나스테리드", "fluconazole": "플루코나졸",
+     "flumazenil": "플루마제닐", "flunarizine": "플루나리진", "fluorometholone": "플루오로메톨론", "fluoxetine": "플루옥세틴",
+     "fluticasone": "플루티카손", "flutrimazol": "플루트리마졸", "folic acid": "엽산", "formoterol": "포모테롤",
+     "fosfomycin": "포스포마이신", "fosfomycin trometamol": "포스포마이신", "furosemide": "푸로세미드", "fursultiamine": "푸르설티아민",
+     "gabapentin": "가바펜틴", "galantamine": "갈란타민", "galantamine hydrobromide": "갈란타민", "gentamicin": "겐타마이신",
+     "ginkgo leaf dried ext": "은행엽엑스", "ginkgo leaf dried extract": "은행엽엑스", "ginkgo leaf extract": "은행엽엑스", "ginseng ethanol dried extract": "인삼엑스",
+     "gliclazide": "글리클라지드", "glimepiride": "글리메피리드", "glucosamine": "글루코사민", "glucose": "포도당",
+     "glutathione": "글루타치온", "glycine": "글리신", "glycopyrrolate": "글리코피롤레이트", "glycyrrhiza powder": "감초분말",
+     "glycyrrhizic acid+glycine+l-cysteine": "글리시리진산·글리신·L-시스테인", "green tea powder": "녹차분말", "guaifenesin": "구아이페네신", "hartmann solution": "하트만액",
+     "hartmann solution+dextrose": "하트만덱스액", "hct": "히드로클로로티아지드", "hederae helix fluid": "아이비엽엑스", "helicobacter pylori": "헬리코박터파일로리",
+     "hemicellulase": "헤미셀룰라아제", "hepatitis a virus antigen purified inactivated": "A형간염백신", "histamine dihydrochloride": "히스타민", "human chorionic gonadotrophin": "HCG",
+     "human papilloma virus type protein": "HPV백신", "human placenta extract": "자하거추출물", "human placenta hydrolysate": "자하거가수분해물", "human serum albumin": "알부민",
+     "human tetanus immunoglobulin": "사람면역글로불린", "hyaluronate": "히알루론산", "hyaluronic acid": "히알루론산", "hyaluronidase": "히알루로니다제",
+     "hydrochlorothiazide": "히드로클로로티아지드", "hydrocortisone": "히드로코르티손", "hydrogen peroxide": "과산화수소", "hydrogen peroxide+peracetic acid": "과산화수소+과산화아세트산",
+     "hydroquinone": "하이드로퀴논", "hydrous benzoyl peroxide": "벤조일퍼옥사이드", "hydroxocobalamin": "히드록소코발라민", "hydroxyzine": "하이드록시진",
+     "hyperici dried extract": "서양고추나물엑스", "hyperici methanol extract": "서양고추나물엑스", "ibandronate": "이반드론산", "ibesartan": "이르베사르탄",
+     "ibuprofen": "이부프로펜", "ibuprofen piconol": "이부프로펜", "icosapent ethyl": "이코사펜트에틸", "indapamide": "인다파미드",
+     "inosiplex": "이노시플렉스", "iohexol": "이오헥솔", "iopamidol": "이오파미돌", "irbesartan": "이르베사르탄",
+     "iron": "철분", "irsogladine": "이르소글라딘", "isotretinoin": "이소트레티노인", "itopride": "이토프리드",
+     "itraconazole": "이트라코나졸", "ivy": "아이비엽", "ivy leaf": "아이비엽엑스", "ivy leaf ethanol dried ext": "아이비엽엑스",
+     "ivy leaf ethanol dry ext": "아이비엽엑스", "ivy leaf ethanol dry ext+pelargonium sidoides ethanol extract ㆍmaltodextrin mixture": "아이비엽엑스+펠라르고니움엑스", "ivy leaf ethanol ext": "아이비엽엑스", "kallidinogenase": "칼리디노게나제",
+     "keratin": "케라틴", "ketoconazole": "케토코나졸", "ketorolac": "케토롤락", "ketorolac tromethamine": "케토롤락",
+     "ketotifen": "케토티펜", "l arginine": "L-아르기닌", "l carnitine": "L-카르니틴", "l cystein": "시스테인",
+     "l cystine": "시스틴", "l isoleucine": "이소류신", "l leucine": "류신", "l menthol": "멘톨",
+     "l ornithine l aspartate": "L-오르니틴-L-아스파르트산", "l valine": "발린", "l-arginine": "L-아르기닌", "l-carnitine": "L-카르니틴",
+     "l-cystein": "시스테인", "l-cystine": "시스틴", "l-isoleucine": "이소류신", "l-leucine": "류신",
+     "l-menthol": "멘톨", "l-ornithine-l-aspartate": "L-오르니틴-L-아스파르트산", "l-valine": "발린", "labetalol": "라베탈롤",
+     "lactobacillus acidophilus": "락토바실루스아시도필루스", "lactobacillus casei": "락토바실루스카세이", "lactobacillus casei rhamnosus": "락토바실루스카세이", "lactobacillus casei variety rhamnosus": "락토바실루스카세이",
+     "lactulose concentrate": "락툴로오스", "lafutidine": "라푸티딘", "lansoprazole": "란소프라졸", "latanoprost": "라타노프로스트",
+     "leflunomide": "레플루노마이드", "lercanidipine": "레르카니디핀", "letrozole": "레트로졸", "levetiracetam": "레베티라세탐",
+     "levo cloperastine fendizoate": "레보클로페라스틴", "levo-cloperastine fendizoate": "레보클로페라스틴", "levocetirizine": "레보세티리진", "levodopa": "레보도파",
+     "levodropropizine": "레보드로프로피진", "levofloxacin": "레보플록사신", "levonorgestrel": "레보노르게스트렐", "levosulpiride": "레보설피리드",
+     "levothyroxine": "레보티록신", "lidocaine": "리도카인", "limaprost": "리마프로스트", "linagliptin": "리나글립틴",
+     "lincomycin": "린코마이신", "linezolid": "리네졸리드", "lipase": "리파제", "lipase ap": "리파제",
+     "lipase ap6": "리파제", "lipid emulsion": "지질유제", "live attenuated measles virus": "홍역백신", "loratadine": "로라타딘",
+     "lorazepam": "로라제팜", "losartan": "로사르탄", "loxoprofen": "록소프로펜", "macrogol": "마크로골",
+     "magnesium": "마그네슘", "magnesium hydroxide": "수산화마그네슘", "magnesium oxide": "산화마그네슘", "magnesium trihydrate": "마그네슘",
+     "manganese": "망간", "mecobalamin": "메코발라민", "medicinal yeast": "건조효모", "megestrol": "메게스트롤",
+     "melatonin": "멜라토닌", "meloxicam": "멜록시캄", "memantine": "메만틴", "menotrophin hp": "메노트로핀",
+     "meropenem": "메로페넴", "metformin": "메트포르민", "metformin colloidal silicon dioxide": "메트포르민", "metformin hcl": "메트포르민",
+     "methocarbamol": "메토카르바몰", "methotrexate": "메토트렉세이트", "methylergometrine": "메틸에르고메트린", "methylol cephalexin": "세팔렉신",
+     "methylol cephalexin lysinate": "세팔렉신", "methylphenidate": "메틸페니데이트", "methylprednisolone": "메틸프레드니솔론", "methylprednisolone aceponate": "메틸프레드니솔론",
+     "metoclopramide": "메토클로프라미드", "metronidazole": "메트로니다졸", "microencapsulated acetaminophen": "아세트아미노펜", "micronized fenofibrate": "페노피브레이트",
+     "micronized formoterol": "포모테롤", "micronized progesterone": "프로게스테론", "micronized rivaroxaban": "리바록사반", "midazolam": "미다졸람",
+     "midodrine": "미도드린", "miglitol": "미글리톨", "milk thistle extract": "밀크시슬엑스", "milk thistle fruit dried extract": "밀크시슬엑스",
+     "minocycline": "미노사이클린", "minoxidil": "미녹시딜", "mirabegron": "미라베그론", "mirtazapine": "미르타자핀",
+     "misoprostol": "미소프로스톨", "mometasone": "모메타손", "mometasone furoate": "모메타손푸로에이트", "montelukast": "몬테루카스트",
+     "morniflumate": "모르니플루메이트", "mosapride": "모사프리드", "moxifloxacin": "목시플록사신", "multivitamin": "종합비타민",
+     "mupirocin": "무피로신", "mycophenolate": "미코페놀레이트", "mycophenolate mofetil": "미코페놀레이트모페틸", "nabumetone": "나부메톤",
+     "nadifloxacin": "나디플록사신", "naftopidil": "나프토피딜", "naltrexone": "날트렉손", "naproxen": "나프록센",
+     "naratriptan": "나라트립탄", "nebivolol": "네비볼롤", "nefopam": "네포팜", "neomycin": "네오마이신",
+     "nepafenac": "네파페낙", "netilmicin": "네틸마이신", "nicergoline": "니세르골린", "nicotinamide": "니코틴아미드",
+     "nifedipine": "니페디핀", "nirmatrelvir+ritonavir": "니르마트렐비르+리토나비르", "nizatidine": "니자티딘", "nystatin": "니스타틴",
+     "octylonium": "옥틸로늄", "ofloxacin": "오플록사신", "olanzapine": "올란자핀", "olmesartan": "올메사르탄",
+     "olmesartan medoxomil": "올메사르탄", "olopatadine": "올로파타딘", "omega 3 acid ethyl esters": "오메가3산에틸에스테르", "omega acid ethyl esters": "오메가3산에틸에스테르",
+     "omega- -acid ethyl esters": "오메가3산에틸에스테르", "omega-3-acid ethyl esters": "오메가3산에틸에스테르", "omeprazole": "오메프라졸", "ondansetron": "온단세트론",
+     "orlistat": "오를리스타트", "orphenadrine": "오르페나드린", "ors": "경구수분보충", "orthosiphon powder": "오르토시폰분말",
+     "oseltamivir": "오셀타미비르", "ox bile extract": "우담즙엑스", "oxethazaine": "옥세타자인", "p-amino benzoic acid": "파라아미노벤조산",
+     "pancrease powder": "판크레아틴", "pancreatin": "판크레아틴", "pancreatin enteric coated granule": "판크레아틴", "pantoprazole": "판토프라졸",
+     "pantothenate": "판토텐산", "paricalcitol": "파리칼시톨", "paroxetine": "파록세틴", "pelargonium sidoides": "펠라르고늄엑스",
+     "pelargonium sidoides ethanol extract": "펠라르고늄엑스", "pelubiprofen": "펠루비프로펜", "pentosan polysulfate": "펜토산폴리설페이트", "peramivir": "페라미비르",
+     "permethrin": "퍼메트린", "phase": "페이즈", "phendimetrazine": "펜디메트라진", "phentermine": "펜터민",
+     "phenylephrine": "페닐레프린", "phloroglucinol": "플로로글루시놀", "picosulfate": "피코술페이트", "pilocarpine": "필로카르핀",
+     "pimecrolimus": "피메크롤리무스", "pioglitazone": "피오글리타존", "piperacillin": "피페라실린", "pirfenidone": "피르페니돈",
+     "pitavastatin": "피타바스타틴", "pivoxyl sulbactam": "술박탐피복실", "polaprezinc": "폴라프레진크", "policresulen solution": "폴리크레줄렌",
+     "polmacoxib": "폼마콕시브", "polycarbophil": "폴리카르보필", "polydeoxyribonucleotide": "PDRN", "polyethylene glycol": "폴리에틸렌글리콜",
+     "polymyxin b": "폴리믹신B", "polynucleotide": "폴리뉴클레오티드", "polystyrene sulfonate": "폴리스티렌술폰산", "povidone iodine": "포비돈요오드",
+     "powdered red clover extract": "레드클로버엑스", "pramipexole": "프라미펙솔", "pramoxine": "프라목신", "pranlukast": "프란루카스트",
+     "pravastatin": "프라바스타틴", "precipitated calcium carbonate": "탄산칼슘", "prednicarbate": "프레드니카르베이트", "prednisolone": "프레드니솔론",
+     "pregabalin": "프레가발린", "probiotics": "유산균", "progesterone": "프로게스테론", "propacetamol": "프로파세타몰",
+     "propiverine": "프로피베린", "propofol": "프로포폴", "propylene glycol": "프로필렌글리콜", "prucalopride": "프루칼로프라이드",
+     "pseudoephedrine": "슈도에페드린", "purified and micronized flavonoid fraction": "플라보노이드분획", "purified hepatitis b surface antigen protein": "B형간염백신", "pyridostigmine bromide": "피리도스티그민",
+     "pyridoxine": "피리독신", "quetiapine": "쿠에티아핀", "r thioctic acid": "티옥트산", "r-thioctic acid": "티옥트산",
+     "r-thioctic acid tromethamine": "티옥트산", "rabeprazole": "라베프라졸", "racecadotril": "라세카도트릴", "raloxifene": "랄록시펜",
+     "ramosetron": "라모세트론", "rasagiline": "라사길린", "rebamipide": "레바미피드", "recombinant varicella zoster virus glycoprotein e": "대상포진백신",
+     "riboflavin": "리보플라빈", "rifaximin": "리팍시민", "risedronate": "리세드로네이트", "risperidone": "리스페리돈",
+     "rivaroxaban": "리바록사반", "rivastigmine": "리바스티그민", "rocuronium": "로쿠로니움", "ropinirole": "로피니롤",
+     "ropivacaine": "로피바카인", "rosuvastatin": "로수바스타틴", "roxatidine": "록사티딘", "roxithromycin": "록시트로마이신",
+     "rupatadine": "루파타딘", "s amlodipine": "에스암로디핀", "s-amlodipine": "에스암로디핀", "s-pantoprazole": "에스판토프라졸",
+     "saccharomyces boulardii": "사카로마이세스불라르디", "safflower oil": "홍화유", "salmeterol": "살메테롤", "saposhnikoviae radix": "방풍엑스",
+     "sarpogrelate": "사르포그렐레이트", "scopolamine butylbromide": "스코폴라민부틸브로마이드", "scopolia extract": "스코폴리아엑스", "selenite pentahydrate": "아셀렌산나트륨",
+     "selenium": "셀렌", "selenium in dried yeast": "셀렌", "semaglutide": "세마글루타이드", "sennoside": "센노사이드",
+     "sertraline": "설트랄린", "sevelamer": "세벨라머", "sheba complex": "생약복합엑스", "sheba complex+celecoxib": "생약복합엑스+셀레콕시브",
+     "sildenafil": "실데나필", "silodosin": "실로도신", "silver antimicrobial": "은 항균", "silver sulfadiazine": "은설파디아진",
+     "simethicone": "시메티콘", "simvastatin": "심바스타틴", "sitagliptin": "시타글립틴", "sobrerol": "소브레롤",
+     "sodium bicarbonate": "탄산수소나트륨", "sodium carbonate hydroxide": "탄산수소나트륨", "sodium chloride": "생리식염수", "sodium hyaluronate": "히알루론산나트륨",
+     "sodium selenite": "셀레늄", "solifenacin": "솔리페나신", "spherical adsorptive carbon": "구형흡착탄", "spherical carbon": "구형흡착탄",
+     "spironolactone": "스피로놀락톤", "standardized lyophilized mixed bacterial lysates": "세균용해물", "sterile water irrigation": "관류용 멸균증류수", "sugammadex": "수가마덱스",
+     "sulbactam": "술박탐", "sumatriptan": "수마트립탄", "tacrolimus": "타크로리무스", "tadalafil": "타다라필",
+     "talc": "탈크", "talniflumate": "탈니플루메이트", "tamsulosin": "탐스로신", "tazobactam": "타조박탐",
+     "tegoprazan": "테고프라잔", "telmisartan": "텔미사르탄", "teneligliptin": "테네리글립틴", "teneligliptin ditosylate": "테네리글립틴",
+     "teneligliptin hydrobromide": "테네리글립틴", "tenofovir": "테노포비르", "tenofovir alafenamide hemifumarate": "테노포비르알라페나미드", "tenofovir alafenamide hemimalate": "테노포비르알라페나미드",
+     "tenofovir disoproxil": "테노포비르디소프록실", "tenofovir disoproxil hemiedisylate": "테노포비르디소프록실", "terazosin": "테라조신", "terbinafine": "테르비나핀",
+     "testosterone undecanoate": "테스토스테론", "tetrahydrozoline": "테트라히드로졸린", "theobromine": "테오브로민", "thiamine": "티아민",
+     "thiocolchicoside": "티오콜히코시드", "thioctic acid": "티옥트산", "thioctic acid tromethamine": "티옥트산", "thymosin-α": "싸이모신알파1",
+     "tianeptine": "티아넵틴", "tibolone": "티볼론", "ticlopidine": "티클로피딘", "timolol": "티몰롤",
+     "tiropramide": "티로프라미드", "tirzepatide": "티르제파타이드", "titrated extract of centella asiatica": "병풀엑스", "tizanidine": "티자니딘",
+     "tobramycin": "토브라마이신", "tocopherol": "토코페롤", "tofacitinib": "토파시티닙", "tolterodine": "톨터로딘",
+     "tolterodine l-tartrate": "톨터로딘", "topiramate": "토피라메이트", "torasemide": "토라세미드", "tramadol": "트라마돌",
+     "tranexamic acid": "트라넥삼산", "tranilast": "트라닐라스트", "triamcinolone": "트리암시놀론", "triamcinolone acetonide": "트리암시놀론",
+     "triflusal": "트리플루살", "trimebutine": "트리메부틴", "trimebutine sr": "트리메부틴", "trimetazidine": "트리메타지딘",
+     "triprolidine": "트리프롤리딘", "tulobuterol": "툴로부테롤", "ulipristal": "울리프리스탈", "ursodeoxycholic acid": "우르소데옥시콜산",
+     "ursodesoxycholic acid": "우르소데옥시콜산", "valacyclovir": "발아시클로버", "valproate": "발프로산", "valsartan": "발사르탄",
+     "vancomycin": "반코마이신", "varenicline": "바레니클린", "venlafaxine": "벤라팍신", "vildagliptin": "빌다글립틴",
+     "vitb": "비타민B", "vitb2": "비타민B2", "vitb6": "비타민B6", "vitc": "비타민C",
+     "vitis vinifera leaf dry extract": "포도잎엑스", "w/w mixed hydrogel hyaluronate gel crosslinked by divinyl sulfone hyaluronate": "히알루론산", "water injection": "주사용수", "water purified": "정제수",
+     "whey": "유청", "zaltoprofen": "잘토프로펜", "zinc": "아연", "zinc oxide": "산화아연",
+     "zinc sulfate hydrate": "황산아연", "zolpidem": "졸피뎀"
+   };
+   /* ING_KO_END */
+
+   /** 염기·수화물 표기 — 한글 발음에서는 뺍니다 (예: Amlodipine Besylate → 암로디핀) */
+   const ING_KO_SALT_ = {
+     'hydrochloride': 1, 'hcl': 1, 'dihydrochloride': 1, '2hcl': 1, 'hydrobromide': 1,
+     'sodium': 1, 'potassium': 1, 'calcium': 1, 'magnesium': 1, 'ammonium': 1,
+     'hydrate': 1, 'monohydrate': 1, 'dihydrate': 1, 'trihydrate': 1, 'sesquihydrate': 1, 'hydrous': 1, 'anhydrous': 1,
+     'besylate': 1, 'besilate': 1, 'maleate': 1, 'hemimalate': 1, 'tosylate': 1, 'ditosylate': 1,
+     'succinate': 1, 'tartrate': 1, 'bitartrate': 1, 'citrate': 1, 'sulfate': 1, 'sulphate': 1, 'bisulfate': 1,
+     'phosphate': 1, 'acetate': 1, 'mesylate': 1, 'hemiedisylate': 1, 'edisylate': 1, 'nitrate': 1,
+     'fumarate': 1, 'hemifumarate': 1, 'oxalate': 1, 'lactate': 1, 'gluconate': 1,
+     'carbonate': 1, 'bicarbonate': 1, 'bromide': 1, 'chloride': 1, 'iodide': 1, 'oxide': 1, 'hydroxide': 1,
+     'stearate': 1, 'pamoate': 1, 'embonate': 1, 'xinafoate': 1, 'napadisylate': 1, 'camsylate': 1,
+     'asparkam': 1, 'aspartate': 1, 'arginine': 1, 'lysine': 1, 'ornithine': 1, 'tromethamine': 1,
+     'trometamol': 1, 'hyclate': 1, 'medoxomil': 1, 'cilexetil': 1, 'propanediol': 1, 'olamine': 1,
+     'mesilate': 1, 'pivoxil': 1, 'proxetil': 1, 'axetil': 1, 'dipivoxil': 1, 'disoproxil': 1,
+     'alafenamide': 1, 'mofetil': 1, 'lysinate': 1, 'nicotinate': 1, 'salicylate': 1, 'benzoate': 1,
+     'aceponate': 1, 'propionate': 1, 'dipropionate': 1, 'valerate': 1, 'pivalate': 1, 'furoate': 1,
+     'piconol': 1, 'palmitate': 1, 'undecanoate': 1, 'valproate': 1, 'acetonide': 1
+   };
+
+   /** 성분명이 아닌 제형·추출 꼬리말 — 음차 변환에서 뺍니다 */
+   const ING_KO_FORM_ = {
+     'extract': 1, 'extracts': 1, 'ext': 1, 'ext.': 1, 'dried': 1, 'dry': 1, 'soft': 1, 'fluid': 1,
+     'granule': 1, 'granules': 1, 'powder': 1, 'powdered': 1, 'concentrated': 1, 'concentrate': 1,
+     'micronized': 1, 'microencapsulated': 1, 'diluted': 1, 'solution': 1, 'suspension': 1,
+     'mixture': 1, 'mixed': 1, 'coated': 1, 'enteric': 1, 'sustained': 1, 'release': 1, 'sterile': 1,
+     'purified': 1, 'standardized': 1, 'standardised': 1, 'lyophilized': 1, 'freeze-dried': 1,
+     'freeze': 1, 'complex': 1, 'fraction': 1, 'base': 1, 'gel': 1, 'emulsion': 1, 'syrup': 1,
+     'tablet': 1, 'capsule': 1, 'injection': 1, 'water': 1, 'irrigation': 1, 'ethanol': 1,
+     'isopropanol': 1, 'methanol': 1, 'acetone': 1, 'and': 1, 'of': 1, 'in': 1, 'with': 1,
+     'type': 1, 'variety': 1, 'strain': 1, 'culture': 1, 'sr': 1, 'er': 1, 'cr': 1, 's.r.': 1,
+     'root': 1, 'radix': 1, 'rhizome': 1, 'fruit': 1, 'herb': 1, 'seed': 1,
+     'precipitated': 1, 'phase': 1, 'phaseii': 1, 'dimethyl': 1, 'salt': 1, 'bridged': 1,
+     'microemulsion': 1, 'm': 1, 'g': 1, 'l': 1, 'ml': 1, 'bcaa': 1, 'var': 1, 'glycerin': 1,
+     'cernelle': 1, 'butanol': 1, 'bdde': 1, 'hexamethylenediamine': 1, 'cross-linked': 1,
+     'crosslinked': 1, 'maltodextrin': 1, 'mg': 1, 'mcg': 1, 'ug': 1, 'iu': 1, 'unit': 1, 'units': 1
+   };
+
+   const ING_KO_ONSET_ = {
+     'ph': 'ㅍ', 'th': 'ㅅ', 'sh': 'ㅅ', 'ch': 'ㅊ', 'wh': 'ㅎ', 'gh': 'ㄱ', 'ck': 'ㅋ', 'qu': 'ㅋ',
+     'kn': 'ㄴ', 'wr': 'ㄹ', 'rh': 'ㄹ', 'ps': 'ㅅ', 'pn': 'ㄴ', 'mb': 'ㅁ',
+     'b': 'ㅂ', 'c': 'ㅋ', 'd': 'ㄷ', 'f': 'ㅍ', 'g': 'ㄱ', 'h': 'ㅎ', 'j': 'ㅈ', 'k': 'ㅋ', 'l': 'ㄹ',
+     'm': 'ㅁ', 'n': 'ㄴ', 'p': 'ㅍ', 'q': 'ㅋ', 'r': 'ㄹ', 's': 'ㅅ', 't': 'ㅌ', 'v': 'ㅂ',
+     'w': 'ㅇ', 'x': 'ㄱㅅ', 'y': 'ㅇ', 'z': 'ㅈ'
+   };
+   const ING_KO_CODA_ = {
+     'b': 'ㅂ', 'c': 'ㄱ', 'd': 'ㄷ', 'f': 'ㅍ', 'g': 'ㄱ', 'k': 'ㄱ', 'l': 'ㄹ', 'm': 'ㅁ',
+     'n': 'ㄴ', 'p': 'ㅂ', 'r': 'ㄹ', 's': 'ㅅ', 't': 'ㅅ', 'v': 'ㅂ', 'x': 'ㄱㅅ', 'z': 'ㅅ'
+   };
+   const ING_KO_VOWELS_ = [
+     ['oo', 'ㅜ'], ['ee', 'ㅣ'], ['ea', 'ㅣ'], ['ae', 'ㅐ'], ['ai', 'ㅐ'], ['ay', 'ㅔ'], ['ey', 'ㅔ'],
+     ['ei', 'ㅔ'], ['eu', 'ㅠ'], ['ew', 'ㅠ'], ['oa', 'ㅗ'], ['oe', 'ㅚ'], ['oi', 'ㅚ'], ['ou', 'ㅜ'],
+     ['ow', 'ㅗ'], ['oy', 'ㅚ'], ['au', 'ㅗ'], ['aw', 'ㅗ'], ['ua', 'ㅘ'], ['ue', 'ㅜ'], ['ui', 'ㅢ'],
+     ['uo', 'ㅗ'], ['ia', 'ㅑ'], ['io', 'ㅛ'], ['iu', 'ㅠ'], ['ie', 'ㅣ'],
+     ['a', 'ㅏ'], ['e', 'ㅔ'], ['i', 'ㅣ'], ['o', 'ㅗ'], ['u', 'ㅜ'], ['y', 'ㅣ']
+   ];
+   const ING_KO_O_IDX_ = { 'ㄱ': 0, 'ㄲ': 1, 'ㄴ': 2, 'ㄷ': 3, 'ㄸ': 4, 'ㄹ': 5, 'ㅁ': 6, 'ㅂ': 7, 'ㅃ': 8, 'ㅅ': 9, 'ㅆ': 10, 'ㅇ': 11, 'ㅈ': 12, 'ㅉ': 13, 'ㅊ': 14, 'ㅋ': 15, 'ㅌ': 16, 'ㅍ': 17, 'ㅎ': 18 };
+   const ING_KO_V_IDX_ = { 'ㅏ': 0, 'ㅐ': 1, 'ㅑ': 2, 'ㅒ': 3, 'ㅓ': 4, 'ㅔ': 5, 'ㅕ': 6, 'ㅖ': 7, 'ㅗ': 8, 'ㅘ': 9, 'ㅙ': 10, 'ㅚ': 11, 'ㅛ': 12, 'ㅜ': 13, 'ㅝ': 14, 'ㅞ': 15, 'ㅟ': 16, 'ㅠ': 17, 'ㅡ': 18, 'ㅢ': 19, 'ㅣ': 20 };
+   const ING_KO_C_IDX_ = { '': 0, 'ㄱ': 1, 'ㄴ': 4, 'ㄷ': 7, 'ㄹ': 8, 'ㅁ': 16, 'ㅂ': 17, 'ㅅ': 19, 'ㅇ': 21, 'ㅈ': 22, 'ㅊ': 23, 'ㅋ': 24, 'ㅌ': 25, 'ㅍ': 26, 'ㅎ': 27 };
+
+   /** 한글 한 글자 만들기 (초성·중성·종성) */
+   function ingKoSyl_(on, vo, co) {
+     const o = ING_KO_O_IDX_[on] || 0;
+     const v = ING_KO_V_IDX_[vo] || 0;
+     const c = ING_KO_C_IDX_[co || ''] || 0;
+     return String.fromCharCode(0xAC00 + o * 588 + v * 28 + c);
+   }
+
+   function ingKoIsVowelAt_(w, i) {
+     const rest = w.slice(i);
+     for (let k = 0; k < ING_KO_VOWELS_.length; k++) {
+       if (rest.indexOf(ING_KO_VOWELS_[k][0]) === 0) return true;
+     }
+     return false;
+   }
+
+   /** 규칙 기반 영문 → 한글 음차 (사전에 없는 성분용) */
+   function ingKoTranslit_(word) {
+     let w = String(word || '').toLowerCase().replace(/[^a-z]/g, '');
+     if (!w) return '';
+     // 묵음 e — '-ate/-ite/-ide/-ote/-ute/-ade/-ole' 는 살리고 나머지는 뺍니다
+     if (w.length > 4 && /[^aeiou]e$/.test(w) && !/(ate|ite|ide|ote|ute|ade|ole)$/.test(w)) w = w.slice(0, -1);
+     w = w.replace(/([bcdfghjklmnpqrstvwxz])\1+/g, '$1');                 // 겹자음 하나로
+     const out = [];
+     let i = 0;
+     let guard = 0;
+     while (i < w.length && guard++ < 60) {
+       // 초성 — 두 글자 조합 먼저
+       let on = '';
+       const two = w.substr(i, 2);
+       if (ING_KO_ONSET_[two] && two.length === 2 && !/[aeiou]/.test(two)) { on = ING_KO_ONSET_[two]; i += 2; }
+       else if (ING_KO_ONSET_[w.charAt(i)] && !/[aeiou]/.test(w.charAt(i))) { on = ING_KO_ONSET_[w.charAt(i)]; i += 1; }
+       else { on = 'ㅇ'; }                                                // 모음으로 시작
+       // 중성
+       let vo = '';
+       for (let k = 0; k < ING_KO_VOWELS_.length; k++) {
+         const v = ING_KO_VOWELS_[k];
+         if (w.substr(i, v[0].length) === v[0]) { vo = v[1]; i += v[0].length; break; }
+       }
+       if (!vo) {                                                        // 모음이 이어지지 않음 → 받침 처리
+         out.push(ingKoSyl_('ㅇ', 'ㅡ', ING_KO_CODA_[on] || ''));
+         continue;
+       }
+       // 종성 — 다음 모음 앞 자음 묶음
+       let j = i;
+       while (j < w.length && !ingKoIsVowelAt_(w, j)) j++;
+       let coda = '';
+       const cluster = w.slice(i, j);
+       if (cluster) {
+         if (j >= w.length) {                                            // 단어 끝 자음은 받침
+           const last = cluster.charAt(cluster.length - 1);
+           coda = ING_KO_CODA_[last] || '';
+           i = j;
+         } else if (cluster.charAt(0) === 'r') {                         // r + 자음 → '르' (카르보·사르탄)
+           out.push(ingKoSyl_(on, vo, ''));
+           out.push(ingKoSyl_('ㄹ', 'ㅡ', ''));
+           i += 1;
+           continue;
+         } else if (cluster.length >= 2) {                               // 자음 두 개 → 앞은 받침
+           coda = ING_KO_CODA_[cluster.charAt(0)] || '';
+           i += 1;
+         }
+       }
+       out.push(ingKoSyl_(on, vo, coda));
+     }
+     return out.join('');
+   }
+
+   /** 사전 키 정규화 — 소문자·마침표 제거·공백 하나 (Python 생성기와 같은 규칙) */
+   function ingKoKey_(s) {
+     return String(s == null ? '' : s).toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
+   }
+
+   /** 성분명 하나를 사전·음차로 한글로 (없으면 '') */
+   function ingKoWord_(w) {
+     const key = ingKoKey_(w);
+     if (!key) return '';
+     if (ING_KO_DICT_[key]) return ING_KO_DICT_[key];
+     if (ING_KO_FORM_[key] || ING_KO_SALT_[key]) return '';   // 제형어·염기어는 소리내지 않음
+     return ingKoTranslit_(key);
+   }
+
+   /** 비ASCII 문자(㎎·㎍·μ 같은 단위 기호)를 공백으로 — 한글 성분명은 이 함수 앞에서 걸러집니다 */
+   function ingKoAscii_(s) {
+     const str = String(s == null ? '' : s);
+     let out = '';
+     for (let i = 0; i < str.length; i++) {
+       out += str.charCodeAt(i) < 128 ? str.charAt(i) : ' ';
+     }
+     return out;
+   }
+
+   /** 영문 성분명에서 발음용 염기 덩어리만 남기기 (함량·염기·괄호 설명 제거) */
+   function ingKoBaseToken_(part, keepSalt) {
+     let t = String(part == null ? '' : part);
+     t = t.replace(/\([^)]*\)/g, ' ');                      // (30mg as edoxaban) 등
+     t = t.split('\u03bc').join(' ').split('\u00b5').join(' ');   // μg (그리스 문자 μ)
+     t = ingKoAscii_(t);                                    // ㎎·㎍ 같은 단위 문자는 공백으로
+     t = t.replace(/\b\d+(?:\.\d+)?\s*(?:mg|g|ml|mcg|ug|iu|i\.u\.?|units?|unit)\b/gi, ' ');
+     t = t.replace(/\d+(?:\.\d+)?\s*%/g, ' ');            // 95% 에탄올 같은 농도
+     t = t.replace(/%/g, ' ');
+     t = t.replace(/\b\d+(?:\.\d+)?\b/g, ' ');
+     t = t.replace(/[^A-Za-z\s]+/g, ' ');                    // 마침표·붙임표·괄호 잔여물
+     t = t.replace(/\d+/g, ' ');
+     const words = t.split(/\s+/).filter(Boolean)
+       .filter(function (w) { return keepSalt || !ING_KO_SALT_[w.toLowerCase()]; });
+     return words.join(' ').trim();
+   }
+
+   /** 염기를 뺀 성분 덩어리 → 한글 발음 */
+   function ingKoTokenKo_(token) {
+     const key = ingKoKey_(token);
+     if (!key) return '';
+     if (ING_KO_DICT_[key]) return ING_KO_DICT_[key];
+     // 제형 꼬리말을 뺀 이름으로 한 번 더 (예: 'Ascorbic Acid Coated Granule' → 'ascorbic acid')
+     const stripped = key.split(' ').filter(function (w) { return !ING_KO_FORM_[w]; }).join(' ');
+     if (stripped && stripped !== key && ING_KO_DICT_[stripped]) return ING_KO_DICT_[stripped];
+     const words = (stripped || key).split(' ');
+     if (words.length > 3) return '';                      // 복잡한 생약·혼합물은 표기하지 않음
+     const out = [];
+     words.forEach(function (w) {
+       const ko = ingKoWord_(w);
+       if (ko) out.push(ko);
+     });
+     return out.join('');
+   }
+
+   /**
+    * 영문 성분명 → 한글 발음 (없으면 '')
+    *   이미 한글이 들어 있으면 '' — 한글 성분명에 괄호를 겹쳐 붙이지 않습니다.
+    */
+   function ingKoOf_(name) {
+     const raw = String(name == null ? '' : name).trim();
+     if (!raw) return '';
+     // 괄호 설명·'100g 중'·'속방층' 같은 한글 꼬리표는 빼고 영문 성분만 봅니다
+     const probe = raw.replace(/\([^)]*\)/g, ' ').replace(/(^|\s)[가-힣]+(\s+|$)/g, ' ');
+     if (/[가-힣]/.test(probe)) return '';                  // '라베프라졸', 'Saposhnikoviae radix 연조엑스'
+     if (!/[A-Za-z]/.test(probe)) return '';
+     const parts = raw.split('+');
+     const out = [];
+     parts.forEach(function (part) {
+       const full = ingKoBaseToken_(part, true);      // 염기까지 남긴 이름 (Calcium Carbonate 등)
+       const tok = ingKoBaseToken_(part);             // 염기를 뺀 이름
+       let ko = '';
+       if (full && ING_KO_DICT_[ingKoKey_(full)]) ko = ING_KO_DICT_[ingKoKey_(full)];
+       if (!ko && tok) ko = ingKoTokenKo_(tok);
+       if (!ko && full && full !== tok) ko = ingKoTokenKo_(full);
+       if (ko && out[out.length - 1] !== ko) out.push(ko);
+     });
+     return out.join('+');
+   }
+
+   /** 성분명 HTML + 한글 발음 꼬리표 (예: Acebrophylline 100mg (아세브로필린)) */
+   function ingLabel_(name) {
+     const raw = String(name == null ? '' : name);
+     const ko = ingKoOf_(name);
+     return esc(raw) + (ko ? ' <span class="ing-ko">(' + esc(ko) + ')</span>' : '');
+   }
+
+   /** 출력물·복사용 글자 (예: Acebrophylline 100mg (아세브로필린)) */
+   function ingText_(name) {
+     const raw = String(name == null ? '' : name);
+     const ko = ingKoOf_(name);
+     return raw + (ko ? ' (' + ko + ')' : '');
    }
 
    function openModal(id) { document.getElementById(id).classList.add('open'); }
@@ -3742,7 +4168,7 @@
        return '<tr>' +
          '<td class="center"><span class="rank-badge' + (i === 0 ? ' gold' : '') + '">' + (i + 1) + '</span></td>' +
          '<td>' + esc(it.질환군) + '</td>' +
-         '<td><strong>' + esc(it.성분명) + '</strong>' + (it.대표제품예 ? ' <small style="color:var(--muted);">' + esc(it.대표제품예) + '</small>' : '') + '</td>' +
+         '<td><strong>' + ingLabel_(it.성분명) + '</strong>' + (it.대표제품예 ? ' <small style="color:var(--muted);">' + esc(it.대표제품예) + '</small>' : '') + '</td>' +
          '<td>' + prodChip(it.추천품목) + '</td>' +
          '<td class="num">' + (it.경구제수 || 0) + ' / ' + (it.주사제수 || 0) + '</td>' +
        '</tr>';
@@ -3752,7 +4178,7 @@
        return '<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 2px;border-bottom:1px dashed var(--border);">' +
          '<span style="min-width:0;">' +
            '<span style="font-weight:700;font-size:12.5px;">' + esc(p.품목명) + '</span>' +
-           '<span style="display:block;font-size:11.5px;color:var(--muted);">' + esc(p.성분명 || p.성분 || '') + ' · ' + esc(p.급여구분 || '-') + ' · ' + fmtNum(p.약가) + '원</span>' +
+           '<span style="display:block;font-size:11.5px;color:var(--muted);">' + (p.성분명 || p.성분 ? ingLabel_(p.성분명 || p.성분) : '') + ' · ' + esc(p.급여구분 || '-') + ' · ' + fmtNum(p.약가) + '원</span>' +
          '</span>' +
          '<span class="badge badge-success" style="flex:0 0 auto;">' + (Number(p.수수료율) || 0) + '%</span>' +
        '</div>';
@@ -5002,7 +5428,7 @@
            return '<tr data-gubun="' + esc(p.급여구분 || '') + '" data-q="' + esc(q) + '">' +
              '<td>' + esc(p.보험코드) + '</td>' +
              '<td><strong>' + esc(p.제품명) + '</strong></td>' +
-             '<td style="font-size:12px;">' + esc(p.성분명 || '-') + '</td>' +
+             '<td style="font-size:12px;">' + (p.성분명 ? ingLabel_(p.성분명) : '-') + '</td>' +
              '<td>' + makerCellHtml_(p, 'inject') + '</td>' +
              '<td>' + esc(p.규격) + '</td>' +
              '<td class="center">' + payTypeBadge(p.급여구분) + '</td>' +
@@ -6436,16 +6862,17 @@
            '<div class="card-title"><span>검색 결과 ' + fmtNum(r.total) + '건 · 성분 ' + r.groups.length + '묶음</span>' +
              '<small style="font-weight:500;color:var(--muted);font-size:12px;">같은 성분은 한 카드로 묶었습니다</small></div>' +
            r.groups.map(function (g) {
-             const ingLabel = g.성분한글 || g.성분명 || '성분 미등록';
+             const ingName = g.성분한글 || g.성분명 || '성분 미등록';       // 버튼·검색에 넘길 글자
+             const ingHead = g.성분한글 ? esc(g.성분한글) : ingLabel_(g.성분명 || '성분 미등록');   // v1.22 — 영문 성분엔 한글 발음 병기
              return '<div class="v14-group">' +
                '<div class="g-head">' +
-                 '<div><strong>' + esc(ingLabel) + '</strong>' +
+                 '<div><strong>' + ingHead + '</strong>' +
                    (g.분류 ? ' <span class="badge badge-muted">' + esc(g.분류) + '</span>' : '') +
                    (g.key ? ' <small style="color:var(--muted);">' + esc(g.key) + '</small>' : '') +
                  '</div>' +
                  '<div style="display:flex;gap:4px;flex-wrap:wrap;">' +
                    (g.key ? '<button class="btn btn-outline btn-sm" onclick="showSameIngredient(\'' + esc(g.key) + '\')">🧬 동일성분 전체</button>' : '') +
-                   (g.key ? '<button class="btn btn-outline btn-sm" onclick="openKpicForIngredient(\'' + esc(ingLabel) + '\')">🏥 금기·상세</button>' : '') +
+                   (g.key ? '<button class="btn btn-outline btn-sm" onclick="openKpicForIngredient(\'' + esc(ingName) + '\')">🏥 금기·상세</button>' : '') +
                  '</div>' +
                '</div>' +
                '<div class="table-wrap"><table><thead><tr>' +
@@ -6514,14 +6941,14 @@
      };
      el.innerHTML =
        '<div class="card">' +
-         '<div class="card-title"><span>🧬 ' + esc(res.성분한글 || res.key) + ' — 같은 성분 제품</span>' +
+         '<div class="card-title"><span>🧬 ' + (res.성분한글 ? esc(res.성분한글) : ingLabel_(res.key)) + ' — 같은 성분 제품</span>' +
            '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'drug-same\').innerHTML=\'\'">닫기</button></div>' +
          (res.분류 ? '<div style="margin-bottom:6px;"><span class="badge badge-muted">' + esc(res.분류) + '</span></div>' : '') +
          '<h4 style="margin:6px 0 4px;font-size:13px;">우리 제품 (' + res.items.length + ')</h4>' + (rows(res.items) || '<p style="color:var(--muted);">등록된 제품이 없습니다.</p>') +
          (res.sameGroup && res.sameGroup.length ? '<h4 style="margin:12px 0 4px;font-size:13px;">복합제로 이 성분이 들어있는 제품 (' + res.sameGroup.length + ')</h4>' + rows(res.sameGroup) : '') +
          '<h4 style="margin:12px 0 4px;font-size:13px;">자사·타사 단가표 (' + res.thirdParty.length + ')</h4>' + (rows(res.thirdParty, 'tp') || '<p style="color:var(--muted);">등록된 단가 자료가 없습니다.</p>') +
          '<div class="v14-dur">' +
-           '<div class="d-title">🚫 금기·주의 요약 <small>(' + esc(res.성분한글 || res.key) + ')</small></div>' +
+           '<div class="d-title">🚫 금기·주의 요약 <small>(' + (res.성분한글 ? esc(res.성분한글) : ingLabel_(res.key)) + ')</small></div>' +
            (금기.병용 ? '<div class="d-row"><b>병용금기</b><span>' + esc(금기.병용) + '</span></div>' : '') +
            (금기.임부 ? '<div class="d-row"><b>임부금기</b><span>' + esc(금기.임부) + '</span></div>' : '') +
            (금기.연령 ? '<div class="d-row"><b>연령금기</b><span>' + esc(금기.연령) + '</span></div>' : '') +
@@ -6554,7 +6981,7 @@
          order.slice(0, 12).map(function (k) {
            const p = byProduct[k];
            return '<div class="v14-group">' +
-             '<div class="g-head"><div><strong>' + esc(p.제품명) + '</strong> <small style="color:var(--muted);">' + esc(p.제약사) + ' · ' + esc(p.성분명) + '</small></div>' +
+             '<div class="g-head"><div><strong>' + esc(p.제품명) + '</strong> <small style="color:var(--muted);">' + esc(p.제약사) + ' · ' + ingLabel_(p.성분명) + '</small></div>' +
              '<span class="badge badge-muted">' + esc(p.규격) + '</span></div>' +
              '<div class="table-wrap"><table><thead><tr><th>수량 조건</th><th>할인율</th><th class="num">적용 단가</th><th class="num">낱개가</th></tr></thead><tbody>' +
              p.tiers.map(function (t) {
@@ -6691,7 +7118,7 @@
        const 금기 = g.금기 || null;
        return '<div class="v14-group">' +
          '<div class="g-head">' +
-           '<div><span class="badge badge-blue">성분</span> <strong>' + esc(ko || en || '성분 미확인') + '</strong>' +
+           '<div><span class="badge badge-blue">성분</span> <strong>' + (ko ? esc(ko) : ingLabel_(en || '성분 미확인')) + '</strong>' +
              (en && ko ? ' <small style="color:var(--muted);">' + esc(en) + '</small>' : '') +
              (marks.length ? '<br /><small style="color:var(--muted);">같은 성분 표기: ' + esc(marks.join(' · ')) + '</small>' : '') +
            '</div>' +
@@ -6815,7 +7242,7 @@
            '<div class="h-name">' + esc(it.name) + ' <span class="badge badge-muted">' + esc(it.전문일반 || '') + '</span>' +
              (it.우리제품수 ? ' <span class="badge badge-success">우리제품 ' + it.우리제품수 + '</span>' : '') + '</div>' +
            '<div class="h-sub">' + esc(it.maker) + ' · ' + esc(it.form) + ' · ' + esc(it.cls || '') + '<br />' +
-             '성분: ' + esc(it.성분한글 || it.성분명) + (it.보험가 ? ' · 보험가 ' + esc(moneyText_(it.보험가)) : '') + '</div>' +
+             '성분: ' + (it.성분한글 ? esc(it.성분한글) : ingLabel_(it.성분명)) + (it.보험가 ? ' · 보험가 ' + esc(moneyText_(it.보험가)) : '') + '</div>' +
          '</div>' +
          '<div style="display:flex;flex-direction:column;gap:4px;">' +
            '<button class="btn btn-primary btn-sm" onclick="openKpicDetail(\'' + esc(it.drugCode) + '\')">금기·상세</button>' +
@@ -6857,7 +7284,7 @@
          '<div class="detail-item"><span class="k">포장</span><span class="v">' + esc(d.box || '-') + '</span></div>' +
        '</div>' +
        '<div class="cd-section"><h4>🧪 성분</h4><div style="font-size:13px;line-height:1.6;">' +
-         (d.성분들 && d.성분들.length ? d.성분들.map(function (s) { return '· ' + esc(s); }).join('<br />') : esc(d.성분명 || '-')) +
+         (d.성분들 && d.성분들.length ? d.성분들.map(function (s) { return '· ' + ingLabel_(s); }).join('<br />') : ingLabel_(d.성분명 || '-')) +
        '</div></div>' +
        '<div class="cd-section"><h4>🚫 금기사항 (DUR)</h4>' +
          '<div class="v14-dur">' +
@@ -7110,7 +7537,7 @@
        (g.최저약가 ? ' · 최저 ' + fmtNum(g.최저약가) + '원' : '');
      return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fff;">' +
          '<div class="collapse-head" onclick="toggleGuideIngGroup(\'' + esc(key) + '\')" role="button" aria-expanded="' + (open ? 'true' : 'false') + '">' +
-           '<div class="card-title" style="margin:0;"><span>💊 ' + esc(g.성분명 || key) + ' <small style="font-weight:500;font-size:12px;color:var(--muted);">' + esc(meta) + '</small></span>' +
+           '<div class="card-title" style="margin:0;"><span>💊 ' + ingLabel_(g.성분명 || key) + ' <small style="font-weight:500;font-size:12px;color:var(--muted);">' + esc(meta) + '</small></span>' +
              (g.분류 ? '<small style="font-weight:500;font-size:11.5px;color:var(--muted);">' + esc(g.분류) + '</small>' : '') +
            '</div>' +
            '<span class="collapse-caret">' + (open ? '접기 ▲' : '펼치기 ▼') + '</span>' +
@@ -7296,10 +7723,23 @@
      STATE.guideMakerKey = '';
      renderGuideMakerResult();
      const q = String(STATE.guideIngQ || '').trim();
+     // v1.22 — 검색어가 한글이면('아세틸', '암로디핀') 서버(영문 성분명) 대신
+     //   이 화면에서 한글 발음으로 걸러 줍니다. 서버·시트는 그대로입니다.
+     const koQ = /[가-힣]/.test(q);
+     STATE.guideMakerKoQ = koQ ? q : '';
      try {
        const res = await runServer('searchGuideIngredients',
-         [{ maker: STATE.guideMaker, q: q, limit: 1 }], { silent: true });
+         [{ maker: STATE.guideMaker, q: koQ ? '' : q, limit: 1 }], { silent: true });
        STATE.guideMakerData = res || null;
+       if (koQ && res && res.성분목록) {
+         const rows = res.성분목록.filter(function (g) {
+           const ko = ingKoOf_(g.성분명) || '';
+           return ko.indexOf(q) !== -1 || String(g.성분명 || '').toLowerCase().indexOf(q.toLowerCase()) !== -1;
+         });
+         let cnt = 0;
+         rows.forEach(function (g) { cnt += Number(g.품목수) || 0; });
+         STATE.guideMakerData = Object.assign({}, res, { 성분목록: rows, total성분: rows.length, total품목: cnt, q: q, koFilter: true });
+       }
        if (res && res.maker && res.maker !== STATE.guideMaker) {
          STATE.guideMaker = res.maker;          // '한미' 처럼 넣었으면 서버가 정식 이름으로 돌려 줍니다
          STATE.guideMakerQ = res.maker;
@@ -7417,7 +7857,7 @@
        const on = STATE.guideMakerKey === k;
        return '<button class="v14-chip' + (on ? ' on' : '') + '" data-guide-maker-ing="' + esc(k) + '" ' +
          'onclick="openGuideMakerIng(\'' + esc(g.성분키 || '') + '\',\'' + esc(g.성분명) + '\')">' +
-         esc(g.성분명) + ' <small>' + fmtNum(g.품목수) + '</small></button>';
+         ingLabel_(g.성분명) + ' <small>' + fmtNum(g.품목수) + '</small></button>';
      }).join('');
      return '<div class="card">' +
          '<div class="card-title"><span>🏭 ' + esc(STATE.guideMaker) + '</span>' +
@@ -7425,6 +7865,7 @@
              '개 · 품목 ' + fmtNum(d.total품목) + '개' + (d.q ? ' · 검색 &quot;' + esc(d.q) + '&quot;' : '') + '</small></div>' +
          '<div style="font-size:11.5px;color:var(--muted);margin:-2px 0 8px;">' +
            '성분을 누르면 그 성분의 품목(약가·수수료율)이 아래에 펼쳐집니다.' +
+           (d.koFilter ? ' <b>한글 발음</b>으로 찾은 결과입니다.' : '') +
            (ings.length > LIMIT && !STATE.guideMakerMore
              ? ' 성분이 많아 <b>' + fmtNum(LIMIT) + '개</b>만 먼저 보여 줍니다 — 검색창으로 좁히거나 <b>[성분 ' + fmtNum(ings.length - LIMIT) + '개 더 보기]</b>를 누르세요.'
              : '') +
@@ -7448,7 +7889,7 @@
        (g.최고수수료율 ? ' · 최고 ' + g.최고수수료율 + '%' : '') +
        (g.최저약가 ? ' · 최저 ' + fmtNum(g.최저약가) + '원' : '');
      return '<div class="card" id="guide-maker-table" style="border-color:#bfdbfe;">' +
-         '<div class="card-title"><span>💊 ' + esc(g.성분명) + ' <small style="font-weight:500;font-size:12px;color:var(--muted);">' + esc(meta) + '</small></span>' +
+         '<div class="card-title"><span>💊 ' + ingLabel_(g.성분명) + ' <small style="font-weight:500;font-size:12px;color:var(--muted);">' + esc(meta) + '</small></span>' +
            '<span style="display:flex;gap:6px;flex-wrap:wrap;">' +
              '<button class="btn btn-outline btn-sm" onclick="closeGuideMakerIng()">▲ 접기</button>' +
              '<button class="btn btn-accent btn-sm pick-bulk-btn" id="guide-maker-bulk-add" onclick="guideAddSelected()">' + guideBulkAddLabel_() + '</button>' +
@@ -7702,7 +8143,7 @@
                    '<strong style="font-size:13.5px;">' + esc(r.케이스) + '</strong>' +
                    '<small style="color:var(--muted);">참고제품(예시): ' + esc(r.참고제품 || '-') + '</small></div>' +
                  '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">' +
-                   (r.성분 ? '<span class="badge badge-blue">성분 ' + esc(r.성분) + '</span>' : '') +
+                   (r.성분 ? '<span class="badge badge-blue">성분 ' + ingLabel_(r.성분) + '</span>' : '') +
                    (r.수액 ? '<span class="badge badge-muted">수액·믹스 ' + esc(r.수액) + '</span>' : '') +
                    (r.용법 ? '<span class="badge badge-muted">용법 ' + esc(r.용법) + '</span>' : '') +
                    (r.추천 ? '<span class="badge badge-green">프로토콜 ' + esc(r.추천) + '</span>' : '') +
@@ -7951,7 +8392,7 @@
            (withSend ? '<td class="center"><input type="checkbox" style="width:auto;" ' + (STATE.injSelected[p.보험코드] ? 'checked' : '') +
              ' onchange="toggleInjPick(\'' + code + '\', this.checked)" /></td>' : '') +
            '<td><span class="badge badge-muted">' + esc(p.카테고리 || '기타') + '</span></td>' +
-           '<td>' + esc(p.성분 || '-') + '</td>' +
+           '<td>' + (p.성분 ? ingLabel_(p.성분) : '-') + '</td>' +
            '<td><strong>' + esc(p.품목명) + '</strong> <small style="color:var(--muted);">' + esc(p.규격 || '') + (p.보험코드 ? ' · ' + esc(p.보험코드) : '') + '</small></td>' +
            '<td>' + makerCellHtml_(p, 'inject') + '</td>' +
            '<td class="center">' + payTypeBadge(p.급여구분) + '</td>' +
@@ -8007,7 +8448,7 @@
            (d.itemsTotal || 0) + '성분 중 ' + ((d.items || []).length) + '성분 표시 · 수수료율 높은 순</small></div>' +
          ((d.items || []).length ? (d.items || []).map(function (g) {
            return '<div class="v14-group">' +
-             '<div class="g-head"><div><strong>' + esc(g.성분명) + '</strong> <small style="color:var(--muted);">' +
+             '<div class="g-head"><div><strong>' + ingLabel_(g.성분명) + '</strong> <small style="color:var(--muted);">' +
                esc(g.카테고리 || '') + ' · ' + g.제품.length + '품목</small></div>' +
                '<small style="color:var(--primary);font-weight:700;">최고 ' + (g.최고수수료율 || 0) + '%</small></div>' +
              g.제품.slice(0, 4).map(function (p) {
@@ -8695,7 +9136,7 @@
        rateSum += r.수수료율;
        feeSum += r.약가 * r.수수료율 / 100;
        return '<tr>' +
-           '<td>' + esc(r.성분 || '-') + '</td>' +
+           '<td>' + (r.성분 ? ingLabel_(r.성분) : '-') + '</td>' +
            '<td><strong>' + esc(r.품목명 || '(품목명 미확인)') + '</strong></td>' +
            '<td>' + esc(r.제약사) + '</td>' +
            '<td style="font-variant-numeric:tabular-nums;">' + esc(r.code) + '</td>' +
@@ -9428,7 +9869,7 @@
      const c = STATE.rxClient ? findClient(STATE.rxClient) : null;
      const body = rows.map(function (r, i) {
        return '<tr><td class="center">' + (i + 1) + '</td>' +
-         '<td>' + esc(r.성분 || '-') + '</td>' +
+         '<td>' + (r.성분 ? ingLabel_(r.성분) : '-') + '</td>' +
          '<td><strong>' + esc(r.품목명) + '</strong></td>' +
          '<td class="center">' + esc(r.보험코드 || '-') + '</td>' +
          '<td>' + esc(r.규격 || '-') + '</td>' +
@@ -9476,7 +9917,7 @@
      const body = rows.map(function (r, i) {
        return '<tr><td class="center">' + (i + 1) + '</td>' +
          '<td>' + esc(r.카테고리 || '-') + '</td>' +
-         '<td>' + esc(r.성분 || '-') + '</td>' +
+         '<td>' + (r.성분 ? ingLabel_(r.성분) : '-') + '</td>' +
          '<td><strong>' + esc(r.품목명) + '</strong></td>' +
          '<td class="center">' + esc(r.보험코드 || '-') + '</td>' +
          '<td>' + esc(r.규격 || '-') + '</td>' +
