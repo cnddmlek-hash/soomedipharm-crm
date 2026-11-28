@@ -180,7 +180,7 @@
     // C. 검색어 입력 + 찾기
     var qEl = $('cp-q');
     qEl.value = '김';
-    qEl.dispatchEvent(new W().Event('input', { bubbles: true }));
+    qEl.dispatchEvent(new (W().Event)('input', { bubbles: true }));
     D().querySelector('#cp-body .btn.btn-primary.btn-sm').click();
     await waitFor(function () { return D().querySelectorAll('#cp-result tbody tr').length === 3; }, 8000, '검색 결과 3건');
     out(D().querySelectorAll('#cp-result tbody tr').length === 3, '검색 "김": 결과 3건',
@@ -232,10 +232,10 @@
     out(W().__QACalls['searchClientsProfile'] === callsBefore, '다시 펼치기: 서버 재조회 없음', String(W().__QACalls['searchClientsProfile']));
 
     // G. 키보드(Enter)로도 토글
-    $('cp-head').dispatchEvent(new W().KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    $('cp-head').dispatchEvent(new (W().KeyboardEvent)('keydown', { key: 'Enter', bubbles: true }));
     await sleep(250);
     out($('cp-body').style.display === 'none', '키보드 Enter: 접힌다');
-    $('cp-head').dispatchEvent(new W().KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    $('cp-head').dispatchEvent(new (W().KeyboardEvent)('keydown', { key: 'Enter', bubbles: true }));
     await sleep(250);
     out($('cp-body').style.display !== 'none', '키보드 Enter: 다시 펼쳐진다');
 
