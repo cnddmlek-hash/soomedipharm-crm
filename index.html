@@ -8904,7 +8904,7 @@
        STATE.boardError = isMissingFunctionError_(e) ? SERVER_REDEPLOY_HINT : ('게시판을 불러오지 못했습니다: ' + msg);
      }
      if (STATE.activeMenu !== 'board') return;
-     renderBoardList_();
+     renderActiveMenu();   // 머리 배지·말머리 건수까지 새로 계산되도록 화면을 다시 그립니다
    }
 
    function reloadBoard() { loadBoardModule(); }
