@@ -92,7 +92,9 @@ def main():
         for name in ['looksParenteral_', 'dosageFormOf_', 'productsOfForm_', 'productIndexByIngredient_',
                      'injectCategoryOf_', 'injectPicks_', 'getInjectGuide']:
             check(name in code, 'Code.gs 에 %s 가 없습니다' % name)
-        check("const APP_VERSION = 'v1.15'" in code, 'Code.gs 버전이 v1.15 가 아닙니다')
+        mver = re.search(r"const APP_VERSION = '(v1\.\d+)'", code)
+        check(bool(mver) and int(mver.group(1).split('.')[1]) >= 15,
+              'Code.gs 버전이 v1.15 이상이 아닙니다: %s' % (mver.group(1) if mver else '없음'))
         check(re.search(r'getInjectGuide\s*:\s*getInjectGuide', code) is not None, 'getInjectGuide 가 apiFunctions_ 에 없습니다')
 
     # ---------------- 2-h. v1.8 월별 실적 — 직납(거래내역) + 예상 처방(처방내역) 합산

@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
- <title>수메디팜 미니 CRM v1.19</title>
+ <title>수메디팜 미니 CRM v1.20</title>
 
  <!-- ---------------- PWA (홈 화면 앱) 설정 ---------------- -->
  <meta name="description" content="수메디팜 미니 CRM — 거래처·주문·수금·회전일을 구글 시트로 실시간 관리하는 영업 앱" />
@@ -402,6 +402,29 @@
    .nav-btn.guest-locked:hover { background: rgba(255,255,255,0.08); }
    .guest-nav-head { padding: 4px 8px 6px; font-size: 11px; color: #94a3b8; font-weight: 700; }
    .guest-note { font-size: 11.5px; color: var(--muted); line-height: 1.55; }
+
+   /* ---------------- v1.20: 👀 비회원 메뉴 미리보기 (들어가기 가능 · 기능 잠금) ---------------- */
+   .nav-btn .g-lock { margin-left: auto; font-size: 10px; opacity: 0.55; }
+   .mnav-btn .g-lock { display: none; }
+   .guest-preview-chip {
+     display: inline-block; font-size: 10.5px; font-weight: 700; color: #b45309;
+     background: #fff7ed; border: 1px solid #fed7aa; border-radius: 999px;
+     padding: 1px 8px; vertical-align: middle;
+   }
+   .guest-preview-card { border-style: dashed; border-color: #cbd5e1; box-shadow: none; }
+   .guest-preview-card .card-title { flex-wrap: wrap; }
+   .gp-toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+   .gp-input { max-width: 260px; }
+   .gp-input:disabled, .guest-preview-card button:disabled {
+     background: #f8fafc; color: #94a3b8; cursor: not-allowed; opacity: 1;
+   }
+   .gp-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+   .gp-field label { display: block; font-size: 11.5px; font-weight: 600; color: var(--muted); margin-bottom: 3px; }
+   .gp-field .gp-input { max-width: none; width: 100%; }
+   .guest-kpi { display: flex; flex-wrap: wrap; gap: 8px; }
+   .guest-kpi .k { flex: 1 1 116px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: #f8fafc; }
+   .guest-kpi .k small { display: block; font-size: 11px; color: var(--muted); }
+   .guest-kpi .k b { font-size: 15px; color: var(--primary); }
    .guest-rank-card .g-count { font-size: 12px; color: var(--muted); font-weight: 500; }
    .guest-rank-group { margin-top: 12px; }
    .guest-rank-group:first-of-type { margin-top: 4px; }
@@ -793,7 +816,7 @@
  <div id="login-overlay" class="login-overlay">
    <div class="login-card">
      <div class="login-brand">
-       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.19</span></div>
+       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.20</span></div>
        <div class="s">담당자 아이디로 로그인해 주세요</div>
      </div>
      <div class="form-group" style="margin-bottom:10px;">
@@ -807,8 +830,8 @@
      <div class="login-error" id="login-error"></div>
      <button class="btn btn-primary" style="width:100%;margin-top:6px;" id="login-btn" onclick="submitLogin()">로그인</button>
      <button class="btn btn-outline" style="width:100%;margin-top:8px;" onclick="openRegisterModal()">회원가입 신청</button>
-     <button class="btn btn-outline" style="width:100%;margin-top:8px;" id="guest-btn" onclick="enterGuestPreview()">👀 비회원 맛보기 (내과 다처방 순위)</button>
-     <small class="guest-hint">로그인 없이 <strong>내과 다처방 성분 순위</strong>만 볼 수 있습니다.<br />검색·처방 셋팅·주사제 셋팅·거래처·실적·게시판은 회원 승인 후 이용 가능합니다.</small>
+     <button class="btn btn-outline" style="width:100%;margin-top:8px;" id="guest-btn" onclick="enterGuestPreview()">👀 비회원 맛보기 (메뉴 미리보기)</button>
+     <small class="guest-hint">로그인 없이 <strong>메뉴 구성</strong>과 <strong>내과 다처방 성분 순위</strong>를 둘러볼 수 있습니다.<br />실제 자료·수수료율·입력·검색·저장은 회원 승인 후 이용 가능합니다.</small>
    </div>
  </div>
 
@@ -1177,7 +1200,7 @@
    <!-- PC 사이드바 -->
    <aside class="sidebar">
      <div class="sidebar-brand">
-       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.19</span></h1>
+       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.20</span></h1>
        <div class="sub" id="brand-sub">로딩 중...</div>
      </div>
      <nav class="sidebar-nav" id="sidebar-nav"></nav>
@@ -1194,7 +1217,7 @@
 
    <!-- 모바일 상단 헤더 -->
    <header class="mobile-header">
-     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.19</span></h1>
+     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.20</span></h1>
      <div style="display:flex;gap:6px;align-items:center;">
        <span id="m-user" class="ver-chip" style="display:none;" onclick="openPasswordModal()" title="내 계정 · 비밀번호 변경"></span>
        <button class="btn btn-sm" id="guest-login-btn" style="display:none;background:rgba(255,255,255,0.16);color:#fff;" onclick="exitGuestPreview()">🔑 로그인</button>
@@ -1215,7 +1238,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.19';
+   const APP_VERSION = 'v1.20';
 
    const STATE = {
      // 로그인/권한
@@ -1991,8 +2014,12 @@
    // =========================================================================
    const GUEST_MENU_ID = 'guest';
    const GUEST_DEPT = '내과';
-   const GUEST_NOTICE = '👀 비회원 맛보기 모드 — 내과 다처방 순위만 공개됩니다. 전 진료과·처방/주사제 셋팅·급여가이드·수액 프로토콜은 회원 승인 후 이용 가능합니다.';
+   const GUEST_NOTICE = '👀 비회원 맛보기 모드 — 내과 다처방 순위와 메뉴 구성을 둘러볼 수 있습니다. 실제 데이터·수수료율·입력·검색·저장은 회원 승인 후 이용 가능합니다.';
    const GUEST_LOCK_MSG = '🔒 승인된 회원 전용 기능입니다';
+   /* v1.20 — 메뉴 미리보기: 메뉴에는 들어가 보되 실제 기능은 모두 잠깁니다 */
+   const GUEST_PREVIEW_NOTICE = '🔒 비회원 미리보기 화면 — 실제 데이터·수수료율·입력·검색·저장 기능은 회원 가입 승인 후 이용 가능합니다';
+   const GUEST_PREVIEW_LOCK_MSG = '🔒 회원 가입 승인 후 이용 가능합니다';
+   const GUEST_PREVIEW_ROW = '회원 가입 승인 후 실제 자료가 표시됩니다';
    /* GUEST_RX_START */
    const GUEST_INTERNAL_RX_ = [
      { 질환군: '고혈압·이상지질혈증', 순위: 1, 성분명: '암로디핀', 대표제품: '노바스크정' },
@@ -2171,10 +2198,25 @@
    function guestBannerHtml_() {
      return '<div class="guest-banner" id="guest-banner">' +
        '<div class="g-msg">' + esc(GUEST_NOTICE) +
-         '<small>맛보기에서는 검색·처방 셋팅·주사제 셋팅·약 검색·거래처·실적·게시판이 모두 잠겨 있습니다.</small>' +
+         '<small>왼쪽(폰은 아래) 메뉴를 누르면 화면 구성은 볼 수 있고, 검색·입력·저장·출력은 잠겨 있습니다.</small>' +
        '</div>' +
        '<button class="btn btn-primary" onclick="exitGuestPreview()">🔑 로그인 / 회원가입</button>' +
      '</div>';
+   }
+
+   /** 메뉴 미리보기 상단 배너 — 요청 문구 그대로 + 🔑 로그인/회원가입 (v1.20) */
+   function guestPreviewBannerHtml_() {
+     return '<div class="guest-banner" id="guest-preview-banner">' +
+       '<div class="g-msg">' + esc(GUEST_PREVIEW_NOTICE) +
+         '<small>메뉴 구성은 둘러볼 수 있고, 실제 조회·입력·저장·출력은 승인된 회원 계정에서만 됩니다.</small>' +
+       '</div>' +
+       '<button class="btn btn-primary" onclick="exitGuestPreview()">🔑 로그인 / 회원가입</button>' +
+     '</div>';
+   }
+
+   /** 미리보기 잠금 안내 — 잠긴 칸·카드를 누르면 이 안내만 */
+   function guestPreviewLocked() {
+     showToast(GUEST_PREVIEW_LOCK_MSG);
    }
 
    /** 내과 다처방 성분 순위 — 질환군·순위·성분명·대표 오리지널 제품명만 */
@@ -2203,23 +2245,213 @@
      '</div>';
    }
 
-   /** 비회원 모드 사이드바 · 모바일 하단 바 — 맛보기 1개 + 잠긴 메뉴(🔒)만 */
+   /** 비회원 모드 사이드바 · 모바일 하단 바 — 내과 순위 + 메뉴 미리보기(들어가기 가능) + MASTER 전용 잠금 (v1.20) */
    function guestNavHtml_(mobile) {
      const cls = mobile ? 'mnav-btn' : 'nav-btn';
      const icon = function (m) { return '<span' + (mobile ? ' class="ico"' : '') + '>' + m.icon + '</span>'; };
-     const preview = '<button class="' + cls + ' active" onclick="switchMenu(\'' + GUEST_MENU_ID + '\')">' +
+     const preview = '<button class="' + cls + ' guest-preview-nav' + (STATE.activeMenu === GUEST_MENU_ID ? ' active' : '') +
+       '" onclick="switchMenu(\'' + GUEST_MENU_ID + '\')">' +
        icon({ icon: '👀' }) + '<span>' + (mobile ? '내과 순위' : '내과 다처방 순위') + '</span></button>';
-     const head = mobile ? '' : '<div class="guest-nav-head">🔒 회원 전용 메뉴</div>';
-     const locked = APP_MENUS.map(function (m) {
-       return '<button class="' + cls + ' guest-locked" title="' + esc(GUEST_LOCK_MSG) + '" onclick="guestLockedNotice()">' +
-         icon(m) + '<span>🔒 ' + esc(mobile ? m.shortLabel : m.label) + '</span></button>';
+     const head = mobile ? '' : '<div class="guest-nav-head">👀 메뉴 미리보기 — 들어가 볼 수 있고 기능은 잠깁니다</div>';
+     const items = APP_MENUS.map(function (m) {
+       /* MASTER 전용(설정·발송이력)은 맛보기에서도 열지 않고 잠금 표시만 */
+       if (!canUseMenu(m)) {
+         return '<button class="' + cls + ' guest-locked" title="' + esc(GUEST_LOCK_MSG) + '" onclick="guestLockedNotice()">' +
+           icon(m) + '<span>🔒 ' + esc(mobile ? m.shortLabel : m.label) + '</span></button>';
+       }
+       return '<button class="' + cls + ' guest-preview-nav' + (STATE.activeMenu === m.id ? ' active' : '') +
+         '" title="미리보기 — 실제 기능은 회원 전용" onclick="switchMenu(\'' + m.id + '\')">' +
+         icon(m) + '<span>' + esc(mobile ? m.shortLabel : m.label) + '</span><span class="g-lock">🔒</span></button>';
      }).join('');
-     return preview + head + locked;
+     return preview + head + items;
    }
 
    /** 잠긴 메뉴·기능을 누르면 이 안내만 — 화면·자료는 열지 않음 */
-   function guestLockedNotice() {
-     showToast(GUEST_LOCK_MSG);
+   function guestLockedNotice(msg) {
+     showToast(msg || GUEST_LOCK_MSG);
+   }
+
+   // ---- v1.20 메뉴 미리보기 — 레이아웃·기능 구성만 그리는 도구들 ----------
+   /** 미리보기 입력칸 (항상 disabled) */
+   function gpInput_(ph, width) {
+     return '<input type="text" class="gp-input" placeholder="' + esc(ph) + '"' +
+       (width ? ' style="max-width:' + width + 'px;"' : '') + ' disabled />';
+   }
+
+   /** 미리보기 드롭다운 (항상 disabled) */
+   function gpSelect_(ph) {
+     return '<select class="gp-input" disabled><option>' + esc(ph) + '</option></select>';
+   }
+
+   /** 미리보기 여러 줄 입력칸 (항상 disabled) */
+   function gpArea_(ph) {
+     return '<textarea class="gp-input" style="width:100%;min-height:52px;max-width:none;" placeholder="' +
+       esc(ph) + '" disabled></textarea>';
+   }
+
+   /** 미리보기 버튼 (항상 disabled — 기능 잠금) */
+   function gpBtn_(label, primary) {
+     return '<button type="button" class="btn ' + (primary ? 'btn-primary' : 'btn-outline') +
+       ' btn-sm" disabled>' + esc(label) + '</button>';
+   }
+
+   /** 미리보기 표 — 머리줄만 보이고 본문은 잠금 안내 한 줄 */
+   function gpTable_(heads, note) {
+     return '<div class="table-wrap"><table><thead><tr>' +
+       heads.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') +
+       '</tr></thead><tbody><tr><td colspan="' + heads.length +
+       '" class="center" style="padding:24px;color:var(--muted);">🔒 ' + esc(note || GUEST_PREVIEW_ROW) +
+       '</td></tr></tbody></table></div>';
+   }
+
+   /** 미리보기 요약 숫자 칸 — 값은 모두 '—' (실제 수치 없음) */
+   function gpKpi_(items) {
+     return '<div class="guest-kpi">' + items.map(function (it) {
+       return '<div class="k"><small>' + esc(it[0]) + '</small><b>' + esc(it[1] || '—') + '</b></div>';
+     }).join('') + '</div>';
+   }
+
+   /** 미리보기 입력 폼 — 라벨 + 잠긴 칸 + 잠긴 버튼 */
+   function gpForm_(fields, buttons) {
+     return '<div class="gp-form">' + fields.map(function (f) {
+       return '<div class="gp-field"><label>' + esc(f[0]) + '</label>' + f[1] + '</div>';
+     }).join('') + '</div>' +
+       '<div class="gp-toolbar" style="margin-top:8px;">' + (buttons || []).join(' ') + '</div>';
+   }
+
+   /** 미리보기 카드 — 누르면 잠금 안내만 (안에 자료·입력·저장 없음) */
+   function gpCard_(title, sub, body) {
+     return '<div class="card guest-preview-card" onclick="guestPreviewLocked()">' +
+       '<div class="card-title"><span>' + title + '</span>' +
+       (sub ? '<small style="font-weight:500;font-size:12px;color:var(--muted);">' + esc(sub) + '</small>' : '') +
+       '</div>' + body + '</div>';
+   }
+
+   /** 메뉴별 미리보기 본문 — 화면 구성(표 머리줄·칸·버튼)만, 실제 자료·수수료율 없음 */
+   function guestPreviewBody_(menuId) {
+     if (menuId === 'board') {
+       return gpCard_('📌 공지사항', '말머리 미지급 사유 · 특별 수수료율 · 일반 공지',
+           '<div class="gp-toolbar">' + gpSelect_('전체 말머리') + gpInput_('공지 검색', 240) +
+             gpBtn_('🔍 검색') + gpBtn_('✏️ 새 공지 작성 (MASTER)') + '</div>' +
+           gpTable_(['구분', '제목', '작성자', '작성일']) +
+           '<p class="guest-note" style="margin:8px 0 0;">📌 고정 공지 · 펼치기/접기 · ＋ 공지 더 보기가 실제 화면에 있습니다.</p>') +
+         gpCard_('💬 소통 · 특이사항 게시판', '로그인한 직원 누구나 글쓰기',
+           '<div class="gp-toolbar">' + gpSelect_('말머리 (소통·특이사항·정보공유·질문)') + gpInput_('제목', 200) +
+             gpBtn_('💾 저장', true) + '</div>' +
+           gpArea_('내용 입력란 (회원 전용)') +
+           '<div style="margin-top:8px;">' + gpTable_(['말머리', '제목', '작성자', '작성일시']) + '</div>');
+     }
+     if (menuId === 'clients') {
+       return gpCard_('🎂 원장님 정보 검색', '생일·취향·특이사항으로 찾기',
+           '<div class="gp-toolbar">' + gpInput_('원장님 성함 · 취향 · 생일 · 병원명', 300) + gpBtn_('🔍 찾기') + '</div>' +
+           '<p class="guest-note" style="margin:8px 0 0;">생일이 가까운 순서, 원장님 취향·특이사항은 승인된 회원 계정에서 보입니다.</p>') +
+         gpCard_('🏥 거래처 목록', '코드 · 거래처명 · 진료과 · 담당자 · 경고기준',
+           '<div class="gp-toolbar">' + gpInput_('거래처명, 코드, 담당자, 진료과 검색', 240) +
+             gpSelect_('전체 유통구분') + gpBtn_('+ 신규 거래처 등록', true) + '</div>' +
+           gpTable_(['코드', '거래처명', '유통구분', '진료과', '담당자', '연락처', '경고기준', '관리']));
+     }
+     if (menuId === 'clientinfo') {
+       return gpCard_('🏥 거래처 상세정보', '거래처를 고르면 원장·거래 정보가 나옵니다',
+           '<div class="gp-toolbar">' + gpSelect_('거래처 선택') + gpBtn_('🔄 새로고침') +
+             gpBtn_('💾 정보 수정', true) + gpBtn_('💰 수금 등록') + '</div>' +
+           gpKpi_([['당월 매출', '—'], ['당월 수금', '—'], ['미수금', '—'], ['회전일', '—'], ['경고기준', '—']]) +
+           '<div style="margin-top:10px;">' + gpTable_(['거래일', '구분', '품목', '금액', '비고']) + '</div>' +
+           '<p class="guest-note" style="margin:8px 0 0;">원장님 생일·취향, 회전일 코멘트, 명세서 출력도 이 화면에 있습니다.</p>');
+     }
+     if (menuId === 'perf') {
+       return gpCard_('📈 월별 실적', '직납(확정) + 예상 처방 합산',
+           '<div class="gp-toolbar">' + gpSelect_('담당자 전체') + gpSelect_('이번 달') +
+             gpBtn_('🔍 조회') + gpBtn_('🖨️ 출력 / PDF') + '</div>' +
+           gpKpi_([['직납 매출(확정)', '—'], ['예상 처방금액', '—'], ['예상 수수료', '—'],
+             ['예상 총매출', '—'], ['수금', '—'], ['미수금', '—']]) +
+           '<div style="margin-top:10px;">' +
+             gpTable_(['담당자', '직납 매출(확정)', '예상 처방금액', '예상 수수료', '수금', '미수금']) + '</div>');
+     }
+     if (menuId === 'guide') {
+       return gpCard_('🧭 처방 셋팅 — 💊 경구제(원외처방) 전용', '진료과·성분·품목·제약사로 골라 담기',
+           '<div class="gp-toolbar">' + gpSelect_('진료과 (내과 외는 회원 전용)') + gpInput_('성분 · 품목 검색', 200) +
+             gpInput_('🏭 제약사', 140) + gpBtn_('🔍 성분 찾기') +
+             gpBtn_('💊 선택 항목 담기', true) + gpBtn_('🖨️ 원장님 안내용 출력 / PDF') + '</div>' +
+           gpTable_(['성분명', '품목명', '제약사', '규격', '보험코드', '약가']) +
+           '<p class="guest-note" style="margin:8px 0 0;">수수료율·수수료액·최소 제약사 요율 향상·다른 진료과는 승인된 회원 계정에만 표시됩니다.</p>');
+     }
+     if (menuId === 'prescription') {
+       return gpCard_('💊 처방전 입력', '병원별 빠른 수량 입력 → 처방내역 저장',
+           gpForm_([['병원명', gpSelect_('거래처 선택')], ['기준월', gpInput_('YYYY-MM')],
+             ['처방일', gpInput_('YYYY-MM-DD')], ['처방의 (선택)', gpInput_('원장님 성함')]],
+             [gpBtn_('💾 처방 저장', true), gpBtn_('🖨️ 원장님용 출력 / PDF'), gpBtn_('🖨️ 내부용 출력 / PDF')])) +
+         gpCard_('📋 처방 품목', '보험코드 · 품목명 · 수량 · 단가',
+           gpTable_(['품목명', '보험코드', '수량', '처방금액']) +
+           '<p class="guest-note" style="margin:8px 0 0;">이엘파마 경구 품목 서버 검색과 빠른 수량 입력은 회원 전용입니다.</p>');
+     }
+     if (menuId === 'order') {
+       return gpCard_('💉 주사제 주문', '💳 주문(매출) 등록 · 💉 주사제 셋팅 (프로토콜·배합금기)',
+           '<div class="gp-toolbar">' + gpBtn_('💳 주문(매출) 등록', true) +
+             gpBtn_('💉 주사제 셋팅 (프로토콜·배합금기)') + '</div>' +
+           gpForm_([['거래 날짜', gpInput_('YYYY-MM-DD')], ['거래처', gpSelect_('거래처 선택')],
+             ['품목', gpSelect_('제품마스터 품목')], ['수량', gpInput_('수량')],
+             ['단가', gpInput_('단가')], ['부가세', gpSelect_('포함 / 별도')], ['비고', gpInput_('비고')]],
+             [gpBtn_('💾 매출 등록', true), gpBtn_('🛒 선택 품목 매출 일괄 등록'),
+              gpBtn_('🖨️ 원장님 안내용 출력 / PDF')]) +
+           '<div style="margin-top:10px;">' + gpTable_(['거래일', '거래처', '품목', '수량', '합계']) + '</div>' +
+           '<p class="guest-note" style="margin:8px 0 0;">목적별 프로토콜·배합금기·추천 요율은 회원 승인 후 표시됩니다.</p>');
+     }
+     if (menuId === 'collection') {
+       return gpCard_('💰 수금 등록', '입금 날짜 · 거래처 · 수금유형 · 입금액',
+           gpForm_([['입금 날짜', gpInput_('YYYY-MM-DD')], ['거래처', gpSelect_('거래처 선택')],
+             ['수금유형', gpSelect_('수금 / 상계 / 반품')], ['입금액', gpInput_('입금액')], ['비고', gpInput_('비고')]],
+             [gpBtn_('💾 수금 등록', true), gpBtn_('미수금 전액 채우기')]) +
+           gpKpi_([['현재 미수금', '—'], ['당월 매출', '—'], ['당월 수금', '—']]) +
+           '<div style="margin-top:10px;">' + gpTable_(['입금일', '거래처', '수금유형', '입금액']) + '</div>');
+     }
+     if (menuId === 'drug') {
+       return gpCard_('🔎 약 검색 · 금기', '약학정보원 연계 · 동일성분 묶음 · 타사단가 비교',
+           '<div class="gp-toolbar">' + gpInput_('약 이름 · 성분명 · 제약사', 260) +
+             gpBtn_('🔍 검색', true) + '</div>' +
+           gpTable_(['제품명', '성분명', '제약사', '규격', '보험코드', '약가']) +
+           '<p class="guest-note" style="margin:8px 0 0;">DUR 병용·임부금기 안내와 동일 성분 타사 단가 비교는 회원 전용입니다.</p>') +
+         gpCard_('⚠️ 병용 · 임부 금기 (DUR)', '검색한 약의 금기 성분',
+           '<p class="guest-note" style="margin:6px 0 0;">🔒 ' + esc(GUEST_PREVIEW_ROW) + '</p>');
+     }
+     if (menuId === 'turnover') {
+       return gpCard_('📊 회전일 대시보드', '거래처별 최근 주문 · 회전일 · 경고',
+           '<div class="gp-toolbar">' + gpSelect_('담당자 전체') + gpInput_('거래처 검색', 200) +
+             gpBtn_('🔄 새로고침') + gpBtn_('🖨️ 출력 / PDF') + '</div>' +
+           gpKpi_([['회전일', '—'], ['경고기준', '—'], ['미수 관리 필요', '—']]) +
+           '<div style="margin-top:10px;">' +
+             gpTable_(['거래처명', '최근 주문일', '회전일', '경고기준', '상태']) + '</div>') +
+         gpCard_('📦 제품마스터', '급여 · 비급여 · 시장가',
+           gpTable_(['제품명', '제약사', '규격', '급여구분', '약가']));
+     }
+     if (menuId === 'ledger') {
+       return gpCard_('📑 거래원장 · 명세서', '거래처별 거래 내역과 미수 잔액',
+           '<div class="gp-toolbar">' + gpSelect_('거래처 선택') + gpInput_('조회 기간', 160) +
+             gpBtn_('🔍 조회') + gpBtn_('🖨️ 인쇄 / PDF 저장') + '</div>' +
+           gpKpi_([['기말잔액(미수)', '—'], ['회전일', '—'], ['경고기준', '—']]) +
+           '<div style="margin-top:10px;">' + gpTable_(['거래일', '구분', '품목', '금액', '잔액']) + '</div>');
+     }
+     return '';
+   }
+
+   /** 메뉴 미리보기 화면 전체 (배너 + 머리줄 + 미리보기 본문) */
+   function guestPreviewPageHtml_(menuId) {
+     const menu = APP_MENUS.filter(function (m) { return m.id === menuId; })[0] || { label: '미리보기', icon: '👀' };
+     return guestPreviewBannerHtml_() +
+       '<div class="page-header">' +
+         '<h2 class="page-title">' + (menu.icon || '👀') + ' ' + esc(menu.label) +
+           ' <span class="guest-preview-chip">👀 미리보기</span></h2>' +
+         '<small style="font-size:12px;color:var(--muted);">' + esc(GUEST_PREVIEW_LOCK_MSG) + '</small>' +
+       '</div>' +
+       guestPreviewBody_(menuId);
+   }
+
+   /** 비회원 모드에서 메뉴를 눌렀을 때 — 미리보기 화면만 렌더 (서버 호출 0건) */
+   function renderGuestMenuPage(menuId) {
+     const el = document.getElementById('main-content');
+     if (!el) return;
+     el.innerHTML = guestPreviewPageHtml_(menuId);
+     try { document.title = '수메디팜 미니 CRM · 비회원 미리보기 ' + APP_VERSION; } catch (e) {}
+     return el;
    }
 
    /** 비회원 맛보기 화면 (서버 호출 없음) */
@@ -2250,7 +2482,7 @@
      const user = document.getElementById('sidebar-user');
      if (user) user.textContent = on ? '👀 비회원 맛보기' : 'Google Sheets 실시간 연동';
      const sub = document.getElementById('brand-sub');
-     if (sub && on) sub.textContent = '비회원 맛보기 · 내과 다처방 순위';
+     if (sub && on) sub.textContent = '비회원 맛보기 · 메뉴 미리보기';
      const mUser = document.getElementById('m-user');
      if (mUser && on) mUser.style.display = 'none';
      try { document.body.classList.toggle('guest-mode', Boolean(on)); } catch (e) {}
@@ -2302,12 +2534,24 @@
    }
 
    function switchMenu(menuId) {
-     /* 👀 비회원 맛보기 — 맛보기 메뉴 외에는 안내만 띄우고 아무 화면·자료도 열지 않음 */
+     /* 👀 비회원 맛보기(v1.20) — 모든 메뉴에 들어가 구성만 보고, 기능은 잠금. MASTER 전용만 막습니다. */
      if (STATE.guestMode) {
-       if (menuId !== GUEST_MENU_ID) { guestLockedNotice(); return; }
-       STATE.activeMenu = GUEST_MENU_ID;
+       if (menuId === GUEST_MENU_ID) {
+         STATE.activeMenu = GUEST_MENU_ID;
+         buildNavMenus();
+         renderGuestPreview();
+         try { window.scrollTo(0, 0); } catch (e) {}
+         return;
+       }
+       const guestMenu = APP_MENUS.filter(function (m) { return m.id === menuId; })[0];
+       if (!guestMenu) { guestLockedNotice(); return; }
+       if (!canUseMenu(guestMenu)) {
+         guestLockedNotice('🔒 MASTER 전용 메뉴입니다 — 마스터 계정에서만 열 수 있습니다');
+         return;
+       }
+       STATE.activeMenu = menuId;
        buildNavMenus();
-       renderGuestPreview();
+       renderGuestMenuPage(menuId);
        try { window.scrollTo(0, 0); } catch (e) {}
        return;
      }
@@ -2328,7 +2572,11 @@
    function renderActiveMenu() {
      destroyAutocompletes();
      const container = document.getElementById('main-content');
-     if (STATE.guestMode) { renderGuestPreview(container); return; }
+     if (STATE.guestMode) {
+       if (STATE.activeMenu === GUEST_MENU_ID) renderGuestPreview(container);
+       else renderGuestMenuPage(STATE.activeMenu);
+       return;
+     }
      const menu = APP_MENUS.filter(function (m) { return m.id === STATE.activeMenu; })[0];
      if (menu && !canUseMenu(menu)) { renderMasterOnlyNotice(container); return; }
      if (menu && menu.render) menu.render(container);
