@@ -70,10 +70,10 @@ def main():
     except ImportError:
         print('(esprima 없음 — 문법 검사 생략: pip install esprima)')
 
-    # 2) v1.12 요소
-    check("const APP_VERSION = 'v1.12'" in js, 'APP_VERSION 이 v1.12 가 아닙니다')
-    check('<title>수메디팜 미니 CRM v1.12</title>' in html, '브라우저 탭 제목의 버전이 v1.12 가 아닙니다')
-    check('ver-chip">v1.12' in html and 'ver-chip dark">v1.12' in html, '로그인 화면·상단 바의 버전 칩이 v1.12 가 아닙니다')
+    # 2) v1.13 요소
+    check("const APP_VERSION = 'v1.13'" in js, 'APP_VERSION 이 v1.13 이 아닙니다')
+    check('<title>수메디팜 미니 CRM v1.13</title>' in html, '브라우저 탭 제목의 버전이 v1.13 이 아닙니다')
+    check('ver-chip">v1.13' in html and 'ver-chip dark">v1.13' in html, '로그인 화면·상단 바의 버전 칩이 v1.13 이 아닙니다')
     check('id: \'drug\'' in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
     check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
     # v1.11 — 🧭 처방 셋팅은 경구제 전용 · 💉 주사제 셋팅은 💉 주사제 주문 메뉴 안 탭
@@ -1047,15 +1047,21 @@ def main():
                  'guidePrintRows_', 'injectPrintRows_', 'rxPrintRows_', 'printStamp_']:
         check(need in js, '출력/PDF 기능에 %s 가 없습니다' % need)
     check('🖨️ 원장님 안내용 출력 / PDF' in js, '원장님 안내용 출력 버튼이 없습니다')
-    check('🖨️ 출력 / PDF 저장' in js, '처방전 입력 출력 / PDF 저장 버튼이 없습니다')
+    # v1.13 — 처방전 입력 출력을 원장님용 / 내부용 두 가지로 분리
+    check('🖨️ 원장님용 출력 / PDF' in js, '처방전 입력 원장님용 출력 버튼이 없습니다')
+    check('🖨️ 내부용 출력 / PDF' in js, '처방전 입력 내부용 출력 버튼이 없습니다')
+    check("printRxSheet(\\'owner\\')" in js and "printRxSheet(\\'internal\\')" in js,
+          '처방전 출력 버튼이 원장님용/내부용을 구분해 부르지 않습니다')
+    check('🖨️ 출력 / PDF 저장' not in js, '처방전 입력에 예전 단일 출력 버튼(출력 / PDF 저장)이 남아 있습니다')
     for fn_name in ['printGuideSheet', 'printInjectSheet']:
         body = re.search(r'function %s\(\)\s*\{(.*?)\n   \}' % fn_name, js, re.S)
         check(bool(body), '%s 를 찾지 못했습니다' % fn_name)
         if body:
             check('수수료율' not in body.group(1) and '예상수수료' not in body.group(1),
                   '%s 출력물에 내부 수수료율이 들어갑니다' % fn_name)
-    rx_body = re.search(r'function printRxSheet\(\)\s*\{(.*?)\n   \}', js, re.S)
-    check(bool(rx_body) and '예상수수료' in rx_body.group(1), '처방전 출력물에 예상수수료가 없습니다')
+    rx_body = re.search(r'function printRxSheet\([^)]*\)\s*\{(.*?)\n   \}', js, re.S)
+    check(bool(rx_body) and '예상수수료' in rx_body.group(1), '처방전 내부용 출력물에 예상수수료가 없습니다')
+    check(bool(rx_body) and "owner ? ''" in rx_body.group(1), '처방전 원장님용에서 수수료 열을 빼는 분기가 없습니다')
     check('#print-area thead' in raw and 'page-break-inside: avoid' in raw, '인쇄용 페이지 나눔 스타일이 없습니다')
     check('window.print()' in js, 'window.print() 호출이 없습니다')
 
@@ -1246,13 +1252,30 @@ def main():
             check('주사·수액 셋팅 안내' in ihtml, '주사제 셋팅 출력물 제목이 없습니다')
             check('자사(페이서)' in ihtml, '주사제 셋팅 출력물에 제약사(자사(페이서))가 없습니다')
             check('수수료율' not in ihtml and '40%' not in ihtml, '주사제 안내용 출력물에 내부 수수료율이 들어갑니다')
-            c5.eval('printRxSheet();')
+            # v1.13 — 내부용: 수수료율·예상수수료 포함
+            c5.eval("printRxSheet('internal');")
             rhtml = q12(c5.eval('__printed'))
-            check('처방 내역' in rhtml and '푸른정의원' in rhtml, '처방전 출력물에 병원 정보가 없습니다')
-            check('2026-11' in rhtml, '처방전 출력물에 기준월이 없습니다')
-            check('10,630원' in rhtml, '입력한 수량이 출력물 처방금액에 반영되지 않았습니다')
-            check('5,740원' in rhtml, '예상수수료(54%)가 출력물에 없습니다')
-            check('대웅바이오' in rhtml, '처방전 출력물에 제약사가 없습니다')
+            check('처방 내역' in rhtml and '푸른정의원' in rhtml, '처방전 내부용 출력물에 병원 정보가 없습니다')
+            check('2026-11' in rhtml, '처방전 내부용 출력물에 기준월이 없습니다')
+            check('10,630원' in rhtml, '입력한 수량이 내부용 출력물 처방금액에 반영되지 않았습니다')
+            check('수수료율' in rhtml and '54%' in rhtml, '처방전 내부용 출력물에 수수료율이 없습니다')
+            check('5,740원' in rhtml, '예상수수료(54%)가 내부용 출력물에 없습니다')
+            check('대웅바이오' in rhtml, '처방전 내부용 출력물에 제약사가 없습니다')
+            # v1.13 — 원장님용: 수수료율·예상수수료·요율등급 완전 제외
+            c5.eval("printRxSheet('owner');")
+            ohtml = q12(c5.eval('__printed'))
+            check('처방 품목 내역서' in ohtml, '원장님용 출력물 제목(처방 품목 내역서)이 없습니다')
+            check('푸른정의원' in ohtml and '2026-11' in ohtml and '2026-11-28' in ohtml,
+                  '원장님용 출력물에 병원·기준월·처방일이 없습니다')
+            check('수메디팜' in ohtml and '출력일시' in ohtml, '원장님용 출력물에 수메디팜 헤더·출력일시가 없습니다')
+            check('베아셋정' in ohtml and '073001620' in ohtml and '대웅바이오' in ohtml,
+                  '원장님용 출력물에 품목명·보험코드·제약사가 없습니다')
+            check('1,063원' in ohtml and '10개' in ohtml and '10,630원' in ohtml,
+                  '원장님용 출력물에 기준단가·수량·처방금액이 없습니다')
+            check('합계 (1품목)' in ohtml and '10개' in ohtml, '원장님용 출력물 합계행(품목수·수량)이 없습니다')
+            check('수수료' not in ohtml, '원장님용 출력물에 수수료 관련 문구가 남아 있습니다')
+            check('54%' not in ohtml and '5,740원' not in ohtml, '원장님용 출력물에 수수료율·예상수수료가 들어갑니다')
+            check('예상수수료' not in ohtml and '요율등급' not in ohtml, '원장님용 출력물에 내부 영업 수치가 들어갑니다')
         # (F) 처방 셋팅 · 주사제 셋팅 화면에 제약사·선택 담기 버튼이 실제로 그려지는지
         c6 = quickjs.Context()
         c6.eval('''
