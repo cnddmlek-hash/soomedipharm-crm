@@ -6,7 +6,7 @@
    3) 정적 파일은 network-first — GitHub에 새로 push한 화면이 1~2분 안에 그대로 반영되고,
       오프라인일 때만 캐시를 쓴다.
 */
-const CACHE = 'soomedipharm-crm-v17';
+const CACHE = 'soomedipharm-crm-v18';
 const ASSETS = [
   './',
   './index.html',

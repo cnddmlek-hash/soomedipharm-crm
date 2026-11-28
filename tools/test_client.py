@@ -132,9 +132,9 @@ def main():
         print('(esprima 없음 — 문법 검사 생략: pip install esprima)')
 
     # 2) v1.14 요소
-    check("const APP_VERSION = 'v1.22'" in js, 'APP_VERSION 이 v1.22 가 아닙니다')
-    check('<title>수메디팜 미니 CRM v1.22</title>' in html, '브라우저 탭 제목의 버전이 v1.22 가 아닙니다')
-    check('ver-chip">v1.22' in html and 'ver-chip dark">v1.22' in html, '로그인 화면·상단 바의 버전 칩이 v1.22 가 아닙니다')
+    check("const APP_VERSION = 'v1.23'" in js, 'APP_VERSION 이 v1.23 이 아닙니다')
+    check('<title>수메디팜 미니 CRM v1.23</title>' in html, '브라우저 탭 제목의 버전이 v1.23 이 아닙니다')
+    check('ver-chip">v1.23' in html and 'ver-chip dark">v1.23' in html, '로그인 화면·상단 바의 버전 칩이 v1.23 이 아닙니다')
     check('id: \'drug\'' in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
     check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
     # v1.11 — 🧭 처방 셋팅은 경구제 전용 · 💉 주사제 셋팅은 💉 주사제 주문 메뉴 안 탭
@@ -249,6 +249,80 @@ def main():
         check(txt == 'Acetylcysteine 200mg (아세틸시스테인)', '출력물용 글자 형식이 다릅니다: %s' % txt)
     except ImportError:
         print('(quickjs 없음 — 성분 한글 발음 실행 검사 생략: pip install quickjs)')
+
+    # 2-e) v1.23 — 인쇄/PDF 합계 행: 연회색 배경 + 진한 글자색 (어두운 배경에 검은 글자 금지)
+    def lum_(hexcolor):
+        """#rrggbb 의 상대 밝기(0=검정, 1=흰색)"""
+        h = hexcolor.strip().lstrip('#')
+        if len(h) == 3:
+            h = ''.join(c * 2 for c in h)
+        r, g, b = (int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    def print_rules_(doc):
+        """@media print 안의 #print-area 규칙을 (선택자, 본문) 으로 뽑습니다."""
+        block = re.search(r'/\* ---------------- Print / PDF A4 Styles ---------------- \*/([\s\S]*?)</style>', doc)
+        out = []
+        if not block:
+            return out
+        body = re.sub(r'/\*[\s\S]*?\*/', ' ', block.group(1))   # 주석 제거 후 선택자 비교
+        for m in re.finditer(r'([^{}]+)\{([^{}]*)\}', body):
+            sel = ' '.join(m.group(1).split())
+            if sel.startswith('#print-area'):
+                out.append((sel, m.group(2)))
+        return out
+
+    _doc23 = open(INDEX, encoding='utf-8').read()
+    _rules23 = print_rules_(_doc23)
+    check(bool(_rules23), '인쇄용 CSS(#print-area) 규칙을 찾지 못했습니다')
+    _tot23 = next((body for sel, body in _rules23 if sel == '#print-area .tot'), '')
+    _totcell23 = next((body for sel, body in _rules23 if sel == '#print-area .tot > td'), '')
+    check(bool(_tot23) and bool(_totcell23), '합계 행(.tot / .tot > td) 인쇄 스타일이 없습니다')
+    _bg23 = re.search(r'background:\s*(#[0-9a-fA-F]{3,6})', _tot23)
+    _fg23 = re.search(r'(?<!-)color:\s*(#[0-9a-fA-F]{3,6})', _tot23)
+    check(bool(_bg23), '합계 행 인쇄 배경색이 없습니다')
+    check(bool(_fg23), '합계 행 인쇄 글자색이 없습니다')
+    if _bg23 and _fg23:
+        check(lum_(_bg23.group(1)) >= 0.85, '합계 행 배경이 연한 색이 아닙니다: %s' % _bg23.group(1))
+        check(lum_(_bg23.group(1)) - lum_(_fg23.group(1)) >= 0.7,
+              '합계 행 배경과 글자색 대비가 부족합니다: %s / %s' % (_bg23.group(1), _fg23.group(1)))
+        check(lum_(_fg23.group(1)) <= 0.15, '합계 행 글자색이 진한 색이 아닙니다: %s' % _fg23.group(1))
+    check('border-top: 2px solid #334155' in _tot23 or 'border-top: 2px solid #334155' in _totcell23,
+          '합계 행 위쪽 구분선(2px #334155)이 없습니다')
+    check('color: #0f172a' in _totcell23 or 'color: #0f172a' in _tot23, '합계 행 글자색(#0f172a)이 없습니다')
+    check('font-weight: 700' in _totcell23 or 'font-weight: bold' in _totcell23, '합계 행 굵은 글씨가 없습니다')
+    check('print-color-adjust: exact' in _tot23 and 'print-color-adjust: exact' in _totcell23,
+          '합계 행 배경이 인쇄되도록 하는 print-color-adjust: exact 가 없습니다')
+    check('color-scheme: only light' in _doc23, '인쇄 영역의 color-scheme: only light(기기 다크모드 차단)가 없습니다')
+    _th23 = next((body for sel, body in _rules23 if sel == '#print-area table.data th'), '')
+    check('background: #1e3a5f' in _th23 and 'color: #fff' in _th23,
+          '표 머리글(thead)이 어두운 배경 + 흰 글씨가 아닙니다')
+    # 인쇄 규칙 어디에도 '어두운 배경 + 어두운 글자' 조합이 없어야 합니다
+    for sel, body in _rules23:
+        b = re.search(r'background(?:-color)?:\s*(#[0-9a-fA-F]{3,6})', body)
+        f = re.search(r'(?<!-)color:\s*(#[0-9a-fA-F]{3,6})', body)
+        if b and f:
+            check(not (lum_(b.group(1)) < 0.5 and lum_(f.group(1)) < 0.35),
+                  '인쇄 규칙이 어두운 배경에 어두운 글자를 씁니다: %s' % sel)
+    # 합계 행이 들어가는 출력물 전부에 합계 클래스가 붙어 있는지
+    for label, needle in [
+        ('처방 내역(내부용·원장님용)', "'<tr class=\"tot\"><td colspan=\"5\" class=\"center\">합계 ('"),
+        ('거래명세서', "'<tr class=\"tot\"><td colspan=\"5\" class=\"center\">합 계</td>"),
+        ('거래원장 기간 합계', "'<tr class=\"tot\"><td colspan=\"3\" class=\"center\">기간 합계 / 기말잔액</td>"),
+        ('회전일 현황표', "'<tr class=\"tot\"><td colspan=\"5\">합계</td>"),
+    ]:
+        check(needle in js, '%s 출력물의 합계 행에 합계 클래스(tot)가 없습니다' % label)
+    for m in re.finditer(r'<tr class="tot"[^>]*>', js):
+        check('style=' not in m.group(0), '합계 행에 인라인 스타일이 붙어 인쇄 색상 규칙을 덮습니다: %s' % m.group(0))
+    # 서비스워커 캐시·배포 사본
+    _sw = open(os.path.join(PROJECT, 'sw.js'), encoding='utf-8').read()
+    check("'soomedipharm-crm-v18'" in _sw, '서비스워커 캐시가 v18 이 아닙니다')
+    _dl = os.path.abspath(os.path.join(PROJECT, '..', '..', 'downloads', 'Index.html'))
+    if os.path.exists(_dl):
+        import hashlib
+        def md5_(p):
+            return hashlib.md5(open(p, 'rb').read()).hexdigest()
+        check(md5_(_dl) == md5_(INDEX), 'downloads/Index.html 이 projects/soomedipharm-crm/index.html 과 다릅니다')
 
     # 2-c) v1.7 — 비거래처 사전조회(심평원 HIRA)
     check('renderHiraPage' in js and '비거래처 심평원(HIRA) 사전조회' in js, '비거래처 사전조회 화면이 없습니다')
