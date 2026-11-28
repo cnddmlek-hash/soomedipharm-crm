@@ -150,6 +150,16 @@
     await waitFor(function () { return $('cp-head'); }, 10000, '거래처 화면');
     await sleep(400);
 
+    var viewMode = (new URLSearchParams(location.search)).get('view') || '';
+    if (viewMode === 'collapsed') { note('보기 모드 — 접힌 화면'); window.__QA_DONE = true; return; }
+    if (viewMode === 'expanded') {
+      $('cp-head').click();
+      await sleep(900);
+      note('보기 모드 — 펼친 화면');
+      window.__QA_DONE = true;
+      return;
+    }
+
     var errs = W().__errs;
     out(errs.length === 0, '거래처 화면 부팅 중 런타임 오류 0건', errs.join(' | '));
     out(D().querySelector('.page-title') && D().querySelector('.page-title').textContent.indexOf('거래처 등록 / 관리') !== -1, '거래처 등록/관리 화면이 그려졌다');
