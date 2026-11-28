@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
- <title>수메디팜 미니 CRM v1.17</title>
+ <title>수메디팜 미니 CRM v1.18</title>
 
  <!-- ---------------- PWA (홈 화면 앱) 설정 ---------------- -->
  <meta name="description" content="수메디팜 미니 CRM — 거래처·주문·수금·회전일을 구글 시트로 실시간 관리하는 영업 앱" />
@@ -387,6 +387,29 @@
    .login-brand .t { font-size: 20px; font-weight: 800; color: var(--primary); }
    .login-brand .s { font-size: 12px; color: var(--muted); margin-top: 6px; }
    .login-error { color: var(--danger); font-size: 12.5px; min-height: 17px; margin: 9px 0 2px; }
+   .guest-hint { display: block; text-align: center; margin-top: 8px; font-size: 11px; color: var(--muted); line-height: 1.55; }
+
+   /* ---------------- v1.18: 👀 비회원 맛보기 (내과 다처방 순위 전용) ---------------- */
+   .guest-banner {
+     display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;
+     background: #fff7ed; border: 1px solid #fed7aa; border-left: 5px solid #f59e0b;
+     border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;
+   }
+   .guest-banner .g-msg { font-size: 13px; color: #7c2d12; line-height: 1.55; font-weight: 700; flex: 1; min-width: 220px; }
+   .guest-banner .g-msg small { display: block; font-weight: 500; color: #9a3412; font-size: 11.5px; margin-top: 3px; }
+   .guest-banner .btn { flex: 0 0 auto; }
+   .nav-btn.guest-locked, .mnav-btn.guest-locked { opacity: 0.6; }
+   .nav-btn.guest-locked:hover { background: rgba(255,255,255,0.08); }
+   .guest-nav-head { padding: 4px 8px 6px; font-size: 11px; color: #94a3b8; font-weight: 700; }
+   .guest-note { font-size: 11.5px; color: var(--muted); line-height: 1.55; }
+   .guest-rank-card .g-count { font-size: 12px; color: var(--muted); font-weight: 500; }
+   .guest-rank-group { margin-top: 12px; }
+   .guest-rank-group:first-of-type { margin-top: 4px; }
+   .guest-rank-head {
+     display: flex; align-items: center; gap: 8px; font-weight: 800; color: var(--primary); font-size: 13.5px;
+     padding: 0 0 6px; border-bottom: 1px solid var(--border);
+   }
+   .guest-rank-head small { font-weight: 500; color: var(--muted); font-size: 11.5px; }
 
    /* ---------------- v1.1: 자동완성(타이핑 검색) ---------------- */
    .ac-list {
@@ -770,7 +793,7 @@
  <div id="login-overlay" class="login-overlay">
    <div class="login-card">
      <div class="login-brand">
-       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.17</span></div>
+       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.18</span></div>
        <div class="s">담당자 아이디로 로그인해 주세요</div>
      </div>
      <div class="form-group" style="margin-bottom:10px;">
@@ -784,6 +807,8 @@
      <div class="login-error" id="login-error"></div>
      <button class="btn btn-primary" style="width:100%;margin-top:6px;" id="login-btn" onclick="submitLogin()">로그인</button>
      <button class="btn btn-outline" style="width:100%;margin-top:8px;" onclick="openRegisterModal()">회원가입 신청</button>
+     <button class="btn btn-outline" style="width:100%;margin-top:8px;" id="guest-btn" onclick="enterGuestPreview()">👀 비회원 맛보기 (내과 다처방 순위)</button>
+     <small class="guest-hint">로그인 없이 <strong>내과 다처방 성분 순위</strong>만 볼 수 있습니다.<br />검색·처방 셋팅·주사제 셋팅·거래처·실적·게시판은 회원 승인 후 이용 가능합니다.</small>
    </div>
  </div>
 
@@ -1152,7 +1177,7 @@
    <!-- PC 사이드바 -->
    <aside class="sidebar">
      <div class="sidebar-brand">
-       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.17</span></h1>
+       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.18</span></h1>
        <div class="sub" id="brand-sub">로딩 중...</div>
      </div>
      <nav class="sidebar-nav" id="sidebar-nav"></nav>
@@ -1162,17 +1187,19 @@
          <button class="btn btn-outline btn-sm" id="logout-btn" style="display:none;" onclick="doLogout()">로그아웃</button>
        </div>
        <button class="btn btn-outline btn-sm" id="pw-btn" style="display:none;margin-top:8px;width:100%;" onclick="openPasswordModal()">🔑 비밀번호 변경</button>
-       <button class="btn btn-outline btn-sm" style="margin-top:8px;width:100%;" onclick="refreshBootstrap()">🔄 데이터 새로고침</button>
+       <button class="btn btn-primary btn-sm" id="guest-login-btn-side" style="display:none;margin-top:8px;width:100%;" onclick="exitGuestPreview()">🔑 로그인 / 회원가입</button>
+       <button class="btn btn-outline btn-sm" id="refresh-btn" style="margin-top:8px;width:100%;" onclick="refreshBootstrap()">🔄 데이터 새로고침</button>
      </div>
    </aside>
 
    <!-- 모바일 상단 헤더 -->
    <header class="mobile-header">
-     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.17</span></h1>
+     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.18</span></h1>
      <div style="display:flex;gap:6px;align-items:center;">
        <span id="m-user" class="ver-chip" style="display:none;" onclick="openPasswordModal()" title="내 계정 · 비밀번호 변경"></span>
+       <button class="btn btn-sm" id="guest-login-btn" style="display:none;background:rgba(255,255,255,0.16);color:#fff;" onclick="exitGuestPreview()">🔑 로그인</button>
        <button class="btn btn-sm" id="pw-btn-m" title="비밀번호 변경" aria-label="비밀번호 변경" style="display:none;background:rgba(255,255,255,0.16);color:#fff;" onclick="openPasswordModal()">🔑</button>
-       <button class="btn btn-sm" style="background:rgba(255,255,255,0.16);color:#fff;" onclick="refreshBootstrap()">🔄</button>
+       <button class="btn btn-sm" id="refresh-btn-m" style="background:rgba(255,255,255,0.16);color:#fff;" onclick="refreshBootstrap()">🔄</button>
        <button class="btn btn-sm" id="logout-btn-m" style="display:none;background:rgba(255,255,255,0.16);color:#fff;" onclick="doLogout()">나가기</button>
      </div>
    </header>
@@ -1188,13 +1215,14 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.17';
+   const APP_VERSION = 'v1.18';
 
    const STATE = {
      // 로그인/권한
      authToken: '',
      user: null,
      isMaster: false,
+     guestMode: false,        // 👀 비회원 맛보기(v1.18) — 내과 다처방 순위만, 서버 호출 없음
      // 공통 마스터 데이터
      activeMenu: 'board',
      settings: {},
@@ -1505,6 +1533,10 @@
    }
 
    function runServer(fnName, args, opts) {
+     /* 👀 비회원 맛보기(v1.18): 시트·요율·내부 자료가 네트워크로도 나가지 않도록 서버 호출을 막습니다. */
+     if (STATE.guestMode) {
+       return Promise.reject(serverError_('비회원 맛보기 모드에서는 서버 자료를 불러오지 않습니다. 로그인 후 이용해 주세요.'));
+     }
      const options = opts || {};
      if (!options.silent) showLoader(true);
      // 모든 서버 공개 함수는 마지막 인자로 로그인 토큰을 받습니다.
@@ -1938,6 +1970,49 @@
    //   → ③ 월별 실적 → ④ 처방 셋팅 → ⑤ 처방전 입력
    //   → ⑥ 💉 주사제 주문(매출 전용) → ⑦ 💰 수금 등록(수금 전용)   ← v1.10 두 화면으로 완전 분리
    //   → ⑧ 약 검색 · 금기 → ⑨ 주문 · 회전일 관리 → ⑩ 거래원장 · 명세서 → ⑪ 발송이력 · 설정(MASTER 전용, 항상 맨 마지막)
+   // =========================================================================
+   // 3-A. 👀 비회원 맛보기 (v1.18) — 내과 다처방 성분 순위만 공개
+   // -------------------------------------------------------------------------
+   //  · 로그인 전 사용자에게 보여 줄 자료는 **앱 코드 안에** 둡니다.
+   //    서버 API·시트·요율·제약사 품목·단가·검색·거래처·게시판은 하나도 호출/노출하지 않습니다.
+   //  · 아래 목록은 구글 시트 `진료과성분` 의 **내과 25성분**(2026-11-28 확인) 중
+   //    질환군 · 순위 · 성분명 · 대표 오리지널 제품명만 옮긴 것입니다.
+   //    (수수료율·취급 품목·약가·비고·처방포인트는 넣지 않습니다 — 회원 전용)
+   // =========================================================================
+   const GUEST_MENU_ID = 'guest';
+   const GUEST_DEPT = '내과';
+   const GUEST_NOTICE = '👀 비회원 맛보기 모드 — 내과 다처방 순위만 공개됩니다. 전 진료과·처방/주사제 셋팅·급여가이드·수액 프로토콜은 회원 승인 후 이용 가능합니다.';
+   const GUEST_LOCK_MSG = '🔒 승인된 회원 전용 기능입니다';
+   /* GUEST_RX_START */
+   const GUEST_INTERNAL_RX_ = [
+     { 질환군: '고혈압·이상지질혈증', 순위: 1, 성분명: '암로디핀', 대표제품: '노바스크정' },
+     { 질환군: '고혈압·이상지질혈증', 순위: 2, 성분명: '로사르탄', 대표제품: '코자정' },
+     { 질환군: '고혈압·이상지질혈증', 순위: 3, 성분명: '텔미사르탄', 대표제품: '미카르디스정' },
+     { 질환군: '고혈압·이상지질혈증', 순위: 4, 성분명: '로수바스타틴', 대표제품: '크레스토정' },
+     { 질환군: '고혈압·이상지질혈증', 순위: 5, 성분명: '아토르바스타틴', 대표제품: '리피토정' },
+     { 질환군: '고혈압·이상지질혈증', 순위: 6, 성분명: '에제티미브', 대표제품: '이지트롤정' },
+     { 질환군: '당뇨병', 순위: 1, 성분명: '메트포르민', 대표제품: '다이아벡스정/글루코파지정' },
+     { 질환군: '당뇨병', 순위: 2, 성분명: '글리클라지드', 대표제품: '다이아미크론정' },
+     { 질환군: '당뇨병', 순위: 3, 성분명: '시타글립틴', 대표제품: '자누비아정' },
+     { 질환군: '당뇨병', 순위: 4, 성분명: '엠파글리플로진', 대표제품: '자디앙정' },
+     { 질환군: '당뇨병', 순위: 5, 성분명: '다파글리플로진', 대표제품: '포시가정' },
+     { 질환군: '소화기·위염', 순위: 1, 성분명: '오메프라졸', 대표제품: '오메프라졸캡슐' },
+     { 질환군: '소화기·위염', 순위: 2, 성분명: '라베프라졸', 대표제품: '파리에트정' },
+     { 질환군: '소화기·위염', 순위: 3, 성분명: '판토프라졸', 대표제품: '판토록정' },
+     { 질환군: '소화기·위염', 순위: 4, 성분명: '모사프리드', 대표제품: '가스모틴정' },
+     { 질환군: '소화기·위염', 순위: 5, 성분명: '이토프리드', 대표제품: '가나톤정' },
+     { 질환군: '소화기·위염', 순위: 6, 성분명: '레바미피드', 대표제품: '무코스타정' },
+     { 질환군: '소화기·위염', 순위: 7, 성분명: '트리메부틴', 대표제품: '포리부틴정' },
+     { 질환군: '간·담도', 순위: 1, 성분명: '우르소데옥시콜산', 대표제품: '우루사정' },
+     { 질환군: '간·담도', 순위: 2, 성분명: 'L-오르니틴-L-아스파르트산', 대표제품: '헤파멜즈주' },
+     { 질환군: '간·담도', 순위: 3, 성분명: '감초주사(글리시리진 복합)', 대표제품: '히시파겐씨' },
+     { 질환군: '통풍·골다공증', 순위: 1, 성분명: '알로푸리놀', 대표제품: '알로푸리놀정' },
+     { 질환군: '통풍·골다공증', 순위: 2, 성분명: '펙부스타트', 대표제품: '페브릭정' },
+     { 질환군: '통풍·골다공증', 순위: 3, 성분명: '알렌드로네이트', 대표제품: '포사맥스정' },
+     { 질환군: '통풍·골다공증', 순위: 4, 성분명: '콜레칼시페롤(비타민D)', 대표제품: '메리트D주' }
+   ];
+   /* GUEST_RX_END */
+
    const APP_MENUS = [
      {
        id: 'board',
@@ -2046,6 +2121,11 @@
    function buildNavMenus() {
      const side = document.getElementById('sidebar-nav');
      const mob = document.getElementById('mobile-nav');
+     if (STATE.guestMode) {
+       if (side) side.innerHTML = guestNavHtml_(false);
+       if (mob) mob.innerHTML = guestNavHtml_(true);
+       return;
+     }
      const menus = APP_MENUS.filter(canUseMenu);
      side.innerHTML = menus.map(function (m) {
        return '<button class="nav-btn ' + (STATE.activeMenu === m.id ? 'active' : '') +
@@ -2060,6 +2140,138 @@
        const act = mob.querySelector('.mnav-btn.active');
        if (act && act.scrollIntoView) act.scrollIntoView({ block: 'nearest', inline: 'center' });
      } catch (e) { /* 스크롤 맞춤은 부가 기능 */ }
+   }
+
+   // =========================================================================
+   // 3-B. 👀 비회원 맛보기 (v1.18) — 내과 다처방 성분 순위 전용 화면·메뉴·복귀
+   // =========================================================================
+   /** 내과 다처방 성분을 질환군(시트 순서)으로 묶기 */
+   function guestGroups_() {
+     const out = [];
+     const map = {};
+     GUEST_INTERNAL_RX_.forEach(function (r) {
+       const key = String(r.질환군 || '');
+       if (!map[key]) { map[key] = { 질환군: key, rows: [] }; out.push(map[key]); }
+       map[key].rows.push(r);
+     });
+     return out;
+   }
+
+   /** 맨 위 안내 배너 + 🔑 로그인/회원가입 복귀 버튼 */
+   function guestBannerHtml_() {
+     return '<div class="guest-banner" id="guest-banner">' +
+       '<div class="g-msg">' + esc(GUEST_NOTICE) +
+         '<small>맛보기에서는 검색·처방 셋팅·주사제 셋팅·약 검색·거래처·실적·게시판이 모두 잠겨 있습니다.</small>' +
+       '</div>' +
+       '<button class="btn btn-primary" onclick="exitGuestPreview()">🔑 로그인 / 회원가입</button>' +
+     '</div>';
+   }
+
+   /** 내과 다처방 성분 순위 — 질환군·순위·성분명·대표 오리지널 제품명만 */
+   function guestRankHtml_() {
+     const groups = guestGroups_();
+     const total = GUEST_INTERNAL_RX_.length;
+     return '<div class="card guest-rank-card" id="guest-rank-card">' +
+       '<div class="card-title"><span>🏥 ' + esc(GUEST_DEPT) + ' 다처방 성분 순위</span>' +
+         '<small class="g-count">' + groups.length + '개 질환군 · ' + total + '성분</small></div>' +
+       '<p class="guest-note" style="margin:-2px 0 10px;">질환군별로 많이 쓰이는 성분과 대표 오리지널 제품만 보여 드립니다. 요율·취급 품목·단가 정보는 회원 승인 후 공개됩니다.</p>' +
+       groups.map(function (g) {
+         return '<div class="guest-rank-group">' +
+           '<div class="guest-rank-head">' + esc(g.질환군) + ' <small>' + g.rows.length + '성분</small></div>' +
+           '<div class="table-wrap"><table><thead><tr>' +
+             '<th class="center" style="width:52px;">순위</th><th>성분명</th><th>대표 오리지널 제품</th>' +
+           '</tr></thead><tbody>' +
+           g.rows.map(function (r) {
+             return '<tr><td class="center"><span class="rank-badge' + (Number(r.순위) === 1 ? ' gold' : '') + '">' + esc(r.순위) + '</span></td>' +
+               '<td><strong>' + esc(r.성분명) + '</strong></td>' +
+               '<td>' + esc(r.대표제품) + '</td></tr>';
+           }).join('') +
+           '</tbody></table></div>' +
+         '</div>';
+       }).join('') +
+       '<p class="guest-note" style="margin:12px 0 0;">※ 참고용 정리입니다(공식 처방 통계 아님). 실제 처방·주문 자료와 요율은 승인된 회원 계정에서 확인할 수 있습니다.</p>' +
+     '</div>';
+   }
+
+   /** 비회원 모드 사이드바 · 모바일 하단 바 — 맛보기 1개 + 잠긴 메뉴(🔒)만 */
+   function guestNavHtml_(mobile) {
+     const cls = mobile ? 'mnav-btn' : 'nav-btn';
+     const icon = function (m) { return '<span' + (mobile ? ' class="ico"' : '') + '>' + m.icon + '</span>'; };
+     const preview = '<button class="' + cls + ' active" onclick="switchMenu(\'' + GUEST_MENU_ID + '\')">' +
+       icon({ icon: '👀' }) + '<span>' + (mobile ? '내과 순위' : '내과 다처방 순위') + '</span></button>';
+     const head = mobile ? '' : '<div class="guest-nav-head">🔒 회원 전용 메뉴</div>';
+     const locked = APP_MENUS.map(function (m) {
+       return '<button class="' + cls + ' guest-locked" title="' + esc(GUEST_LOCK_MSG) + '" onclick="guestLockedNotice()">' +
+         icon(m) + '<span>🔒 ' + esc(mobile ? m.shortLabel : m.label) + '</span></button>';
+     }).join('');
+     return preview + head + locked;
+   }
+
+   /** 잠긴 메뉴·기능을 누르면 이 안내만 — 화면·자료는 열지 않음 */
+   function guestLockedNotice() {
+     showToast(GUEST_LOCK_MSG);
+   }
+
+   /** 비회원 맛보기 화면 (서버 호출 없음) */
+   function renderGuestPreview(container) {
+     const el = container || document.getElementById('main-content');
+     if (!el) return;
+     el.innerHTML = guestBannerHtml_() + guestRankHtml_();
+     try { document.title = '수메디팜 미니 CRM · 비회원 맛보기 ' + APP_VERSION; } catch (e) {}
+     return el;
+   }
+
+   /** 맛보기 화면 전용 UI — 새로고침·로그아웃 숨기고 🔑 로그인 버튼만 보이기 */
+   function setGuestUi_(on) {
+     function show(id, flag) {
+       const el = document.getElementById(id);
+       if (el) el.style.display = flag ? '' : 'none';
+     }
+     show('refresh-btn', !on);
+     show('refresh-btn-m', !on);
+     show('guest-login-btn', on);
+     show('guest-login-btn-side', on);
+     if (on) {
+       show('logout-btn', false);
+       show('logout-btn-m', false);
+       show('pw-btn', false);
+       show('pw-btn-m', false);
+     }
+     const user = document.getElementById('sidebar-user');
+     if (user) user.textContent = on ? '👀 비회원 맛보기' : 'Google Sheets 실시간 연동';
+     const sub = document.getElementById('brand-sub');
+     if (sub && on) sub.textContent = '비회원 맛보기 · 내과 다처방 순위';
+     const mUser = document.getElementById('m-user');
+     if (mUser && on) mUser.style.display = 'none';
+     try { document.body.classList.toggle('guest-mode', Boolean(on)); } catch (e) {}
+   }
+
+   /** 로그인 화면 → 비회원 맛보기 (서버 호출·토큰 없이) */
+   function enterGuestPreview() {
+     clearLocalSession();
+     STATE.guestMode = true;
+     STATE.activeMenu = GUEST_MENU_ID;
+     const login = document.getElementById('login-overlay');
+     if (login) login.classList.add('hidden');
+     const setup = document.getElementById('setup-overlay');
+     if (setup) setup.classList.add('hidden');
+     setGuestUi_(true);
+     buildNavMenus();
+     renderGuestPreview();
+     try { window.scrollTo(0, 0); } catch (e) {}
+     return true;
+   }
+
+   /** 맛보기 → 🔑 로그인/회원가입 (비회원 상태를 깨끗이 지우고 로그인 화면으로) */
+   function exitGuestPreview() {
+     STATE.guestMode = false;
+     clearLocalSession();
+     setGuestUi_(false);
+     buildNavMenus();
+     const main = document.getElementById('main-content');
+     if (main) main.innerHTML = '';
+     showLoginScreen('');
+     return true;
    }
 
    /** 권한 없는 메뉴로 들어오면 내용 대신 이 안내만 보여 줌 */
@@ -2080,6 +2292,15 @@
    }
 
    function switchMenu(menuId) {
+     /* 👀 비회원 맛보기 — 맛보기 메뉴 외에는 안내만 띄우고 아무 화면·자료도 열지 않음 */
+     if (STATE.guestMode) {
+       if (menuId !== GUEST_MENU_ID) { guestLockedNotice(); return; }
+       STATE.activeMenu = GUEST_MENU_ID;
+       buildNavMenus();
+       renderGuestPreview();
+       try { window.scrollTo(0, 0); } catch (e) {}
+       return;
+     }
      const menu = APP_MENUS.filter(function (m) { return m.id === menuId; })[0];
      STATE.activeMenu = menuId;
      buildNavMenus();
@@ -2097,6 +2318,7 @@
    function renderActiveMenu() {
      destroyAutocompletes();
      const container = document.getElementById('main-content');
+     if (STATE.guestMode) { renderGuestPreview(container); return; }
      const menu = APP_MENUS.filter(function (m) { return m.id === STATE.activeMenu; })[0];
      if (menu && !canUseMenu(menu)) { renderMasterOnlyNotice(container); return; }
      if (menu && menu.render) menu.render(container);
@@ -2122,23 +2344,22 @@
    }
 
    function updateUserUi() {
+     STATE.guestMode = false;
+     setGuestUi_(false);
      if (!STATE.user) return;
      const comp = STATE.settings['회사명'] || '수메디팜';
      const brand = document.getElementById('brand-name');
      const mbrand = document.getElementById('mbrand-name');
      if (brand) brand.textContent = comp;
      if (mbrand) mbrand.textContent = comp;
-     document.getElementById('brand-sub').textContent =
-       comp + ' · ' + (STATE.settings['담당자명'] || '') + ' · ' + APP_VERSION;
+     /* 메뉴판 맨 위 브랜드 영역에는 회사명·버전만 — 담당자 개인 이름은 넣지 않습니다 (v1.18) */
+     document.getElementById('brand-sub').textContent = comp + ' · ' + APP_VERSION;
 
      const roleLabel = STATE.isMaster ? 'MASTER' : 'STAFF';
      document.getElementById('sidebar-user').innerHTML =
        '<span>' + esc(STATE.user.담당자명) + '</span><span class="role-badge">' + roleLabel + '</span>';
      const mUser = document.getElementById('m-user');
-     if (mUser) {
-       mUser.textContent = STATE.user.담당자명;
-       mUser.style.display = 'inline-block';
-     }
+     if (mUser) { mUser.textContent = ''; mUser.style.display = 'none'; }   // 상단 메뉴바에 개인 이름 표시 안 함 (v1.18)
      const lbtn = document.getElementById('logout-btn');
      const lbtnM = document.getElementById('logout-btn-m');
      if (lbtn) lbtn.style.display = 'inline-flex';
@@ -2155,6 +2376,7 @@
      STATE.authToken = '';
      STATE.user = null;
      STATE.isMaster = false;
+     STATE.guestMode = false;       // 비회원 맛보기에서 넘어온 상태가 남지 않게
      STATE.activeMenu = 'board';   // 로그아웃 후에는 MASTER 전용 메뉴에 머무르지 않음
      STATE.clients = [];
      STATE.products = [];
@@ -2170,6 +2392,8 @@
    }
 
    function showLoginScreen(message) {
+     STATE.guestMode = false;      // 로그인 화면으로 돌아오면 비회원 모드는 끝 (v1.18)
+     setGuestUi_(false);
      document.getElementById('login-overlay').classList.remove('hidden');
      document.getElementById('logout-btn').style.display = 'none';
      document.getElementById('logout-btn-m').style.display = 'none';
@@ -2384,6 +2608,7 @@
    }
 
    async function refreshBootstrap() {
+     if (STATE.guestMode) { guestLockedNotice(); return; }
      if (!STATE.authToken) { showLoginScreen(''); return; }
      try {
        const data = await runServer('getBootstrapData', []);
@@ -5831,6 +6056,7 @@
    }
 
    function renderBirthdayBanner() {
+     if (STATE.guestMode) return;
      const holder = document.getElementById('main-content');
      if (!holder) return;
      const old = document.getElementById('birthday-banner');

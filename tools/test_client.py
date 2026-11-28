@@ -93,9 +93,9 @@ def main():
         print('(esprima 없음 — 문법 검사 생략: pip install esprima)')
 
     # 2) v1.14 요소
-    check("const APP_VERSION = 'v1.17'" in js, 'APP_VERSION 이 v1.17 이 아닙니다')
-    check('<title>수메디팜 미니 CRM v1.17</title>' in html, '브라우저 탭 제목의 버전이 v1.17 이 아닙니다')
-    check('ver-chip">v1.17' in html and 'ver-chip dark">v1.17' in html, '로그인 화면·상단 바의 버전 칩이 v1.17 이 아닙니다')
+    check("const APP_VERSION = 'v1.18'" in js, 'APP_VERSION 이 v1.18 이 아닙니다')
+    check('<title>수메디팜 미니 CRM v1.18</title>' in html, '브라우저 탭 제목의 버전이 v1.18 이 아닙니다')
+    check('ver-chip">v1.18' in html and 'ver-chip dark">v1.18' in html, '로그인 화면·상단 바의 버전 칩이 v1.18 이 아닙니다')
     check('id: \'drug\'' in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
     check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
     # v1.11 — 🧭 처방 셋팅은 경구제 전용 · 💉 주사제 셋팅은 💉 주사제 주문 메뉴 안 탭
@@ -1949,6 +1949,222 @@ def main():
             check('맞는 경구제가 없습니다' in empty, '검색 결과 없음 안내가 없습니다')
     except ImportError:
         print('(quickjs 없음 — 성분 검색 실행 검사 생략: pip install quickjs)')
+
+    # 15) v1.18 — 👀 비회원 맛보기 (내과 다처방 순위 전용)
+    doc15 = open(INDEX, encoding='utf-8').read()   # 앞선 실행 검사에서 html 이 조각으로 바뀌었을 수 있어 다시 읽습니다
+    check('id="guest-btn"' in doc15 and 'enterGuestPreview()' in doc15,
+          '로그인 화면에 👀 비회원 맛보기 버튼이 없습니다')
+    check('👀 비회원 맛보기 (내과 다처방 순위)' in doc15,
+          '비회원 맛보기 버튼 이름이 다릅니다')
+    check('guestMode: false' in js, 'STATE.guestMode 가 없습니다')
+    check("const GUEST_DEPT = '내과'" in js and 'GUEST_INTERNAL_RX_' in js,
+          '비회원 공개 자료(내과)가 없습니다')
+    check('내과 다처방 순위만 공개됩니다' in js, '비회원 모드 안내 문구가 없습니다')
+    check('🔒 승인된 회원 전용 기능입니다' in js, '잠긴 메뉴 안내 문구가 없습니다')
+    for need in ['enterGuestPreview', 'exitGuestPreview', 'renderGuestPreview',
+                 'guestBannerHtml_', 'guestRankHtml_', 'guestNavHtml_',
+                 'guestLockedNotice', 'guestGroups_', 'setGuestUi_']:
+        check('function %s' % need in js, '비회원 맛보기에 %s 가 없습니다' % need)
+
+    # 15-a) 서버 호출 차단 · 잠긴 메뉴 차단이 함수 맨 앞에 있는지
+    run_block = extract_fn(js, 'runServer') or ''
+    check('STATE.guestMode' in run_block[:400] and 'Promise.reject' in run_block[:500],
+          'runServer 에 비회원 모드 서버 호출 차단이 없습니다')
+    switch_block = extract_fn(js, 'switchMenu') or ''
+    check('STATE.guestMode' in switch_block[:400] and switch_block.find('STATE.guestMode') < switch_block.find('APP_MENUS'),
+          'switchMenu 에 비회원 모드 차단이 없습니다')
+    active_block = extract_fn(js, 'renderActiveMenu') or ''
+    check('STATE.guestMode' in active_block and 'renderGuestPreview' in active_block,
+          'renderActiveMenu 에 비회원 모드 차단이 없습니다')
+    check('if (STATE.guestMode) return;' in (extract_fn(js, 'renderBirthdayBanner') or ''),
+          '비회원 모드에서 생일 배너가 막히지 않았습니다')
+    check('STATE.guestMode) { guestLockedNotice(); return; }' in (extract_fn(js, 'refreshBootstrap') or ''),
+          '비회원 모드에서 데이터 새로고침이 막히지 않았습니다')
+    check('STATE.guestMode = false;' in (extract_fn(js, 'clearLocalSession') or ''),
+          '로그아웃·복귀 시 비회원 모드가 초기화되지 않습니다')
+
+    # 15-b) 공개 자료는 내과 25성분 · 질환군/순위/성분명/대표제품만 (시트 사본과 대조)
+    guest_m = re.search(r'/\* GUEST_RX_START \*/(.*?)/\* GUEST_RX_END \*/', js, re.S)
+    check(bool(guest_m), '비회원 공개 자료 블록 표시가 없습니다')
+    rows_js = []
+    gblock = guest_m.group(1) if guest_m else ''
+    if gblock:
+        rows_js = re.findall(
+            r"\{ 질환군: '([^']*)', 순위: (\d+), 성분명: '([^']*)', 대표제품: '([^']*)' \}", gblock)
+        check(len(rows_js) == 25, '비회원 내과 성분 건수가 25건이 아닙니다: %d' % len(rows_js))
+        for bad in ['수수료', '우리제품', '기준단가', '시장가', '처방포인트', '보험코드']:
+            check(bad not in gblock, '비회원 공개 자료에 %s 가 들어 있습니다' % bad)
+        try:
+            import json as _json
+            fx = _json.load(open(os.path.join(HERE, 'fixtures', 'sheets.json'), encoding='utf-8'))
+            fx_rows = [[str(r[1]).strip(), str(r[2]).strip(), str(r[3]).strip(), str(r[5]).strip()]
+                       for r in fx['진료과성분'][1:] if r and r[0] == '내과']
+            js_rows = [[a.strip(), b.strip(), c.strip(), d.strip()] for a, b, c, d in rows_js]
+            check(js_rows == fx_rows, '비회원 내과 성분이 시트(진료과성분)와 다릅니다')
+        except (KeyError, ValueError, OSError) as e:  # noqa: BLE001
+            check(False, '비회원 공개 자료를 시트 사본과 대조하지 못했습니다: %s' % e)
+
+    # 15-c) 화면·메뉴 실행 검사 (QuickJS)
+    try:
+        import quickjs
+        import json as _json
+
+        def q15(v):
+            return v.decode() if isinstance(v, bytes) else v
+
+        guest_notice = ''
+        nm = re.search(r"const GUEST_NOTICE = '([^']*)';", js)
+        if nm:
+            guest_notice = nm.group(1)
+        guest_rows = [{'질환군': a, '순위': int(b), '성분명': c, '대표제품': d}
+                      for a, b, c, d in rows_js]
+
+        names15 = ['guestGroups_', 'guestBannerHtml_', 'guestRankHtml_', 'guestNavHtml_',
+                   'guestLockedNotice', 'renderGuestPreview', 'setGuestUi_',
+                   'enterGuestPreview', 'exitGuestPreview', 'clearLocalSession',
+                   'buildNavMenus', 'canUseMenu', 'switchMenu', 'renderActiveMenu', 'runServer']
+        blocks15 = [extract_fn(js, n) for n in names15]
+        missing15 = [n for n, b in zip(names15, blocks15) if b is None]
+        check(not missing15, '비회원 맛보기 함수를 추출하지 못했습니다: %s' % missing15)
+        if not missing15 and guest_rows:
+            c = quickjs.Context()
+            c.eval("""
+            var STATE = { guestMode: false, activeMenu: 'board', authToken: '', user: null,
+              isMaster: false, clients: [], products: [], turnoverData: null, ledgerData: null,
+              detailData: null, pastOrders: null, orderClientCode: '', collectionClientCode: '',
+              collectionBalances: {}, mailLogs: [] };
+            var __toasts = [], __els = {}, __fetch = 0, __loginShown = 0;
+            function showToast(m) { __toasts.push(String(m)); }
+            function showLoader() {}
+            function serverError_(m) { return new Error(m); }
+            function getServerUrl() { return 'https://example.invalid/exec'; }
+            function fetch() { __fetch++; return Promise.resolve({}); }
+            function destroyAutocompletes() {}
+            function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+            function fmtNum(n) { return String(Math.round(Number(n || 0))); }
+            function clsList() { return { _s: {}, add: function (c) { this._s[c] = 1; },
+              remove: function (c) { delete this._s[c]; },
+              contains: function (c) { return !!this._s[c]; },
+              toggle: function (c, v) { if (v === undefined) v = !this._s[c];
+                if (v) this._s[c] = 1; else delete this._s[c]; return !!this._s[c]; } }; }
+            function mkEl(id) { return { id: id, _h: '', value: '', textContent: '', style: {},
+              classList: clsList(), focus: function () {}, scrollIntoView: function () {},
+              querySelector: function () { return null; },
+              set innerHTML(v) { this._h = v; }, get innerHTML() { return this._h; } }; }
+            var document = { title: '', body: { classList: clsList() },
+              getElementById: function (id) { if (!__els[id]) __els[id] = mkEl(id); return __els[id]; } };
+            var window = { scrollTo: function () {}, _pinUnlocked: false };
+            var sessionStorage = { getItem: function () { return ''; }, setItem: function () {}, removeItem: function () {} };
+            var APP_MENUS = [
+              { id: 'board', label: '공지사항 · 게시판', shortLabel: '공지', icon: '📢' },
+              { id: 'clients', label: '거래처 등록/관리', shortLabel: '거래처', icon: '🏥' },
+              { id: 'perf', label: '월별 실적', shortLabel: '실적', icon: '📈' },
+              { id: 'docs', label: '발송이력 · 설정', shortLabel: '설정', icon: '✉️', masterOnly: true }
+            ];
+            """)
+            c.eval("const GUEST_MENU_ID = 'guest';")
+            c.eval("const GUEST_DEPT = '내과';")
+            c.eval("const GUEST_NOTICE = " + _json.dumps(guest_notice, ensure_ascii=False) + ";")
+            c.eval("const GUEST_LOCK_MSG = '🔒 승인된 회원 전용 기능입니다';")
+            c.eval("const GUEST_INTERNAL_RX_ = " + _json.dumps(guest_rows, ensure_ascii=False) + ";")
+            for b in blocks15:
+                c.eval(b)
+            c.eval("function showLoginScreen(m) { __loginShown++; document.getElementById('login-error').textContent = m || ''; "
+                   "document.getElementById('login-overlay').classList.remove('hidden'); }" )
+
+            # (A) 진입 — 서버 호출 0, 배너 + 내과 순위만
+            check(c.eval('enterGuestPreview() ? 1 : 0') == 1, '비회원 맛보기 진입이 실패했습니다')
+            check(c.eval('STATE.guestMode ? 1 : 0') == 1, 'STATE.guestMode 가 켜지지 않았습니다')
+            check(int(c.eval('__fetch')) == 0, '비회원 진입에서 서버(fetch)를 호출했습니다')
+            page = q15(c.eval("__els['main-content'].innerHTML"))
+            for need in ['비회원 맛보기 모드', '내과 다처방 성분 순위', '고혈압·이상지질혈증', '당뇨병',
+                         '소화기·위염', '간·담도', '통풍·골다공증', '암로디핀', '노바스크정', '메트포르민',
+                         '로그인 / 회원가입', '25성분']:
+                check(need in page, '비회원 화면에 %s 가 없습니다' % need)
+            check(page.count('<input') == 0, '비회원 화면에 입력칸(검색창)이 있습니다')
+            for bad in ['수수료', '%', '담기', '출력', 'PDF', 'data-guide', 'onclick="guide',
+                        'onclick="loadGuide', 'onclick="openInject', 'onclick="printGuide',
+                        'data-board-no', '거래처코드']:
+                check(bad not in page, '비회원 화면에 내부 기능/자료(%s)가 노출됩니다' % bad)
+
+            # (B) 사이드바 · 모바일 하단 바 — 맛보기 1개 + 잠긴 메뉴
+            side = q15(c.eval("__els['sidebar-nav'].innerHTML"))
+            mob = q15(c.eval("__els['mobile-nav'].innerHTML"))
+            check('내과 다처방 순위' in side and '🔒 회원 전용 메뉴' in side, '사이드바 맛보기 안내가 없습니다')
+            check(side.count('guest-locked') == 4 and mob.count('guest-locked') == 4,
+                  '잠긴 메뉴가 모두 표시되지 않았습니다')
+            check('공지사항 · 게시판' in side and '거래처 등록/관리' in side, '잠긴 메뉴 이름이 없습니다')
+            check("switchMenu('guest')" in side, '사이드바 맛보기 메뉴 연결이 없습니다')
+
+            # (C) 잠긴 메뉴를 누르면 안내만 — 화면·자료는 그대로
+            before = q15(c.eval("__els['main-content'].innerHTML"))
+            c.eval("switchMenu('clients');")
+            check(q15(c.eval('__toasts[__toasts.length - 1]')) == '🔒 승인된 회원 전용 기능입니다',
+                  '잠긴 메뉴 안내가 없습니다')
+            check(q15(c.eval('STATE.activeMenu')) == 'guest', '잠긴 메뉴로 activeMenu 가 바뀌었습니다')
+            check(q15(c.eval("__els['main-content'].innerHTML")) == before, '잠긴 메뉴가 화면을 바꿨습니다')
+            c.eval("guestLockedNotice();")
+            check(q15(c.eval('__toasts[__toasts.length - 1]')) == '🔒 승인된 회원 전용 기능입니다',
+                  '잠금 안내 토스트가 다릅니다')
+
+            # (D) 비회원 모드에서는 서버 호출이 막힌다
+            c.eval("runServer('getBootstrapData', []);")
+            check(int(c.eval('__fetch')) == 0, '비회원 모드인데 runServer 가 서버를 호출했습니다')
+
+            # (E) 🔑 로그인 / 회원가입 → 비회원 상태 초기화 + 로그인 화면
+            c.eval('exitGuestPreview();')
+            check(c.eval('STATE.guestMode ? 1 : 0') == 0, '복귀 후 guestMode 가 남아 있습니다')
+            check(int(c.eval('__loginShown')) == 1, '복귀 시 로그인 화면이 뜨지 않았습니다')
+            check(int(c.eval('__els["main-content"].innerHTML.length')) == 0, '복귀 후 맛보기 화면이 남아 있습니다')
+            side2 = q15(c.eval("__els['sidebar-nav'].innerHTML"))
+            check('guest-locked' not in side2 and '공지사항 · 게시판' in side2,
+                  '복귀 후 정상 메뉴로 돌아오지 않았습니다')
+            check(q15(c.eval("__els['guest-login-btn'].style.display")) == 'none',
+                  '복귀 후 모바일 로그인 버튼이 남아 있습니다')
+    except ImportError:
+        print('(quickjs 없음 — 비회원 맛보기 실행 검사 생략: pip install quickjs)')
+
+    # 15-d) v1.18 — 메뉴판 맨 위 브랜드 영역에서 담당자 개인 이름 빼기
+    brand_block = extract_fn(js, 'updateUserUi') or ''
+    check('담당자명' not in brand_block.split("brand-sub")[1].split(';')[0]
+          if 'brand-sub' in brand_block else False,
+          '메뉴판 맨 위 브랜드 부제에 담당자명이 남아 있습니다')
+    try:
+        import quickjs
+
+        def q15b(v):
+            return v.decode() if isinstance(v, bytes) else v
+
+        names15b = ['updateUserUi', 'setGuestUi_']
+        blocks15b = [extract_fn(js, n) for n in names15b]
+        if all(blocks15b):
+            c = quickjs.Context()
+            c.eval("""
+            var APP_VERSION = 'v1.18';
+            var STATE = { guestMode: false, isMaster: false,
+              user: { 아이디: 'choi', 담당자명: '최충의' },
+              settings: { 회사명: '수메디팜', 담당자명: '최충의' } };
+            var __els = {};
+            function esc(s) { return String(s == null ? '' : s); }
+            function clsList() { return { _s: {}, toggle: function (c, v) { this._s[c] = v; } }; }
+            function mkEl(id) { return { id: id, _h: '', value: '', textContent: '', style: {},
+              classList: clsList(), set innerHTML(v) { this._h = v; }, get innerHTML() { return this._h; } }; }
+            var document = { title: '', body: { classList: clsList() },
+              getElementById: function (id) { if (!__els[id]) __els[id] = mkEl(id); return __els[id]; } };
+            """)
+            for b in blocks15b:
+                c.eval(b)
+            c.eval('updateUserUi();')
+            sub = q15b(c.eval("__els['brand-sub'].textContent"))
+            check(sub == '수메디팜 · v1.18', '메뉴판 브랜드 부제가 회사명·버전이 아닙니다: %s' % sub)
+            check('최충의' not in sub, '메뉴판 맨 위에 개인 이름이 남아 있습니다: %s' % sub)
+            check(q15b(c.eval("__els['m-user'].style.display")) == 'none',
+                  '모바일 상단 바에 개인 이름 칩이 남아 있습니다')
+            check(q15b(c.eval("__els['sidebar-user'].innerHTML")).find('최충의') != -1,
+                  '사이드바 하단 계정 표시에서 사용자 이름이 사라졌습니다')
+    except ImportError:
+        print('(quickjs 없음 — 메뉴판 브랜드 이름 검사 생략: pip install quickjs)')
 
     print('=' * 62)
     if fails:
