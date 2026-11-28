@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>QA — v1.29 (임시)</title>
+<style>
+  body { font-family: -apple-system, "Malgun Gothic", sans-serif; margin: 0; padding: 10px; background: #f1f5f9; }
+  #log { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; font-size: 12.5px; line-height: 1.6; margin-bottom: 10px; white-space: pre-wrap; }
+  #log .pass { color: #166534; }
+  #log .fail { color: #b91c1c; font-weight: 700; }
+  iframe { width: 1180px; height: 1100px; border: 1px solid #94a3b8; background: #fff; }
+</style>
+</head>
+<body>
+<div id="log">준비 중…</div>
+<iframe id="frame" srcdoc=""></iframe>
+<script>
+/* 임시 QA 페이지 — 라이브 index.html 을 같은 출처 iframe(srcdoc)으로 띄우고
+   서버 호출(runServer)만 가짜로 바꿔 v1.29 동작을 확인합니다. 확인 후 삭제합니다. */
+(function () {
+  var logEl = document.getElementById('log');
+  var frame = document.getElementById('frame');
+  var lines = [];
+
+  function paint() {
+    logEl.innerHTML = lines.map(function (l) {
+      return '<div class="' + (l.indexOf('PASS') === 0 ? 'pass' : 'fail') + '">' + l.replace(/</g, '&lt;') + '</div>';
+    }).join('') + '<div id="qa-tail">' + (window.__QA_TAIL || '') + '</div>';
+  }
+  function out(ok, msg, extra) {
+    lines.push((ok ? 'PASS' : 'FAIL') + ' — ' + msg + (extra ? '  [' + extra + ']' : ''));
+    paint();
+  }
+  function note(t) { window.__QA_TAIL = t; paint(); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function W() { return frame.contentWindow; }
+  function D() { return frame.contentDocument; }
+  function $(id) { return D().getElementById(id); }
+  function txt(id) { var el = $(id); return el ? String(el.textContent || '').trim() : ''; }
+  async function waitFor(fn, ms, label) {
+    var t0 = Date.now();
+    while (Date.now() - t0 < (ms || 10000)) {
+      try { if (fn()) return true; } catch (e) {}
+      await sleep(120);
+    }
+    throw new Error('대기 시간 초과: ' + (label || ''));
+  }
+
+  /* 가짜 시트 서버 — iframe 안에서 실행되므로 바깥 함수·변수를 쓰지 않고 스스로 완결됩니다. */
+  function qaServer(fn, args) {
+    fn = String(fn || '');
+    var calls = window.__QACalls || (window.__QACalls = {});
+    calls[fn] = (calls[fn] || 0) + 1;
+
+    if (!window.__QAClients) {
+      var SEED = [
+        ['C001', '김가정의원', '내과', '김원장', '051-111-0001', 'a1@clinic.kr', '김도현', '04-08', '홍삼 선호, 커피 X'],
+        ['C002', '부산튼튼병원', '정형외과', '박원장', '051-111-0002', 'a2@clinic.kr', '박서준', '11-30', '주말 연락 자제'],
+        ['C003', '김해속편한내과', '내과', '이원장', '055-111-0003', 'a3@clinic.kr', '이하늘', '05-02', ''],
+        ['C004', '신호약국', '약국', '정약사', '051-111-0004', 'a4@pharm.kr', '', '', ''],
+        ['C005', '강서연세의원', '가정의학과', '최원장', '051-111-0005', 'a5@clinic.kr', '최민수', '12-15', '골프'],
+        ['C006', '명지이비인후과', '이비인후과', '한원장', '051-111-0006', 'a6@clinic.kr', '', '', ''],
+        ['C007', '녹산보건진료소', '내과', '서원장', '051-111-0007', 'a7@clinic.kr', '', '', ''],
+        ['C008', '김해미소치과', '치과', '문원장', '055-111-0008', 'a8@clinic.kr', '', '', ''],
+        ['C009', '하단중앙의원', '내과', '임원장', '051-111-0009', 'a9@clinic.kr', '', '', ''],
+        ['C010', '대저한의원', '한방', '오원장', '051-111-0010', 'a10@clinic.kr', '', '', ''],
+        ['C011', '사하약국', '약국', '윤약사', '051-111-0011', 'a11@pharm.kr', '', '', ''],
+        ['C012', '수메디팜도매', '도매', '-', '051-111-0012', 'a12@sumedipharm.co.kr', '', '', '']
+      ];
+      window.__QAClients = SEED.map(function (r, i) {
+        return {
+          거래처코드: r[0], 거래처명: r[1], 진료과: r[2], 담당자: r[3], 연락처: r[4], 이메일: r[5],
+          원장성함: r[6], 원장생일: r[7], 취향: r[8],
+          유통구분: (r[2] === '약국' ? '약국' : (r[2] === '도매' ? '도매' : '의원')),
+          사용여부: 'Y', 회전일경고기준: 30, _rowIndex: i + 2, 사업자등록번호: '', 사업자등록증URL: ''
+        };
+      });
+    }
+    var clients = window.__QAClients;
+
+    if (fn === 'getBootstrapData') {
+      return Promise.resolve({
+        settings: { '회사명': '수메디팜' }, clients: clients,
+        products: [
+          { 보험코드: '645000010', 제품명: '가나주 5ml', 급여구분: '급여', 제약사: '가나제약' },
+          { 보험코드: '645000020', 제품명: '나나주 3ml', 급여구분: '급여', 제약사: '나나제약' },
+          { 보험코드: '645000030', 제품명: '다다주 2ml', 급여구분: '급여', 제약사: '다다제약' },
+          { 보험코드: '645000040', 제품명: '라라주 10ml', 급여구분: '비급여', 제약사: '라라제약' },
+          { 보험코드: '645000050', 제품명: '마마주 20ml', 급여구분: '급여', 제약사: '마마제약' },
+          { 보험코드: '645000060', 제품명: '바바주 100ml', 급여구분: '급여', 제약사: '바바제약' },
+          { 보험코드: '645000070', 제품명: '사사주 50ml', 급여구분: '급여', 제약사: '사사제약' },
+          { 보험코드: '645000080', 제품명: '아아주 5ml', 급여구분: '비급여', 제약사: '아아제약' },
+          { 보험코드: '645000090', 제품명: '자자주 3ml', 급여구분: '급여', 제약사: '자자제약' },
+          { 보험코드: '645000100', 제품명: '차차주 2ml', 급여구분: '급여', 제약사: '차차제약' },
+          { 보험코드: '645000110', 제품명: '카카주 1ml', 급여구분: '급여', 제약사: '카카제약' },
+          { 보험코드: '645000120', 제품명: '타타주 500ml', 급여구분: '급여', 제약사: '타타제약' }
+        ],
+        elpharmaCount: 0,
+        today: '2026-11-29', currentMonth: '2026-11', user: { 아이디: 'qa', 담당자명: 'QA 담당' },
+        isMaster: true, appVersion: 'v1.29', hiraConfigured: false
+      });
+    }
+    if (fn === 'searchClientsProfile') {
+      var q = String((args && args[0]) || '').trim().toLowerCase();
+      var items = clients.filter(function (c) {
+        if (!q) return true;
+        return (c.거래처명 + ' ' + c.원장성함 + ' ' + c.취향 + ' ' + c.거래처코드).toLowerCase().indexOf(q) !== -1;
+      }).map(function (c) {
+        var o = {};
+        for (var k in c) if (Object.prototype.hasOwnProperty.call(c, k)) o[k] = c[k];
+        o.생일까지 = 3;
+        return o;
+      });
+      return Promise.resolve({ items: items, total: items.length });
+    }
+    if (fn === 'saveClientProfile') {
+      var p = (args && args[0]) || {};
+      clients.forEach(function (c) {
+        if (c.거래처코드 === p.거래처코드) {
+          if (typeof p.원장성함 === 'string') c.원장성함 = p.원장성함;
+          if (typeof p.원장생일 === 'string') c.원장생일 = p.원장생일;
+          if (typeof p.취향 === 'string') c.취향 = p.취향;
+        }
+      });
+      return Promise.resolve({ clients: clients });
+    }
+    return Promise.resolve({});
+  }
+
+  var STUB = [
+    'window.__QACalls = {};',
+    'window.__QA_SERVER = ' + qaServer.toString() + ';',
+    'runServer = function (fnName, args, opts) { try { return window.__QA_SERVER(fnName, args); } catch (e) { return Promise.reject(e); } };',
+    'registerServiceWorker = function () {};'
+  ].join('\n');
+
+  async function boot() {
+    var res = await fetch('../index.html?qa=' + Date.now(), { cache: 'no-store' });
+    var html = await res.text();
+    var guard = '<script>window.__errs=[];window.addEventListener("error",function(e){window.__errs.push(String((e&&e.message)||e));});' +
+      'window.addEventListener("unhandledrejection",function(e){window.__errs.push("unhandledrejection: "+String((e&&e.reason&&e.reason.message)||(e&&e.reason)||e));});' +
+      'var _ce=console.error;console.error=function(){try{window.__errs.push(Array.prototype.join.call(arguments," "));}catch(x){}return _ce.apply(console,arguments);};<\/script>\n<script>';
+    var first = html.indexOf('<script>');
+    if (first < 0) throw new Error('index.html 에서 <script> 를 찾지 못했습니다');
+    html = html.slice(0, first) + guard + html.slice(first + '<script>'.length);
+    var closeIdx = html.lastIndexOf('<\/script>');
+    if (closeIdx < 0) throw new Error('index.html 에서 닫는 script 태그를 찾지 못했습니다');
+    html = html.slice(0, closeIdx) + '\n' + STUB + '\n' + html.slice(closeIdx);
+
+    try {
+      localStorage.setItem('crm_server_url', 'https://script.google.com/macros/s/QA-PLACEHOLDER/exec');
+      localStorage.setItem('crm_session_v1', JSON.stringify({ token: 'qa-token', user: { 아이디: 'qa', 담당자명: 'QA 담당' }, isMaster: true }));
+    } catch (e) {}
+
+    frame.srcdoc = html;
+    await waitFor(function () { return D() && D().readyState === 'complete' && W().__errs; }, 20000, 'iframe 로드');
+    await sleep(500);
+  }
+
+  async function main() {
+    note('index.html 내려받는 중…');
+    await boot();
+    var viewMode = (new URLSearchParams(location.search)).get('view') || '';
+
+    // ---------- 1) 🎂 원장님 정보 검색 접기·펼치기 ----------
+    W().eval("switchMenu('clients')");
+    await waitFor(function () { return $('cp-head'); }, 10000, '거래처 화면');
+    await sleep(400);
+
+    if (viewMode === 'collapsed') { note('보기 모드 — 접힌 화면'); window.__QA_DONE = true; return; }
+
+    var errs = W().__errs;
+    out(errs.length === 0, '거래처 화면 부팅 중 런타임 오류 0건', errs.join(' | '));
+    out(D().querySelector('.page-title') && D().querySelector('.page-title').textContent.indexOf('거래처 등록 / 관리') !== -1, '거래처 등록/관리 화면이 그려졌다');
+
+    out($('cp-body').style.display === 'none', '기본: 카드 본문이 접혀 있다');
+    out(txt('cp-caret') === '펼치기 ▼', '기본: 버튼 문구가 "펼치기 ▼"', txt('cp-caret'));
+    out(/^전체 \d+곳 · 클릭해서 펼치기$/.test(txt('cp-summary')), '기본: 요약 문구 형식', txt('cp-summary'));
+    out(txt('cp-summary') === '전체 12곳 · 클릭해서 펼치기', '기본: 요약의 거래처 수가 맞다', txt('cp-summary'));
+    out($('cp-head').getAttribute('aria-expanded') === 'false', '기본: aria-expanded="false"');
+    out(D().querySelectorAll('#client-card tr[data-client-item]').length === 12, '기본: 바로 아래 거래처 12곳이 보인다',
+      String(D().querySelectorAll('#client-card tr[data-client-item]').length));
+    out(!(W().__QACalls['searchClientsProfile'] > 0), '기본(접힘): 원장님 검색 서버 조회를 하지 않는다', JSON.stringify(W().__QACalls));
+
+    $('cp-head').click();
+    await waitFor(function () { return $('cp-body').style.display !== 'none'; }, 4000, '펼치기');
+    out($('cp-body').style.display !== 'none', '펼치기: 본문이 보인다');
+    out(txt('cp-caret') === '접기 ▲', '펼치기: 버튼 문구가 "접기 ▲"', txt('cp-caret'));
+    out($('cp-summary').style.display === 'none', '펼치기: 접힘 요약은 숨는다');
+    out($('cp-head').getAttribute('aria-expanded') === 'true', '펼치기: aria-expanded="true"');
+    await waitFor(function () { return D().querySelector('#cp-result table'); }, 8000, '첫 결과');
+    out(W().__QACalls['searchClientsProfile'] === 1, '펼치기: 서버 조회 1회', String(W().__QACalls['searchClientsProfile']));
+
+    var qEl = $('cp-q');
+    qEl.value = '김';
+    qEl.dispatchEvent(new (W().Event)('input', { bubbles: true }));
+    D().querySelector('#cp-body .btn.btn-primary.btn-sm').click();
+    await waitFor(function () { return D().querySelectorAll('#cp-result tbody tr').length === 3; }, 8000, '검색 결과 3건');
+    out(D().querySelectorAll('#cp-result tbody tr').length === 3, '검색 "김": 결과 3건', String(D().querySelectorAll('#cp-result tbody tr').length));
+    out($('cp-q').value === '김', '검색 "김": 입력값이 남아 있다', $('cp-q').value);
+    out($('cp-body').style.display !== 'none' && txt('cp-caret') === '접기 ▲', '검색 "김": 펼침·문구 유지');
+
+    W().eval('renderActiveMenu()');
+    await sleep(700);
+    out($('cp-body') && $('cp-body').style.display !== 'none', '재렌더: 펼침 유지');
+    out($('cp-q') && $('cp-q').value === '김', '재렌더: 검색어 유지', $('cp-q') ? $('cp-q').value : '(칸 없음)');
+    out(D().querySelectorAll('#cp-result tbody tr').length === 3, '재렌더: 검색 결과 유지', String(D().querySelectorAll('#cp-result tbody tr').length));
+
+    var editBtn = null;
+    var btns = D().querySelectorAll('#cp-result button');
+    for (var i = 0; i < btns.length; i++) if (btns[i].textContent.indexOf('생일·취향 입력') !== -1) { editBtn = btns[i]; break; }
+    out(!!editBtn, '결과 줄에 "생일·취향 입력" 버튼이 있다');
+    if (editBtn) {
+      editBtn.click();
+      await waitFor(function () { return $('cpf-taste'); }, 4000, '입력 모달');
+      await sleep(200);
+      $('cpf-taste').value = '홍삼 선호(테스트)';
+      $('cpf-birth').value = '04-08';
+      W().eval('submitClientProfile()');
+      await waitFor(function () { return W().__QACalls['saveClientProfile'] === 1; }, 6000, '저장 호출');
+      await sleep(900);
+      out($('cp-body') && $('cp-body').style.display !== 'none', '저장 후: 펼침 유지');
+      out($('cp-q') && $('cp-q').value === '김', '저장 후: 검색어 유지', $('cp-q') ? $('cp-q').value : '(칸 없음)');
+      out(D().querySelector('#cp-result').textContent.indexOf('홍삼 선호(테스트)') !== -1, '저장 후: 결과가 새 값으로 갱신됨');
+    }
+
+    var callsBefore = W().__QACalls['searchClientsProfile'];
+    $('cp-head').click();
+    await sleep(300);
+    out($('cp-body').style.display === 'none', '다시 접기: 본문 숨김');
+    out(/^전체 3곳 · 클릭해서 펼치기$/.test(txt('cp-summary')), '다시 접기: 요약이 검색 결과 기준으로 갱신', txt('cp-summary'));
+    $('cp-head').click();
+    await sleep(300);
+    out($('cp-body').style.display !== 'none', '다시 펼치기: 본문 표시');
+    out($('cp-q').value === '김' && D().querySelectorAll('#cp-result tbody tr').length === 3, '다시 펼치기: 검색어·결과 유지');
+    out(W().__QACalls['searchClientsProfile'] === callsBefore, '다시 펼치기: 서버 재조회 없음', String(W().__QACalls['searchClientsProfile']));
+
+    $('cp-head').dispatchEvent(new (W().KeyboardEvent)('keydown', { key: 'Enter', bubbles: true }));
+    await sleep(250);
+    out($('cp-body').style.display === 'none', '키보드 Enter: 접힌다');
+    $('cp-head').dispatchEvent(new (W().KeyboardEvent)('keydown', { key: 'Enter', bubbles: true }));
+    await sleep(250);
+    out($('cp-body').style.display !== 'none', '키보드 Enter: 다시 펼쳐진다');
+
+    var ver = W().eval('APP_VERSION');
+    out(ver === 'v1.29', 'APP_VERSION 이 v1.29', String(ver));
+
+    // ---------- 2) 📑 품목명 네이티브 드롭다운 ----------
+    W().eval("switchMenu('guide')");
+    await waitFor(function () { return $('notice-item'); }, 12000, '처방 셋팅 화면');
+    await sleep(600);
+
+    var itemEl = $('notice-item');
+    out(!!itemEl, '📑 카드가 그려졌다');
+    out(itemEl && itemEl.tagName === 'SELECT', '품목명 칸이 네이티브 <select> 다', itemEl ? itemEl.tagName : '(없음)');
+    out(itemEl && !itemEl.hasAttribute('list'), '예전 datalist 방식이 아니다');
+    var opts = itemEl ? itemEl.options : [];
+    out(opts.length === 14, '옵션 = 머리말 + 제품 12 + 직접 입력(2) = 14', String(opts.length));
+    out(opts[0] && opts[0].textContent.indexOf('품목명 — 선택') === 0, '첫 옵션: "품목명 — 선택"', opts[0] ? opts[0].textContent : '');
+    out(opts[opts.length - 1] && opts[opts.length - 1].value === '__custom__' && opts[opts.length - 1].textContent.indexOf('직접 입력') !== -1,
+      '마지막 옵션: "✏️ 직접 입력..."', opts[opts.length - 1] ? opts[opts.length - 1].textContent : '');
+    out(opts[1] && opts[1].value === '가나주 5ml' && opts[2].value === '나나주 3ml', '제품 목록이 이름순으로 들어 있다',
+      opts[1] ? opts[1].value + ' / ' + opts[2].value : '');
+    out($('notice-item-custom') && $('notice-item-custom').style.display === 'none', '직접 입력칸은 처음엔 숨김');
+
+    if (viewMode === 'expanded' || viewMode === 'notice') {
+      itemEl.value = '나나주 3ml';
+      itemEl.dispatchEvent(new (W().Event)('change', { bubbles: true }));
+      W().eval("document.getElementById('notice-card').scrollIntoView({block:'center'})");
+      await sleep(400);
+      note('보기 모드 — 품목명 드롭다운');
+      window.__QA_DONE = true;
+      return;
+    }
+
+    if (itemEl) {
+      // 목록에서 품목 선택
+      itemEl.value = '나나주 3ml';
+      itemEl.dispatchEvent(new (W().Event)('change', { bubbles: true }));
+      await sleep(150);
+      out(W().eval('NOTICE_DOC.meta.itemName') === '나나주 3ml', '목록 선택 → meta.itemName 이 그 품목',
+        String(W().eval('NOTICE_DOC.meta.itemName')));
+      out($('notice-item-custom').style.display === 'none', '목록 선택: 직접 입력칸은 숨김');
+
+      // 직접 입력 선택
+      itemEl.value = '__custom__';
+      itemEl.dispatchEvent(new (W().Event)('change', { bubbles: true }));
+      await sleep(150);
+      out($('notice-item-custom').style.display !== 'none', '직접 입력 선택: 입력칸이 나타난다');
+      var cEl = $('notice-item-custom');
+      cEl.value = '테스트품목정';
+      cEl.dispatchEvent(new (W().Event)('input', { bubbles: true }));
+      await sleep(150);
+      out(W().eval('NOTICE_DOC.meta.itemName') === '테스트품목정', '직접 입력 → meta.itemName 이 입력값',
+        String(W().eval('NOTICE_DOC.meta.itemName')));
+
+      // 화면을 다시 그려도 유지
+      W().eval('renderActiveMenu()');
+      await sleep(700);
+      out($('notice-item') && $('notice-item').value === '__custom__', '재렌더: 직접 입력 모드 유지',
+        $('notice-item') ? $('notice-item').value : '(없음)');
+      out($('notice-item-custom') && $('notice-item-custom').style.display !== 'none' && $('notice-item-custom').value === '테스트품목정',
+        '재렌더: 직접 입력값 유지', $('notice-item-custom') ? $('notice-item-custom').value : '(칸 없음)');
+
+      // 다시 목록 선택 → 재렌더 시 그 품목이 선택되어 있어야 함
+      $('notice-item').value = '다다주 2ml';
+      $('notice-item').dispatchEvent(new (W().Event)('change', { bubbles: true }));
+      await sleep(150);
+      W().eval('renderActiveMenu()');
+      await sleep(700);
+      out($('notice-item') && $('notice-item').value === '다다주 2ml', '재렌더: 고른 품목이 그대로 선택됨',
+        $('notice-item') ? $('notice-item').value : '(없음)');
+      out($('notice-item-custom').style.display === 'none', '재렌더: 목록 선택이면 직접 입력칸 숨김');
+      out(W().eval('NOTICE_DOC.meta.itemName') === '다다주 2ml', '재렌더 후 meta.itemName 유지',
+        String(W().eval('NOTICE_DOC.meta.itemName')));
+
+      // 분석 요청에 품목명이 실려 나가는지 (파일 없이 호출하면 안내만) — meta 경로 확인용
+      out(typeof W().eval('noticeItemSelectChanged') === 'function', 'noticeItemSelectChanged 함수가 노출돼 있다(onchange)');
+    }
+
+    var errs2 = W().__errs;
+    out(errs2.length === 0, '전체 동작 중 런타임 오류 0건', errs2.join(' | '));
+    out(/v1\.29/.test(D().title), '화면 제목에 v1.29', D().title);
+
+    var fails = lines.filter(function (l) { return l.indexOf('FAIL') === 0; }).length;
+    note(fails ? ('실패 ' + fails + '건 / 전체 ' + lines.length + '건') : ('모두 통과 · 전체 ' + lines.length + '건'));
+    window.__QA_RESULT = { total: lines.length, fails: fails, lines: lines };
+    window.__QA_DONE = true;
+  }
+
+  main().catch(function (e) {
+    out(false, 'QA 실행 오류: ' + String((e && e.message) || e));
+    window.__QA_RESULT = { error: String((e && e.stack) || e), lines: lines };
+    window.__QA_DONE = true;
+  });
+})();
+</script>
+</body>
+</html>
