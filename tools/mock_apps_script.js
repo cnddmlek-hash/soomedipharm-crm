@@ -103,6 +103,9 @@ Range_.prototype.setNumberFormat = function (fmt) {
 };
 Range_.prototype.setBackground = function () { return this; };
 Range_.prototype.setFontWeight = function () { return this; };
+Range_.prototype.setFontColor = function () { return this; };
+Range_.prototype.setFontSize = function () { return this; };
+Range_.prototype.setHorizontalAlignment = function () { return this; };
 
 function Sheet_(name, values) {
   this.name = name;

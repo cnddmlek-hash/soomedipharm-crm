@@ -91,7 +91,7 @@ def main():
         for name in ['looksParenteral_', 'dosageFormOf_', 'productsOfForm_', 'productIndexByIngredient_',
                      'injectCategoryOf_', 'injectPicks_', 'getInjectGuide']:
             check(name in code, 'Code.gs 에 %s 가 없습니다' % name)
-        check("const APP_VERSION = 'v1.8'" in code, 'Code.gs 버전이 v1.8 이 아닙니다')
+        check("const APP_VERSION = 'v1.14'" in code, 'Code.gs 버전이 v1.14 가 아닙니다')
         check(re.search(r'getInjectGuide\s*:\s*getInjectGuide', code) is not None, 'getInjectGuide 가 apiFunctions_ 에 없습니다')
 
     # ---------------- 2-h. v1.8 월별 실적 — 직납(거래내역) + 예상 처방(처방내역) 합산
@@ -163,6 +163,109 @@ def main():
         check(bool(qk) and 'insuranceCodeKey_' in qk.group(1), '빠른 입력 목록이 보험코드를 정규화하지 않습니다')
         gp = re.search(r'function getPrescriptions\(month, clientCode, token\)\s*\{(.*?)\n\}', code, re.S)
         check(bool(gp) and 'insuranceCodeKey_' in gp.group(1), '처방 조회가 보험코드 중복을 합치지 않습니다')
+
+    # ---------------- 2-i. v1.14 공지사항 · 게시판 (시트 `게시판` + Code.gs API)
+    if code:
+        check(heads.get('게시판') == ['번호', '구분', '카테고리', '제목', '내용',
+                                      '작성자아이디', '작성자명', '고정여부', '작성일시', '수정일시'],
+              '게시판 머리글이 다릅니다: %s' % heads.get('게시판'))
+        check("BOARD: '게시판'" in code, 'SHEET_NAMES 에 BOARD 가 없습니다')
+        for name in ['boardList', 'boardCreate', 'boardUpdate', 'boardDelete',
+                     'boardRowOut_', 'boardSort_', 'boardPerms_', 'boardNextNo_']:
+            check('function %s' % name in code, 'Code.gs 에 %s 가 없습니다' % name)
+        for name in ['boardList', 'boardCreate', 'boardUpdate', 'boardDelete']:
+            check(re.search(r'%s\s*:\s*%s' % (name, name), code) is not None,
+                  '%s 가 apiFunctions_ 에 없습니다' % name)
+        check("BOARD_KIND_NOTICE = '공지'" in code and "BOARD_KIND_FREE = '자유'" in code,
+              '구분 상수(공지/자유)가 없습니다')
+        # 권한: 공지 작성·수정·삭제는 MASTER 만
+        bc = re.search(r'function boardCreate\(payload, token\)\s*\{(.*?)\n\}', code, re.S)
+        check(bool(bc) and 'MASTER 권한만' in bc.group(1), '공지 작성 MASTER 제한이 없습니다')
+        bp = re.search(r'function boardPerms_\(item, user\)\s*\{(.*?)\n\}', code, re.S)
+        check(bool(bp) and 'BOARD_KIND_NOTICE' in bp.group(1) and 'master' in bp.group(1),
+              'boardPerms_ 가 공지/자유 권한을 나누지 않습니다')
+        for name in ['boardUpdate', 'boardDelete']:
+            fn = re.search(r'function %s\([^)]*\)\s*\{(.*?)\n\}' % name, code, re.S)
+            check(bool(fn) and 'boardPerms_' in fn.group(1), '%s 가 권한 검사를 하지 않습니다' % name)
+
+    # ---------------- 2-j. 공지 초기 데이터(시드) — 원본과 대조
+    seed_path = os.path.abspath(os.path.join(PROJECT, '..', '..', 'downloads', 'board-seed-2026-11-28.json'))
+    check(os.path.exists(seed_path), '공지 초기 데이터 파일(downloads/board-seed-2026-11-28.json)이 없습니다')
+    if os.path.exists(seed_path):
+        seed = json.load(open(seed_path, encoding='utf-8'))
+        posts = seed.get('posts') or []
+        check(len(posts) >= 4, '공지 초기 데이터가 %d건뿐입니다' % len(posts))
+        check(seed.get('tab') == '게시판', '시드의 탭 이름이 게시판이 아닙니다')
+        check(seed.get('headers') == ['번호', '구분', '카테고리', '제목', '내용',
+                                      '작성자아이디', '작성자명', '고정여부', '작성일시', '수정일시'],
+              '시드 머리글이 Code.gs 와 다릅니다')
+        allowed = {'미지급 사유', '특별 수수료율', '일반 공지'}
+        for i, p in enumerate(posts, 1):
+            check(p.get('번호') == i, '%d번째 시드 번호가 %s 입니다' % (i, p.get('번호')))
+            check(p.get('구분') == '공지', '%d번째 시드 구분이 공지가 아닙니다' % i)
+            check(p.get('카테고리') in allowed, '%d번째 시드 카테고리: %s' % (i, p.get('카테고리')))
+            check(p.get('고정여부') in ('Y', 'N'), '%d번째 시드 고정여부가 Y/N 이 아닙니다' % i)
+            check(re.match(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$', str(p.get('작성일시') or '')) is not None,
+                  '%d번째 시드 작성일시 형식: %s' % (i, p.get('작성일시')))
+            body = p.get('내용') or ''
+            check(len(body) > 300, '%d번째 시드 내용이 너무 짧습니다(%d자)' % (i, len(body)))
+            check(len(body) <= 45000, '%d번째 시드 내용이 시트 한 칸 한도(45,000자)를 넘습니다(%d자)' % (i, len(body)))
+            check((p.get('제목') or '').strip() != '', '%d번째 시드 제목이 비었습니다' % i)
+
+        # 미지급 사유 — 4장 원본의 77곳이 빠짐없이, 기준 금액과 EDI 기간까지
+        soaek = [p for p in posts if p.get('카테고리') == '미지급 사유']
+        check(len(soaek) == 1, '미지급 사유 공지가 %d건입니다' % len(soaek))
+        if soaek:
+            b = soaek[0]['내용']
+            nums = [int(m) for m in re.findall(r'^(\d+)\. ', b, re.M)]
+            check(nums == list(range(1, 78)), '미지급 사유 번호가 1~77 이 아닙니다: %d건' % len(nums))
+            for word in ['국제약품', '라이트팜텍', '파마사이언스코리아(PMSK)', '화이트생명과학',
+                         '에이프로젠', 'HLB제약', '옵투스제약', '이든파마', '휴온스', '휴온스메디텍',
+                         '제이더블유중외제약', '동성제약', '셀트리온제약', '대웅바이오', '제이더블유신약']:
+                check(word in b, '미지급 사유에 %s 가 없습니다' % word)
+            for word in ['수수료 1만 원 미만', '5만 원 미만', '10만 원 미만', '20만 원 미만',
+                         '30만 원 미만', '직전 2개월', '직전 3개월', '직전 4개월',
+                         '안과·대학병원: 50만 원 미만', '신규처 유예기간 X', '신규처 유예기간 O',
+                         '7만 원 미만', '15만 원 미만', '25만 원 미만', '6개월까지 정산 가능']:
+                check(word in b, '미지급 사유에 "%s" 기준이 없습니다' % word)
+
+        # 특별 수수료율 — 12월 371 · 11월 15 · 정산 종료 41 · 신규 불가 86 · 장기 품절 3
+        camp = [p for p in posts if '2026.12 EDI' in p.get('제목', '')]
+        check(len(camp) == 1, '2026.12 캠페인 공지가 없습니다')
+        if camp:
+            b = camp[0]['내용']
+            nums = [int(m) for m in re.findall(r'^(\d+)\. ', b, re.M)]
+            check(nums == list(range(1, 372)), '12월 캠페인 품목이 371개가 아닙니다: %d개' % len(nums))
+            for word in ['371품목', '30% 이상 — 13품목', '20% 이상 ~ 30% 미만 — 47품목',
+                         '5% 이상 ~ 10% 미만 — 149품목', '품목신규 — 248품목', '신규처 — 39품목',
+                         '종합병원 신규 — 3품목', '9월판 동일 — 290품목', '204건',
+                         '라베로즈정10mg', '칸데산에스정16/2.5mg', '자누다파정10/100mg',
+                         '메피정', '신일제약㈜', '마더스제약', '2026.12 EDI', '⚠신규불가']:
+                check(word in b, '12월 캠페인 공지에 "%s" 가 없습니다' % word)
+            check('2026.05 ~ 2026.12 EDI' in b, '12월 캠페인 적용기간 표기가 없습니다')
+
+        urgent = [p for p in posts if '2026.11 EDI' in p.get('제목', '')]
+        check(len(urgent) == 1, '2026.11 마감 긴급 공지가 없습니다')
+        if urgent:
+            b = urgent[0]['내용']
+            nums = [int(m) for m in re.findall(r'^(\d+)\. ', b, re.M)]
+            check(nums == list(range(1, 16)), '11월 마감이 15개가 아닙니다: %d개' % len(nums))
+            for word in ['프란롤정50mg', '추가 40%', '페바로젯정1/10mg', '뉴레일정',
+                         '2026.09 ~ 2026.11 EDI', '이번 달 안에 처방']:
+                check(word in b, '11월 긴급 공지에 "%s" 가 없습니다' % word)
+
+        caution = [p for p in posts if '정산 종료' in p.get('제목', '')]
+        check(len(caution) == 1, '정산 종료·신규 불가 공지가 없습니다')
+        if caution:
+            b = caution[0]['내용']
+            check(b.count('2026.11 EDI가 마지막') == 1 and b.count('2026.12 EDI가 마지막') == 1,
+                  '정산 종료 11·12월 구간 안내가 없습니다')
+            check(len(re.findall(r'· \[\d', b)) == 41 + 3 + 86,
+                  '정산 종료 41 + 장기 품절 3 + 신규 불가 86 = 130줄이 아닙니다: %d줄'
+                  % len(re.findall(r'· \[\d', b)))
+            for word in ['포스넬엠정', '아모렉스듀오시럽', '유나모캡슐', '장기 품절', '라도바정40mg',
+                         '알마스콘정500mg', '해제 예정']:
+                check(word in b, '주의 공지에 "%s" 가 없습니다' % word)
 
     # ---------------- 2-c. v1.5 제형 구분 (경구제 / 주사·수액) — fixtures 기준
     # ---------------- 3. 자료 파일

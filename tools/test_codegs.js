@@ -1459,6 +1459,302 @@ t('월별 실적: 거래기간 밖 달의 처방은 그 달 칸에만 들어감'
   });
 });
 
+
+// ------------------------------------------------------------------ 18. 공지사항 · 게시판 (v1.14)
+function boardSheet_() { return getSheet_(SHEET_NAMES.BOARD); }
+function boardClear_() {
+  var sh = boardSheet_();
+  while (sh.getLastRow() > 1) sh.deleteRow(sh.getLastRow());
+  return sh;
+}
+function boardLast_() {
+  var sh = boardSheet_();
+  var row = sh.values[sh.getLastRow() - 1] || [];
+  var head = sh.values[0] || [];
+  var o = {};
+  for (var i = 0; i < head.length; i++) o[head[i]] = row[i];
+  return o;
+}
+
+t('게시판: 시트 탭·헤더 10칸이 정의되어 있음', function () {
+  eq(SHEET_NAMES.BOARD, '게시판');
+  var head = SHEET_HEADERS['게시판'];
+  eq(head.join('|'), '번호|구분|카테고리|제목|내용|작성자아이디|작성자명|고정여부|작성일시|수정일시');
+});
+
+t('게시판: 시트가 없으면 initializeSheets 가 만들어 줌', function () {
+  var sh = boardSheet_();
+  ok(sh, '게시판 시트 없음');
+  eq(sh.values[0].join('|'), '번호|구분|카테고리|제목|내용|작성자아이디|작성자명|고정여부|작성일시|수정일시');
+});
+
+t('게시판: STAFF 가 자유 게시판에 글을 쓴다', function () {
+  boardClear_();
+  var res = boardCreate({ 구분: '자유', 카테고리: '질문', 제목: '수아의원 단가 문의', 내용: '이번 달 단가 확인 부탁드립니다.' }, STAFF_TOKEN);
+  ok(res && res.success, '자유 글 작성 실패');
+  eq(res.번호, 1, '첫 글 번호');
+  var row = boardLast_();
+  eq(row.구분, '자유');
+  eq(row.카테고리, '질문');
+  eq(row.작성자아이디, 'choi', '작성자 아이디');
+  eq(row.작성자명, STAFF.bootstrap.user.담당자명, '작성자 이름');
+  eq(row.고정여부, 'N');
+  ok(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(String(row.작성일시)), '작성일시 형식: ' + row.작성일시);
+});
+
+t('게시판: STAFF 는 공지사항을 쓸 수 없다', function () {
+  throwsMatch(function () {
+    boardCreate({ 구분: '공지', 카테고리: '일반 공지', 제목: '공지', 내용: '내용' }, STAFF_TOKEN);
+  }, 'MASTER 권한만', 'STAFF 공지 작성');
+});
+
+t('게시판: MASTER 는 공지를 쓰고 상단 고정할 수 있다', function () {
+  var res = boardCreate({ 구분: '공지', 카테고리: '미지급 사유', 제목: '제약사별 소액처 기준', 내용: '국제약품 소액처 정산 가능', 고정여부: 'Y' }, TOKEN);
+  ok(res && res.success, '공지 작성 실패');
+  eq(res.번호, 2, '두 번째 글 번호');
+  var row = boardLast_();
+  eq(row.구분, '공지');
+  eq(row.고정여부, 'Y', '고정 여부');
+});
+
+t('게시판: 공지 카테고리 목록에 없는 값은 일반 공지로', function () {
+  var res = boardCreate({ 구분: '공지', 카테고리: '아무말', 제목: '분류 시험', 내용: '내용' }, TOKEN);
+  eq(boardLast_().카테고리, '일반 공지', '카테고리 정규화');
+  boardDelete({ 번호: res.번호 }, TOKEN);
+});
+
+t('게시판: 제목·내용이 없으면 저장하지 않는다', function () {
+  throwsMatch(function () { boardCreate({ 구분: '자유', 제목: '  ', 내용: '내용' }, STAFF_TOKEN); }, '제목', '빈 제목');
+  throwsMatch(function () { boardCreate({ 구분: '자유', 제목: '제목', 내용: '   ' }, STAFF_TOKEN); }, '내용', '빈 내용');
+});
+
+t('게시판: 로그인 없이는 읽지도 쓰지도 못한다', function () {
+  throwsMatch(function () { boardList({}, ''); }, '로그인이 필요', '목록');
+  throwsMatch(function () { boardCreate({ 구분: '자유', 제목: '제목', 내용: '내용' }, ''); }, '로그인이 필요', '작성');
+});
+
+t('게시판: 목록은 고정 글이 먼저, 그 다음 최신 순', function () {
+  var all = boardList({}, TOKEN);
+  eq(all.total, 2, '글 수');
+  eq(all.items[0].번호, 2, '고정 글이 맨 위');
+  eq(all.items[0].고정여부, 'Y');
+  eq(all.items[1].번호, 1);
+});
+
+t('게시판: 구분·카테고리·검색으로 거를 수 있다', function () {
+  eq(boardList({ 구분: '공지' }, TOKEN).total, 1, '공지 수');
+  eq(boardList({ 구분: '자유' }, TOKEN).total, 1, '자유 수');
+  eq(boardList({ 구분: '공지', 카테고리: '미지급 사유' }, TOKEN).total, 1, '카테고리');
+  eq(boardList({ 구분: '공지', 카테고리: '특별 수수료율' }, TOKEN).total, 0, '없는 카테고리');
+  eq(boardList({ 검색: '단가' }, TOKEN).total, 1, '검색');
+  eq(boardList({ 검색: '없는말' }, TOKEN).total, 0, '검색 없음');
+  var one = boardList({ 검색: '국제약품' }, TOKEN);
+  eq(one.total, 1, '내용 검색');
+  eq(one.items[0].구분, '공지');
+});
+
+t('게시판: 목록 응답에 구분별 개수·카테고리별 개수가 함께 온다', function () {
+  var res = boardList({}, TOKEN);
+  eq(res.counts['공지'], 1, '공지 개수');
+  eq(res.counts['자유'], 1, '자유 개수');
+  eq(res.categories['공지'][0].카테고리, '미지급 사유');
+  eq(res.categories['공지'][0].개수, 1);
+  eq(res.isMaster, true);
+  eq(boardList({}, STAFF_TOKEN).isMaster, false);
+});
+
+t('게시판: 자유 글은 본인만 수정·삭제할 수 있다', function () {
+  var master = login('master', 'test');
+  // 다른 사람(마스터)이 쓴 자유 글
+  var other = boardCreate({ 구분: '자유', 제목: '마스터가 쓴 자유 글', 내용: '내용' }, TOKEN);
+  throwsMatch(function () { boardUpdate({ 번호: other.번호, 제목: '가로채기' }, STAFF_TOKEN); }, '본인이 쓴 글만', '남의 글 수정');
+  throwsMatch(function () { boardDelete({ 번호: other.번호 }, STAFF_TOKEN); }, '본인이 쓴 글만', '남의 글 삭제');
+  // 내가 쓴 글은 수정·삭제 가능
+  var mine = boardList({ 구분: '자유' }, STAFF_TOKEN).items.filter(function (r) { return r.번호 === 1; })[0];
+  ok(mine, '내 글 없음');
+  eq(mine.수정가능, true, '내 글 수정가능');
+  eq(mine.삭제가능, true, '내 글 삭제가능');
+  var up = boardUpdate({ 번호: 1, 제목: '수아의원 단가 문의(수정)', 내용: '확인했습니다.' }, STAFF_TOKEN);
+  ok(up && up.success, '수정 실패');
+  var after = boardList({ 구분: '자유' }, STAFF_TOKEN).items.filter(function (r) { return r.번호 === 1; })[0];
+  eq(after.제목, '수아의원 단가 문의(수정)');
+  eq(after.내용, '확인했습니다.');
+  ok(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(String(after.수정일시)), '수정일시가 비었거나 형식이 다름: ' + after.수정일시);
+  boardDelete({ 번호: other.번호 }, TOKEN);   // 마스터가 정리
+});
+
+t('게시판: STAFF 는 공지를 수정·삭제·고정할 수 없다', function () {
+  throwsMatch(function () { boardUpdate({ 번호: 2, 제목: '바꿔치기' }, STAFF_TOKEN); }, 'MASTER 권한만', '공지 수정');
+  throwsMatch(function () { boardDelete({ 번호: 2 }, STAFF_TOKEN); }, 'MASTER 권한만', '공지 삭제');
+  throwsMatch(function () { boardUpdate({ 번호: 2, 고정여부: 'N' }, STAFF_TOKEN); }, 'MASTER 권한만', '공지 고정');
+  var forStaff = boardList({ 구분: '공지' }, STAFF_TOKEN).items[0];
+  eq(forStaff.수정가능, false, 'STAFF 공지 수정가능');
+  eq(forStaff.삭제가능, false, 'STAFF 공지 삭제가능');
+  eq(forStaff.고정가능, false, 'STAFF 공지 고정가능');
+  var forMaster = boardList({ 구분: '공지' }, TOKEN).items[0];
+  eq(forMaster.수정가능, true, 'MASTER 공지 수정가능');
+});
+
+t('게시판: MASTER 는 남의 자유 글도 고치고 지울 수 있다', function () {
+  var res = boardCreate({ 구분: '자유', 제목: '지울 글', 내용: '내용' }, STAFF_TOKEN);
+  var up = boardUpdate({ 번호: res.번호, 제목: '마스터가 고침' }, TOKEN);
+  ok(up && up.success, 'MASTER 수정 실패');
+  var del = boardDelete({ 번호: res.번호 }, TOKEN);
+  ok(del && del.success, 'MASTER 삭제 실패');
+  eq(boardList({ 구분: '자유' }, TOKEN).items.filter(function (r) { return r.번호 === res.번호; }).length, 0, '삭제 후 남음');
+});
+
+t('게시판: 자유 글에는 상단 고정을 쓸 수 없다', function () {
+  var res = boardCreate({ 구분: '자유', 제목: '고정 시도', 내용: '내용' }, TOKEN);
+  throwsMatch(function () { boardUpdate({ 번호: res.번호, 고정여부: 'Y' }, TOKEN); }, '공지사항에만', '자유 글 고정');
+  boardDelete({ 번호: res.번호 }, TOKEN);
+});
+
+t('게시판: 공지 고정을 풀면 최신 순으로 내려간다', function () {
+  var res = boardCreate({ 구분: '공지', 카테고리: '특별 수수료율', 제목: '12월 캠페인', 내용: '추가 수수료', 고정여부: 'Y' }, TOKEN);
+  eq(boardList({ 구분: '공지' }, TOKEN).items[0].번호, res.번호, '새 공지가 맨 위');
+  boardUpdate({ 번호: res.번호, 고정여부: 'N' }, TOKEN);
+  var top = boardList({ 구분: '공지' }, TOKEN).items[0];
+  eq(top.번호, 2, '고정 글(2번)이 다시 맨 위');
+  boardDelete({ 번호: res.번호 }, TOKEN);
+});
+
+t('게시판: 없는 글·비정상 번호는 조용히 넘어가지 않고 알린다', function () {
+  throwsMatch(function () { boardUpdate({ 번호: 9999, 제목: 'x' }, TOKEN); }, '찾을 수 없', '수정');
+  throwsMatch(function () { boardDelete({ 번호: 9999 }, TOKEN); }, '찾을 수 없', '삭제');
+});
+
+t('게시판: 글을 지워도 번호는 다시 쓰지 않는다', function () {
+  var a = boardCreate({ 구분: '자유', 제목: 'A', 내용: '내용' }, STAFF_TOKEN);
+  var b = boardCreate({ 구분: '자유', 제목: 'B', 내용: '내용' }, STAFF_TOKEN);
+  ok(b.번호 > a.번호, '번호가 커져야 함');
+  boardDelete({ 번호: b.번호 }, TOKEN);
+  var c = boardCreate({ 구분: '자유', 제목: 'C', 내용: '내용' }, STAFF_TOKEN);
+  ok(c.번호 > b.번호, '지운 번호 재사용: ' + c.번호);
+  boardDelete({ 번호: c.번호 }, TOKEN);
+  boardDelete({ 번호: a.번호 }, TOKEN);
+});
+
+t('게시판: 긴 내용도 저장되고 목록에서 잘리지 않는다', function () {
+  var long = [];
+  for (var i = 1; i <= 400; i++) long.push(i + '번째 줄 — 이엘파마 캠페인 확인');
+  var res = boardCreate({ 구분: '공지', 카테고리: '특별 수수료율', 제목: '긴 공지', 내용: long.join('\n') }, TOKEN);
+  ok(res && res.success, '긴 글 저장 실패');
+  var item = boardList({ 구분: '공지' }, TOKEN).items.filter(function (r) { return r.번호 === res.번호; })[0];
+  eq(item.내용.split('\n').length, 400, '줄 수 보존');
+  boardDelete({ 번호: res.번호 }, TOKEN);
+});
+
+t('게시판: 45,000자를 넘는 내용은 거절한다', function () {
+  throwsMatch(function () {
+    boardCreate({ 구분: '공지', 제목: '너무 김', 내용: new Array(45002).join('가') }, TOKEN);
+  }, '너무 깁니다', '길이 제한');
+});
+
+t('게시판: 한글 검색과 대소문자 섞인 검색', function () {
+  var res = boardCreate({ 구분: '공지', 카테고리: '일반 공지', 제목: 'EDI 마감 안내', 내용: '2026.12 EDI까지 정산' }, TOKEN);
+  eq(boardList({ 검색: 'edi' }, TOKEN).total >= 1, true, '영문 소문자 검색');
+  eq(boardList({ 검색: '마감' }, TOKEN).total >= 1, true, '한글 검색');
+  eq(boardList({ 검색: '작성자이름없음' }, TOKEN).total, 0, '없는 검색어');
+  boardDelete({ 번호: res.번호 }, TOKEN);
+});
+
+
+// ------------------------------------------------------------------ 19. 처방 셋팅 성분 검색 (v1.14)
+t('성분검색: 같은 성분을 여러 제약사 품목으로 묶어 준다', function () {
+  var res = searchGuideIngredients({ q: 'atorvastatin' }, TOKEN);
+  ok(res && res.total성분 >= 1, '검색 결과 없음');
+  var g = res.groups[0];
+  ok(g.성분명, '성분명 없음');
+  ok(g.items.length >= 2, '품목이 2개 미만: ' + g.items.length);
+  ok(g.제약사수 >= 2, '제약사가 한 곳뿐: ' + g.제약사수);
+  var makers = {};
+  g.items.forEach(function (it) { makers[it.제약사] = true; ok(it.보험코드, '보험코드 없음'); });
+  eq(Object.keys(makers).length, g.제약사수, '제약사 수가 다름');
+  ok(g.최고수수료율 > 0, '최고 수수료율 없음');
+  ok(g.최저약가 > 0, '최저 약가 없음');
+});
+
+t('성분검색: 품목은 수수료율 높은 순으로 온다', function () {
+  var g = searchGuideIngredients({ q: 'atorvastatin' }, TOKEN).groups[0];
+  for (var i = 1; i < g.items.length; i++) {
+    ok(Number(g.items[i - 1].수수료율) >= Number(g.items[i].수수료율),
+      '수수료율 정렬이 아님: ' + g.items[i - 1].수수료율 + ' < ' + g.items[i].수수료율);
+  }
+});
+
+t('성분검색: 경구제만 나온다 (주사·수액 제외)', function () {
+  var res = searchGuideIngredients({ q: '세프트리악손' }, TOKEN);
+  if (res.groups.length) {
+    res.groups.forEach(function (g) {
+      g.items.forEach(function (it) { ok(dosageFormOf_(it) === '경구', '주사제가 섞여 나옴: ' + it.품목명); });
+    });
+  }
+  var all = searchGuideIngredients({ q: '정' , limit: 40}, TOKEN);
+  all.groups.forEach(function (g) {
+    g.items.forEach(function (it) { eq(dosageFormOf_(it), '경구', '경구가 아님: ' + it.품목명); });
+  });
+});
+
+t('성분검색: 제약사 이름으로도 찾고, 그 제약사 품목만 나온다', function () {
+  var res = searchGuideIngredients({ q: '한화제약' }, TOKEN);
+  ok(res.total성분 >= 1, '제약사 검색 실패');
+  res.groups.forEach(function (g) {
+    g.items.forEach(function (it) { ok(String(it.제약사).indexOf('한화제약') !== -1, '다른 제약사: ' + it.제약사); });
+  });
+});
+
+t('성분검색: 성분명·품목명·보험코드 어느 것으로도 찾힌다', function () {
+  var byName = searchGuideIngredients({ q: '아토타틴' }, TOKEN);
+  ok(byName.total품목 >= 1, '품목명 검색 실패');
+  var code = byName.groups[0].items[0].보험코드;
+  var byCode = searchGuideIngredients({ q: code }, TOKEN);
+  ok(byCode.total품목 >= 1, '보험코드 검색 실패: ' + code);
+  eq(byCode.groups[0].items[0].보험코드, code, '보험코드 검색 결과가 다름');
+});
+
+t('성분검색: 성분키를 넘기면 그 성분 품목 전체', function () {
+  var first = searchGuideIngredients({ q: 'atorvastatin' }, TOKEN).groups[0];
+  var byKey = searchGuideIngredients({ 성분키: first.성분키 }, TOKEN);
+  ok(byKey.total성분 >= 1, '성분키 조회 실패');
+  eq(byKey.성분키, first.성분키, '성분키 에코');
+  ok(byKey.groups[0].품목수 >= first.items.length, '품목이 줄어듦');
+});
+
+t('성분검색: 빈 검색어는 아무것도 돌려주지 않는다', function () {
+  var res = searchGuideIngredients({ q: '   ' }, TOKEN);
+  eq(res.total성분, 0);
+  eq(res.groups.length, 0);
+});
+
+t('성분검색: 로그인 없이는 쓸 수 없다', function () {
+  throwsMatch(function () { searchGuideIngredients({ q: 'atorvastatin' }, ''); }, '로그인이 필요', '권한');
+});
+
+t('성분검색: STAFF 는 요율등급이 차감된 요율만 본다', function () {
+  var master = searchGuideIngredients({ q: 'atorvastatin' }, TOKEN).groups[0];
+  var staff = searchGuideIngredients({ q: 'atorvastatin' }, STAFF_TOKEN).groups[0];
+  eq(staff.items.length, master.items.length, '품목 수가 다름');
+  var lower = 0;
+  staff.items.forEach(function (it, i) {
+    var m = master.items.filter(function (x) { return x.보험코드 === it.보험코드; })[0];
+    if (!m) return;
+    ok(Number(it.수수료율) <= Number(m.수수료율), 'STAFF 요율이 더 높음');
+    if (Number(it.수수료율) < Number(m.수수료율)) lower++;
+  });
+  ok(lower > 0, 'STAFF 차감이 하나도 반영되지 않음');
+});
+
+t('성분검색: 품목이 많은 성분은 상한까지만 보내고 잘림을 알린다', function () {
+  var res = searchGuideIngredients({ q: '정', limit: 5 }, TOKEN);
+  ok(res.shown성분 <= 5, '상한을 넘음: ' + res.shown성분);
+  ok(res.total성분 >= res.shown성분, '총 성분수보다 많이 보냄');
+  res.groups.forEach(function (g) {
+    ok(g.items.length <= 45, '성분 품목이 45개를 넘음: ' + g.items.length);
+    if (g.잘림) eq(g.items.length, 45, '잘림 표시가 있는데 45개가 아님');
+  });
+});
+
 // ------------------------------------------------------------------ 결과
 var PASSED = RESULTS.filter(function (r) { return r.ok; }).length;
 var FAILED = RESULTS.length - PASSED;

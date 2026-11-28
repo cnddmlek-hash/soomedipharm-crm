@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
- <title>수메디팜 미니 CRM v1.13</title>
+ <title>수메디팜 미니 CRM v1.14</title>
 
  <!-- ---------------- PWA (홈 화면 앱) 설정 ---------------- -->
  <meta name="description" content="수메디팜 미니 CRM — 거래처·주문·수금·회전일을 구글 시트로 실시간 관리하는 영업 앱" />
@@ -770,7 +770,7 @@
  <div id="login-overlay" class="login-overlay">
    <div class="login-card">
      <div class="login-brand">
-       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.13</span></div>
+       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.14</span></div>
        <div class="s">담당자 아이디로 로그인해 주세요</div>
      </div>
      <div class="form-group" style="margin-bottom:10px;">
@@ -1152,7 +1152,7 @@
    <!-- PC 사이드바 -->
    <aside class="sidebar">
      <div class="sidebar-brand">
-       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.13</span></h1>
+       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.14</span></h1>
        <div class="sub" id="brand-sub">로딩 중...</div>
      </div>
      <nav class="sidebar-nav" id="sidebar-nav"></nav>
@@ -1168,7 +1168,7 @@
 
    <!-- 모바일 상단 헤더 -->
    <header class="mobile-header">
-     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.13</span></h1>
+     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.14</span></h1>
      <div style="display:flex;gap:6px;align-items:center;">
        <span id="m-user" class="ver-chip" style="display:none;" onclick="openPasswordModal()" title="내 계정 · 비밀번호 변경"></span>
        <button class="btn btn-sm" id="pw-btn-m" title="비밀번호 변경" aria-label="비밀번호 변경" style="display:none;background:rgba(255,255,255,0.16);color:#fff;" onclick="openPasswordModal()">🔑</button>
@@ -1188,7 +1188,7 @@
    // =========================================================================
    // 0. 전역 상수 & 상태
    // =========================================================================
-   const APP_VERSION = 'v1.13';
+   const APP_VERSION = 'v1.14';
 
    const STATE = {
      // 로그인/권한
@@ -1196,7 +1196,7 @@
      user: null,
      isMaster: false,
      // 공통 마스터 데이터
-     activeMenu: 'turnover',
+     activeMenu: 'board',
      settings: {},
      clients: [],
      products: [],
@@ -1205,6 +1205,15 @@
      userEmail: '',
      userList: null,          // MASTER 설정 탭 — 사용자 목록·가입 승인 (getUsersList)
      serverVersion: '',       // 시트 서버(Code.gs) 버전 — v1.4 함수 사용 가능 여부 판단
+     // 📢 공지사항 · 게시판 (v1.14)
+     boardTab: 'notice',          // 'notice' 공지사항 | 'free' 자유 게시판
+     boardCategory: '',           // '' 면 전체
+     boardQuery: '',              // 제목·내용·작성자·카테고리 검색어
+     boardData: null,             // boardList 응답
+     boardOpen: {},               // 번호 → 펼침 여부
+     boardDraft: null,            // 작성/수정 중인 글 { 구분, 카테고리, 제목, 내용 }
+     boardEditNo: 0,              // 0 이면 새 글, 번호가 있으면 그 글 수정
+     boardSaving: false,
      // 주문/회전일 탭
      turnoverSubtab: 'dashboard',   // 'dashboard' | 'products'  (v1.10: 주사제 주문 'order' · 수금 등록 'collection' 두 메뉴)
      orderTab: 'entry',           // 주사제 주문 메뉴 두 탭 — 'entry' 주문(매출) 등록 | 'inject' 주사제 셋팅 (v1.11)
@@ -1267,6 +1276,11 @@
      guideDept: '',
      guideData: null,
      guideMode: 'maxrate',
+     guideIngQ: '',                 // 처방 셋팅 성분·품목·제약사 검색어 (v1.14)
+     guideIngKey: '',               // 성분키로 바로 찾을 때 (외 N 보기)
+     guideIngData: null,            // searchGuideIngredients 응답
+     guideIngOpen: {},              // 성분키 → 펼침 여부
+     guideIngLoading: false,
      guideSelected: {},             // 처방 셋팅 성분 체크(추천용)
      guidePick: {},                 // 처방 셋팅 품목 체크(선택 담기·출력용) { 보험코드: true } (v1.12)
      guideRec: null,
@@ -1852,11 +1866,20 @@
    // 3. 메뉴 레지스트리 / 내비게이션
    // =========================================================================
    // 사이드바/모바일 메뉴 순서 — 사용자가 정한 순서 (메뉴명 앞 숫자는 붙이지 않습니다)
-   //   ① 거래처 등록/관리 → ② 거래처 상세정보(내 거래처 상세 · 비거래처 심평원 HIRA 탭)
+   //   ⓪ 📢 공지사항 · 게시판 (v1.14 — 로그인 후 첫 화면, 사용자가 "가장 첫번째"로 지정)
+   //   → ① 거래처 등록/관리 → ② 거래처 상세정보(내 거래처 상세 · 비거래처 심평원 HIRA 탭)
    //   → ③ 월별 실적 → ④ 처방 셋팅 → ⑤ 처방전 입력
    //   → ⑥ 💉 주사제 주문(매출 전용) → ⑦ 💰 수금 등록(수금 전용)   ← v1.10 두 화면으로 완전 분리
    //   → ⑧ 약 검색 · 금기 → ⑨ 주문 · 회전일 관리 → ⑩ 거래원장 · 명세서 → ⑪ 발송이력 · 설정(MASTER 전용, 항상 맨 마지막)
    const APP_MENUS = [
+     {
+       id: 'board',
+       label: '공지사항 · 게시판',
+       shortLabel: '공지',
+       icon: '📢',
+       render: renderBoardPage,
+       onEnter: loadBoardModule
+     },
      {
        id: 'clients',
        label: '거래처 등록/관리',
@@ -2065,7 +2088,7 @@
      STATE.authToken = '';
      STATE.user = null;
      STATE.isMaster = false;
-     STATE.activeMenu = 'turnover';   // 로그아웃 후에는 MASTER 전용 메뉴에 머무르지 않음
+     STATE.activeMenu = 'board';   // 로그아웃 후에는 MASTER 전용 메뉴에 머무르지 않음
      STATE.clients = [];
      STATE.products = [];
      STATE.turnoverData = null;
@@ -6326,6 +6349,7 @@
      loadCoverageNotes();
      renderGuideDeptChips();
      renderGuideBody();
+     renderGuideIngResult();
    }
 
    /** 🏥 지금 어느 병원에 담는 중인지 — 처방전에서 고른 병원을 그대로 이어받습니다 */
@@ -6372,8 +6396,182 @@
            '💊 이 화면은 <b>경구제(원외처방)</b> 전용입니다. 주사·수액 품목은 추천하지 않습니다 — 원내 주사는 <b>💉 주사제 주문</b> 메뉴의 <b>💉 주사제 셋팅</b> 탭에서 보세요.' +
          '</div>' +
        '</div>' +
+       guideIngSearchCardHtml_() +
        '<div id="guide-coverage"></div>' +
        '<div id="guide-body"></div>';
+   }
+
+   /** 🔎 성분·제약사 검색 카드 — 성분 하나에 여러 제약사 경구제를 펼쳐 비교·선택 (v1.14) */
+   function guideIngSearchCardHtml_() {
+     return '<div class="card" style="border-color:#bfdbfe;background:#f8fbff;">' +
+         '<div class="card-title"><span>🔎 성분 · 제약사 검색</span>' +
+           '<small style="font-weight:500;font-size:12px;color:var(--muted);">성분 하나에 여러 제약사 품목을 한눈에 비교 · 체크해서 담기</small></div>' +
+         '<div class="toolbar" style="gap:6px;flex-wrap:wrap;">' +
+           '<input type="text" id="guide-ing-q" style="flex:1 1 200px;max-width:340px;" placeholder="성분·품목·제약사 검색 (예: 로수바스타틴, 라베프라졸, 암로디핀)" autocomplete="off" value="' + esc(STATE.guideIngQ || '') + '" oninput="onGuideIngQuery(this.value)" />' +
+           '<button class="btn btn-primary btn-sm" onclick="loadGuideIngSearch(true)">🔎 검색</button>' +
+           (STATE.guideIngQ || STATE.guideIngKey ? '<button class="btn btn-outline btn-sm" onclick="clearGuideIngSearch()">지우기</button>' : '') +
+         '</div>' +
+         '<div style="font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.6;">이엘파마 경구 품목 전체에서 찾습니다. 성분을 누르면 그 성분의 <b>여러 제약사 품목</b>이 약가·수수료율과 함께 펼쳐집니다.</div>' +
+       '</div>' +
+       '<div id="guide-ing-result"></div>';
+   }
+
+   let _guideIngTimer = null;
+   function onGuideIngQuery(v) {
+     STATE.guideIngQ = String(v || '');
+     STATE.guideIngKey = '';
+     clearTimeout(_guideIngTimer);
+     _guideIngTimer = setTimeout(function () { loadGuideIngSearch(); }, 350);
+   }
+
+   function clearGuideIngSearch() {
+     STATE.guideIngQ = '';
+     STATE.guideIngKey = '';
+     STATE.guideIngData = null;
+     STATE.guideIngOpen = {};
+     const q = document.getElementById('guide-ing-q');
+     if (q) q.value = '';
+     renderGuideIngResult();
+   }
+
+   /** 성분 하나를 펼쳐서 보기 (성분 줄의 '외 N 보기' / 성분명 누를 때) */
+   function guideOpenIngredient(key, name) {
+     STATE.guideIngKey = String(key || '');
+     STATE.guideIngQ = String(name || '');
+     STATE.guideIngOpen = {};
+     if (STATE.guideIngKey) STATE.guideIngOpen[STATE.guideIngKey] = true;
+     const q = document.getElementById('guide-ing-q');
+     if (q) q.value = STATE.guideIngQ;
+     loadGuideIngSearch(true);
+   }
+
+   async function loadGuideIngSearch(scroll) {
+     const q = String(STATE.guideIngQ || '').trim();
+     const key = String(STATE.guideIngKey || '').trim();
+     if (!q && !key) {
+       STATE.guideIngData = null;
+       renderGuideIngResult();
+       return;
+     }
+     STATE.guideIngLoading = true;
+     renderGuideIngResult();
+     try {
+       const res = await runServer('searchGuideIngredients', [{ q: key ? '' : q, 성분키: key, limit: 40 }], { silent: true });
+       STATE.guideIngData = res || null;
+       ((res && res.groups) || []).forEach(function (g) {
+         (g.items || []).forEach(guideCacheProduct_);
+         const k = guideIngGroupKey_(g);
+         if (STATE.guideIngOpen[k] === undefined) STATE.guideIngOpen[k] = true;
+       });
+     } catch (e) {
+       STATE.guideIngData = { groups: [], q: q, total성분: 0, total품목: 0, error: v14ErrorText_(e) };
+     }
+     STATE.guideIngLoading = false;
+     renderGuideIngResult();
+     if (scroll) {
+       const box = document.getElementById('guide-ing-result');
+       if (box && box.scrollIntoView) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+     }
+   }
+
+   function guideIngGroupKey_(g) {
+     return String((g && (g.성분키 || g.성분명)) || '');
+   }
+
+   function renderGuideIngResult() {
+     const el = document.getElementById('guide-ing-result');
+     if (!el) return;
+     el.innerHTML = guideIngResultHtml_();
+   }
+
+   function guideIngResultHtml_() {
+     if (STATE.guideIngLoading) {
+       return '<div class="card"><span style="color:var(--muted);font-size:13px;">성분·품목을 찾는 중…</span></div>';
+     }
+     const d = STATE.guideIngData;
+     if (!d) {
+       return '<div class="card"><div style="font-size:12.5px;color:var(--muted);line-height:1.65;">' +
+         '성분명(예: <b>로수바스타틴</b>, <b>라베프라졸</b>, <b>암로디핀</b>)이나 품목명·제약사명을 넣으면 ' +
+         '그 성분의 <b>여러 제약사 경구제</b>를 약가·수수료율과 함께 펼쳐 비교할 수 있습니다. ' +
+         '체크한 품목은 <b>[💊 선택 항목 담기]</b>로 한 번에 담고, <b>[🖨️ 원장님 안내용 출력]</b>에도 그대로 담깁니다.</div></div>';
+     }
+     if (d.error) return '<div class="card" style="color:var(--danger);font-size:12.5px;">' + esc(d.error) + '</div>';
+     const groups = d.groups || [];
+     if (!groups.length) {
+       return '<div class="card"><div style="padding:14px 4px;text-align:center;color:var(--muted);font-size:13px;">' +
+         '"' + esc(d.q || '') + '" 에 맞는 경구제가 없습니다. 성분명을 짧게(예: 아토르, 라베) 넣어 보세요.</div></div>';
+     }
+     return '<div class="card">' +
+         '<div class="card-title"><span>🔎 성분 ' + fmtNum(d.total성분) + '개 · 품목 ' + fmtNum(d.total품목) + '개</span>' +
+           '<span style="display:flex;gap:6px;flex-wrap:wrap;">' +
+             '<button class="btn btn-outline btn-sm" onclick="guideIngSelectAll(true)">결과 전체 체크</button>' +
+             '<button class="btn btn-outline btn-sm" onclick="guideIngSelectAll(false)">체크 해제</button>' +
+             '<button class="btn btn-accent btn-sm pick-bulk-btn" id="guide-ing-bulk-add" onclick="guideAddSelected()">' + guideBulkAddLabel_() + '</button>' +
+           '</span></div>' +
+         (d.shown성분 < d.total성분
+           ? '<div style="font-size:11.5px;color:var(--muted);margin:-4px 0 8px;">상위 ' + d.shown성분 + '성분만 보여 줍니다 — 검색어를 좁혀 주세요.</div>'
+           : '') +
+         groups.map(guideIngGroupHtml_).join('') +
+       '</div>';
+   }
+
+   function guideIngGroupHtml_(g) {
+     const key = guideIngGroupKey_(g);
+     const open = Boolean(STATE.guideIngOpen[key]);
+     const picks = STATE.guidePick || {};
+     const meta = '제약사 ' + g.제약사수 + '곳 · ' + g.품목수 + '품목' +
+       (g.최고수수료율 ? ' · 최고 ' + g.최고수수료율 + '%' : '') +
+       (g.최저약가 ? ' · 최저 ' + fmtNum(g.최저약가) + '원' : '');
+     const rows = (g.items || []).map(function (it) {
+       const code = rxCodeNorm_(it.보험코드);
+       return '<tr>' +
+           '<td style="text-align:center;"><input type="checkbox" style="width:auto;" data-guide-pick="' + esc(code) + '" ' +
+             (code && picks[code] ? 'checked' : '') + ' onchange="guideToggleProduct(\'' + esc(code) + '\', this.checked)" /></td>' +
+           '<td><strong>' + esc(it.품목명) + '</strong></td>' +
+           '<td>' + esc(it.제약사 || '-') + '</td>' +
+           '<td>' + esc(it.규격 || '-') + '</td>' +
+           '<td>' + esc(code || '-') + '</td>' +
+           '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + (Number(it.약가) ? fmtNum(it.약가) + '원' : '-') + '</td>' +
+           '<td style="text-align:right;font-variant-numeric:tabular-nums;"><strong>' + (Number(it.수수료율) ? Number(it.수수료율) + '%' : '-') + '</strong></td>' +
+           '<td style="text-align:center;"><button class="btn-link" style="font-size:12px;" onclick="guideAddItem(\'' + esc(it.보험코드) + '\')">+ 담기</button></td>' +
+         '</tr>';
+     }).join('');
+     return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fff;">' +
+         '<div class="collapse-head" onclick="toggleGuideIngGroup(\'' + esc(key) + '\')" role="button" aria-expanded="' + (open ? 'true' : 'false') + '">' +
+           '<div class="card-title" style="margin:0;"><span>💊 ' + esc(g.성분명 || key) + ' <small style="font-weight:500;font-size:12px;color:var(--muted);">' + esc(meta) + '</small></span>' +
+             (g.분류 ? '<small style="font-weight:500;font-size:11.5px;color:var(--muted);">' + esc(g.분류) + '</small>' : '') +
+           '</div>' +
+           '<span class="collapse-caret">' + (open ? '접기 ▲' : '펼치기 ▼') + '</span>' +
+         '</div>' +
+         (g.잘림 ? '<div style="font-size:11.5px;color:#b45309;margin:2px 0 4px;">품목이 많아 수수료율 높은 순으로 45개만 보여 줍니다.</div>' : '') +
+         (open
+           ? '<div class="table-wrap" style="margin-top:8px;"><table><thead><tr>' +
+               '<th style="text-align:center;">선택</th><th>품목명</th><th>제약사</th><th>규격</th><th>보험코드</th>' +
+               '<th style="text-align:right;">약가</th><th style="text-align:right;">수수료율</th><th style="text-align:center;">담기</th>' +
+             '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+           : '') +
+       '</div>';
+   }
+
+   function toggleGuideIngGroup(key) {
+     const k = String(key || '');
+     STATE.guideIngOpen[k] = !STATE.guideIngOpen[k];
+     renderGuideIngResult();
+   }
+
+   /** 검색 결과 전체 체크/해제 — 체크하면 [💊 선택 항목 담기]에 바로 반영 */
+   function guideIngSelectAll(on) {
+     const groups = (STATE.guideIngData && STATE.guideIngData.groups) || [];
+     STATE.guidePick = STATE.guidePick || {};
+     groups.forEach(function (g) {
+       (g.items || []).forEach(function (it) {
+         const c = rxCodeNorm_(it.보험코드);
+         if (!c) return;
+         if (on) STATE.guidePick[c] = true; else delete STATE.guidePick[c];
+       });
+     });
+     renderGuideIngResult();
+     guideSyncPickUI_();
    }
 
    // ---------------------------------------------------------------- 급여·삭감 가이드 (v1.5)
@@ -7124,7 +7322,7 @@
                          ' onchange="guideToggleProduct(\'' + esc(pc) + '\', this.checked)" /></label>' +
                        '<button class="v14-prod" data-guide-kind="prod" data-guide-code="' + esc(pc) + '" onclick="guideAddItem(\'' + esc(p.보험코드) + '\')" title="처방전 입력에 담기">' +
                        esc(p.품목명) + ' <small class="maker-tag">' + esc(makerOf_(p, 'oral')) + '</small> <span>' + (p.수수료율 || 0) + '%</span></button>';
-                   }).join('') + (it.경구제수 > 3 ? '<span style="font-size:11.5px;color:var(--muted);align-self:center;">외 ' + (it.경구제수 - 3) + '</span>' : '')
+                   }).join('') + (it.경구제수 > 3 ? '<button class="btn-link" style="font-size:11.5px;align-self:center;" title="이 성분의 여러 제약사 품목 보기" onclick="guideOpenIngredient(\'' + esc(it.영문키) + '\', \'' + esc(it.성분명) + '\')">외 ' + (it.경구제수 - 3) + ' 보기</button>' : '')
                      : '<span style="color:var(--muted);font-size:12px;">경구제 없음' +
                        (it.주사제수 ? ' <button class="btn-link" style="font-size:12px;" onclick="openInjectSetting()">💉 주사·수액 ' + it.주사제수 + '개 보기</button>' : '') + '</span>') +
                  '</div>' +
@@ -7229,6 +7427,8 @@
      }
      const btn = document.getElementById('guide-bulk-add');
      if (btn) btn.textContent = guideBulkAddLabel_();
+     const btn2 = document.getElementById('guide-ing-bulk-add');
+     if (btn2) btn2.textContent = guideBulkAddLabel_();
    }
 
    /** 체크한 품목을 한 번에 처방전 입력 목록에 담기 (v1.12) */
@@ -8582,6 +8782,328 @@
      updateUserUi();
      showToast('설정이 저장되었습니다.');
      renderActiveMenu();
+   }
+
+   // =========================================================================
+   // 8-C. MODULE: 📢 공지사항 · 게시판 (v1.14)
+   //   · 📌 공지사항 — 미지급 사유 / 특별 수수료율 / 일반 공지 · MASTER 만 작성·수정·삭제·상단 고정
+   //   · 💬 자유 게시판 — 로그인한 모든 직원 글쓰기 · 본인 글 수정·삭제(MASTER 는 모든 글 삭제)
+   // =========================================================================
+   const BOARD_NOTICE_CATS = ['전체', '미지급 사유', '특별 수수료율', '일반 공지'];
+   const BOARD_FREE_CATS = ['전체', '일반', '질문', '공유', '건의'];
+   const BOARD_CONTENT_MAX = 45000;
+
+   function boardCurTab_() { return STATE.boardTab === 'free' ? 'free' : 'notice'; }
+   function boardKindOf_(tab) { return (tab || boardCurTab_()) === 'free' ? '자유' : '공지'; }
+   function boardFindItem_(no) {
+     const want = Number(no);
+     const items = (STATE.boardData && STATE.boardData.items) || [];
+     for (let i = 0; i < items.length; i++) if (Number(items[i].번호) === want) return items[i];
+     return null;
+   }
+
+   /** 메뉴 진입 — 화면을 먼저 그리고, 글 목록은 서버에서 받아 채웁니다 */
+   async function loadBoardModule() {
+     renderActiveMenu();
+     try {
+       const data = await runServer('boardList', [{ limit: 500 }], { silent: true });
+       if (data) { STATE.boardData = data; STATE.boardError = ''; }
+     } catch (e) {
+       const msg = String((e && e.message) || e);
+       STATE.boardError = isMissingFunctionError_(e) ? SERVER_REDEPLOY_HINT : ('게시판을 불러오지 못했습니다: ' + msg);
+     }
+     if (STATE.activeMenu !== 'board') return;
+     renderBoardList_();
+   }
+
+   function reloadBoard() { loadBoardModule(); }
+
+   function renderBoardPage(container) {
+     container.innerHTML =
+       '<div class="page-header">' +
+         '<h2 class="page-title">📢 공지사항 · 게시판</h2>' +
+         '<span style="display:flex;gap:6px;flex-wrap:wrap;">' +
+           '<span class="badge badge-blue">' + (STATE.isMaster ? 'MASTER · 공지 작성 가능' : '직원 · 자유 게시판 글쓰기') + '</span>' +
+           '<span class="badge badge-muted">회사 공지 + 자유 게시판</span>' +
+         '</span>' +
+       '</div>' +
+       boardTabBar_() +
+       '<div class="card">' + boardToolbarHtml_() + '</div>' +
+       '<div id="board-list"></div>';
+     renderBoardList_();
+   }
+
+   function boardTabBar_() {
+     const t = boardCurTab_();
+     const c = (STATE.boardData && STATE.boardData.counts) || null;
+     return '<div class="subtabs">' +
+       '<button class="subtab ' + (t === 'notice' ? 'active' : '') + '" onclick="switchBoardTab(\'notice\')">📌 공지사항' + (c ? ' (' + fmtNum(c['공지'] || 0) + ')' : '') + '</button>' +
+       '<button class="subtab ' + (t === 'free' ? 'active' : '') + '" onclick="switchBoardTab(\'free\')">💬 자유 게시판' + (c ? ' (' + fmtNum(c['자유'] || 0) + ')' : '') + '</button>' +
+     '</div>';
+   }
+
+   function switchBoardTab(tab) {
+     STATE.boardTab = tab === 'free' ? 'free' : 'notice';
+     STATE.boardCategory = '';
+     STATE.boardOpen = {};
+     STATE.boardDraft = null;
+     STATE.boardEditNo = 0;
+     renderActiveMenu();
+   }
+
+   function boardCatCount_(value) {
+     const items = (STATE.boardData && STATE.boardData.items) || [];
+     const kind = boardKindOf_();
+     let n = 0;
+     for (let i = 0; i < items.length; i++) {
+       if (items[i].구분 !== kind) continue;
+       if (value && items[i].카테고리 !== value) continue;
+       n++;
+     }
+     return n;
+   }
+
+   function boardToolbarHtml_() {
+     const tab = boardCurTab_();
+     const cats = tab === 'free' ? BOARD_FREE_CATS : BOARD_NOTICE_CATS;
+     const chips = cats.map(function (c) {
+       const v = c === '전체' ? '' : c;
+       const active = String(STATE.boardCategory || '') === v;
+       return '<button class="btn btn-sm ' + (active ? 'btn-primary' : 'btn-outline') + '" onclick="setBoardCategory(\'' + esc(v) + '\')">' +
+         esc(c) + ' ' + fmtNum(boardCatCount_(v)) + '</button>';
+     }).join('');
+     const canCompose = tab === 'free' || STATE.isMaster;
+     return '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">' +
+         '<input id="board-search" style="flex:1 1 170px;min-width:140px;" placeholder="🔍 제목·내용·작성자 검색" value="' + esc(STATE.boardQuery) + '" oninput="onBoardSearch(this.value)" />' +
+         '<button class="btn btn-outline btn-sm" title="새로고침" onclick="reloadBoard()">🔄</button>' +
+         (canCompose
+           ? '<button class="btn btn-primary btn-sm" onclick="openBoardComposer()">✏️ 새 글</button>'
+           : '<span style="font-size:11.5px;color:var(--muted);">공지 작성은 MASTER만</span>') +
+       '</div>' +
+       '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + chips + '</div>';
+   }
+
+   /** 검색어를 칠 때는 목록만 다시 그립니다 (입력 커서·포커스 유지) */
+   function onBoardSearch(value) {
+     STATE.boardQuery = String(value || '');
+     renderBoardList_();
+   }
+
+   function setBoardCategory(cat) {
+     STATE.boardCategory = String(cat || '');
+     renderActiveMenu();
+   }
+
+   function renderBoardList_() {
+     const el = document.getElementById('board-list');
+     if (!el) return;
+     el.innerHTML = boardListHtml_();
+   }
+
+   function boardFiltered_() {
+     const items = (STATE.boardData && STATE.boardData.items) || [];
+     const kind = boardKindOf_();
+     const q = String(STATE.boardQuery || '').trim().toLowerCase();
+     const cat = String(STATE.boardCategory || '');
+     const out = items.filter(function (it) {
+       if (it.구분 !== kind) return false;
+       if (cat && it.카테고리 !== cat) return false;
+       if (q) {
+         const hay = (it.제목 + ' ' + it.내용 + ' ' + it.카테고리 + ' ' + it.작성자명).toLowerCase();
+         if (hay.indexOf(q) === -1) return false;
+       }
+       return true;
+     });
+     return out.slice().sort(function (a, b) {
+       if (a.고정여부 !== b.고정여부) return a.고정여부 === 'Y' ? -1 : 1;
+       if (a.작성일시 !== b.작성일시) return String(a.작성일시) < String(b.작성일시) ? 1 : -1;
+       return Number(b.번호 || 0) - Number(a.번호 || 0);
+     });
+   }
+
+   function boardListHtml_() {
+     const tab = boardCurTab_();
+     let head = '';
+     if (STATE.boardError) {
+       head = '<div class="card" style="border-color:#fecaca;"><p style="margin:0;font-size:13px;color:var(--danger);">' + esc(STATE.boardError) + '</p></div>';
+     }
+     if (!STATE.boardData) {
+       return head + '<div class="card"><p style="margin:0;color:var(--muted);font-size:13px;">불러오는 중…</p></div>';
+     }
+     const items = boardFiltered_();
+     const composer = boardComposerHtml_();
+     if (!items.length) {
+       return head + composer +
+         '<div class="card"><div style="padding:20px 6px;text-align:center;color:var(--muted);font-size:13px;">' +
+           (STATE.boardQuery || STATE.boardCategory
+             ? '조건에 맞는 글이 없습니다.'
+             : (tab === 'free' ? '아직 올라온 글이 없습니다. ✏️ 새 글로 첫 글을 남겨 보세요.' : '공지사항이 없습니다.')) +
+         '</div></div>';
+     }
+     return head + composer + items.map(boardItemHtml_).join('');
+   }
+
+   function boardPreview_(text) {
+     const s = String(text || '').replace(/\s+/g, ' ').trim();
+     return s.length > 140 ? s.slice(0, 140) + '…' : s;
+   }
+
+   function boardItemHtml_(it) {
+     const open = Boolean(STATE.boardOpen[it.번호]);
+     const isNotice = it.구분 === '공지';
+     const canEdit = it.수정가능 !== undefined ? Boolean(it.수정가능) : STATE.isMaster;
+     const canDelete = it.삭제가능 !== undefined ? Boolean(it.삭제가능) : STATE.isMaster;
+     const canPin = Boolean(it.고정가능) && isNotice;
+
+     const no = Number(it.번호) || 0;
+     const btns = [];
+     btns.push('<button class="btn btn-outline btn-sm" onclick="toggleBoardPost(' + no + ')">' + (open ? '접기 ▲' : '펼치기 ▼') + '</button>');
+     if (canPin) btns.push('<button class="btn btn-outline btn-sm" title="상단 고정" onclick="toggleBoardPin(' + no + ')">' + (it.고정여부 === 'Y' ? '📌 해제' : '📌 고정') + '</button>');
+     if (canEdit) btns.push('<button class="btn btn-outline btn-sm" onclick="openBoardEdit(' + no + ')">✏️</button>');
+     if (canDelete) btns.push('<button class="btn btn-danger-soft btn-sm" onclick="boardDeletePost(' + no + ')">🗑️</button>');
+
+     return '<div class="card" data-board-no="' + no + '"' + (it.고정여부 === 'Y' ? ' style="border-left:3px solid var(--primary);"' : '') + '>' +
+         '<div style="display:flex;gap:8px;align-items:flex-start;justify-content:space-between;">' +
+           '<div style="flex:1 1 auto;min-width:0;">' +
+             '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">' +
+               (it.고정여부 === 'Y' ? '<span title="상단 고정">📌</span>' : '') +
+               '<span class="badge ' + (isNotice ? 'badge-blue' : 'badge-muted') + '">' + esc(it.카테고리 || (isNotice ? '일반 공지' : '일반')) + '</span>' +
+               '<strong style="font-size:14px;line-height:1.4;">' + esc(it.제목) + '</strong>' +
+             '</div>' +
+             '<div style="font-size:11.5px;color:var(--muted);">' +
+               esc(it.작성자명 || it.작성자아이디 || '-') + ' · ' + esc(String(it.작성일시 || '').slice(0, 16)) +
+               (it.수정일시 ? ' · 수정 ' + esc(String(it.수정일시).slice(0, 16)) : '') +
+             '</div>' +
+           '</div>' +
+           '<div style="display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">' + btns.join('') + '</div>' +
+         '</div>' +
+         (open
+           ? '<div style="margin-top:10px;border-top:1px dashed var(--border);padding-top:10px;white-space:pre-wrap;font-size:13px;line-height:1.65;word-break:break-word;">' + esc(it.내용) + '</div>'
+           : '<div style="margin-top:8px;font-size:12.5px;color:var(--muted);">' + esc(boardPreview_(it.내용)) + '</div>') +
+       '</div>';
+   }
+
+   function toggleBoardPost(no) {
+     const key = Number(no);
+     STATE.boardOpen[key] = !STATE.boardOpen[key];
+     renderBoardList_();
+   }
+
+   function boardComposerHtml_() {
+     const d = STATE.boardDraft;
+     if (!d) return '';
+     const kind = d.구분 === '공지' ? '공지' : '자유';
+     const cats = kind === '공지' ? ['미지급 사유', '특별 수수료율', '일반 공지'] : ['일반', '질문', '공유', '건의'];
+     const opts = cats.map(function (c) {
+       return '<option value="' + esc(c) + '"' + (c === d.카테고리 ? ' selected' : '') + '>' + esc(c) + '</option>';
+     }).join('');
+     return '<div class="card" id="board-composer" style="border-color:var(--primary);">' +
+         '<h3 class="card-title">' + (STATE.boardEditNo ? '✏️ 글 수정 (#' + fmtNum(STATE.boardEditNo) + ')' : (kind === '공지' ? '📌 공지 쓰기' : '💬 글쓰기')) + '</h3>' +
+         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">' +
+           '<select id="board-cat" style="flex:0 0 auto;min-width:130px;">' + opts + '</select>' +
+           '<input id="board-title" style="flex:1 1 200px;min-width:150px;" maxlength="200" placeholder="제목" value="' + esc(d.제목) + '" />' +
+         '</div>' +
+         '<textarea id="board-content" rows="12" style="width:100%;font-size:13px;line-height:1.6;" placeholder="내용을 입력하세요">' + esc(d.내용) + '</textarea>' +
+         '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px;">' +
+           '<button class="btn btn-outline btn-sm" onclick="cancelBoardComposer()">취소</button>' +
+           '<button class="btn btn-primary btn-sm" onclick="submitBoardPost()">💾 저장</button>' +
+         '</div>' +
+       '</div>';
+   }
+
+   function openBoardComposer(kind) {
+     const k = kind === '공지' || kind === '자유' ? kind : boardKindOf_();
+     if (k === '공지' && !STATE.isMaster) {
+       showToast('공지사항은 MASTER만 쓸 수 있습니다. 자유 게시판에 남겨 주세요.');
+       return;
+     }
+     STATE.boardDraft = { 구분: k, 카테고리: (k === '공지' ? '일반 공지' : '일반'), 제목: '', 내용: '' };
+     STATE.boardEditNo = 0;
+     renderBoardList_();
+     const el = document.getElementById('board-title');
+     if (el && el.focus) el.focus();
+   }
+
+   function openBoardEdit(no) {
+     const it = boardFindItem_(no);
+     if (!it) return;
+     if (it.수정가능 === false) {
+       showToast(it.구분 === '공지' ? '공지사항은 MASTER만 수정할 수 있습니다.' : '내가 쓴 글만 수정할 수 있습니다.');
+       return;
+     }
+     STATE.boardDraft = { 구분: it.구분, 카테고리: it.카테고리, 제목: it.제목, 내용: it.내용 };
+     STATE.boardEditNo = Number(it.번호);
+     STATE.boardOpen[STATE.boardEditNo] = true;
+     renderBoardList_();
+     const el = document.getElementById('board-title');
+     if (el && el.focus) el.focus();
+   }
+
+   function cancelBoardComposer() {
+     STATE.boardDraft = null;
+     STATE.boardEditNo = 0;
+     renderBoardList_();
+   }
+
+   async function submitBoardPost() {
+     const d = STATE.boardDraft;
+     if (!d || STATE.boardSaving) return;
+     const titleEl = document.getElementById('board-title');
+     const contentEl = document.getElementById('board-content');
+     const catEl = document.getElementById('board-cat');
+     const title = (titleEl ? titleEl.value : d.제목 || '').trim();
+     const content = contentEl ? contentEl.value : (d.내용 || '');
+     const category = catEl ? catEl.value : d.카테고리;
+     if (!title) { showToast('제목을 입력해 주세요.'); if (titleEl) titleEl.focus(); return; }
+     if (!content.trim()) { showToast('내용을 입력해 주세요.'); if (contentEl) contentEl.focus(); return; }
+     if (content.length > BOARD_CONTENT_MAX) { showToast('내용이 너무 깁니다. 45,000자까지 저장됩니다.'); return; }
+
+     STATE.boardSaving = true;
+     try {
+       if (STATE.boardEditNo) {
+         await runServer('boardUpdate', [{ 번호: STATE.boardEditNo, 제목: title, 내용: content, 카테고리: category }], { silent: true });
+         showToast('수정했습니다.');
+       } else {
+         await runServer('boardCreate', [{ 구분: d.구분, 제목: title, 내용: content, 카테고리: category }], { silent: true });
+         showToast('올렸습니다.');
+       }
+       STATE.boardDraft = null;
+       STATE.boardEditNo = 0;
+       STATE.boardOpen = {};
+       await loadBoardModule();
+     } catch (e) {
+       showToast('저장하지 못했습니다: ' + String((e && e.message) || e));
+     } finally {
+       STATE.boardSaving = false;
+     }
+   }
+
+   async function toggleBoardPin(no) {
+     const it = boardFindItem_(no);
+     if (!it) return;
+     const pin = it.고정여부 === 'Y' ? 'N' : 'Y';
+     try {
+       await runServer('boardUpdate', [{ 번호: Number(no), 고정여부: pin }], { silent: true });
+       showToast(pin === 'Y' ? '상단에 고정했습니다.' : '고정을 풀었습니다.');
+       await loadBoardModule();
+     } catch (e) {
+       showToast('고정을 바꾸지 못했습니다: ' + String((e && e.message) || e));
+     }
+   }
+
+   async function boardDeletePost(no) {
+     const it = boardFindItem_(no);
+     if (!it) return;
+     if (!window.confirm('이 글을 삭제할까요? 되돌릴 수 없습니다.\n\n#' + Number(no) + ' ' + (it.제목 || ''))) return;
+     try {
+       await runServer('boardDelete', [{ 번호: Number(no) }], { silent: true });
+       showToast('삭제했습니다.');
+       delete STATE.boardOpen[Number(no)];
+       if (STATE.boardEditNo === Number(no)) { STATE.boardDraft = null; STATE.boardEditNo = 0; }
+       await loadBoardModule();
+     } catch (e) {
+       showToast('삭제하지 못했습니다: ' + String((e && e.message) || e));
+     }
    }
 
    // =========================================================================

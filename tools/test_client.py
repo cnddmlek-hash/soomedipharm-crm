@@ -35,7 +35,7 @@ def check(cond, label):
 
 def extract_fn(js, name):
     """`   function name(...) { ... }` 블록을 중괄호 깊이로 잘라 냅니다 (QuickJS 실행용)."""
-    m = re.search(r'\n   function %s\(' % re.escape(name), js)
+    m = re.search(r'\n   (?:async )?function %s\(' % re.escape(name), js)
     if not m:
         return None
     start = m.start() + 1
@@ -70,10 +70,10 @@ def main():
     except ImportError:
         print('(esprima 없음 — 문법 검사 생략: pip install esprima)')
 
-    # 2) v1.13 요소
-    check("const APP_VERSION = 'v1.13'" in js, 'APP_VERSION 이 v1.13 이 아닙니다')
-    check('<title>수메디팜 미니 CRM v1.13</title>' in html, '브라우저 탭 제목의 버전이 v1.13 이 아닙니다')
-    check('ver-chip">v1.13' in html and 'ver-chip dark">v1.13' in html, '로그인 화면·상단 바의 버전 칩이 v1.13 이 아닙니다')
+    # 2) v1.14 요소
+    check("const APP_VERSION = 'v1.14'" in js, 'APP_VERSION 이 v1.14 가 아닙니다')
+    check('<title>수메디팜 미니 CRM v1.14</title>' in html, '브라우저 탭 제목의 버전이 v1.14 가 아닙니다')
+    check('ver-chip">v1.14' in html and 'ver-chip dark">v1.14' in html, '로그인 화면·상단 바의 버전 칩이 v1.14 가 아닙니다')
     check('id: \'drug\'' in js and 'renderDrugPage' in js, '약 검색 메뉴가 없습니다')
     check("id: 'guide'" in js and 'renderGuidePage' in js, '처방 셋팅 메뉴가 없습니다')
     # v1.11 — 🧭 처방 셋팅은 경구제 전용 · 💉 주사제 셋팅은 💉 주사제 주문 메뉴 안 탭
@@ -115,9 +115,10 @@ def main():
 
     # 2-c) v1.7 — 비거래처 사전조회(심평원 HIRA)
     check('renderHiraPage' in js and '비거래처 심평원(HIRA) 사전조회' in js, '비거래처 사전조회 화면이 없습니다')
-    # 메뉴 순서: 거래처 등록/관리 → 거래처 상세정보 → 월별 실적 → 처방 셋팅 → 처방전 입력 → 주사제 주문 → 수금 등록 → 약 검색 → 주문 → 원장 → 설정
+    # 메뉴 순서 (v1.14): 공지사항·게시판 → 거래처 등록/관리 → 거래처 상세정보 → 월별 실적 → 처방 셋팅 → 처방전 입력
+    #   → 주사제 주문 → 수금 등록 → 약 검색 → 주문 → 원장 → 설정
     order_ids = re.findall(r"\n       id: '([a-z]+)',", js)
-    expect_order = ['clients', 'clientinfo', 'perf', 'guide', 'prescription', 'order', 'collection', 'drug', 'turnover', 'ledger', 'docs']
+    expect_order = ['board', 'clients', 'clientinfo', 'perf', 'guide', 'prescription', 'order', 'collection', 'drug', 'turnover', 'ledger', 'docs']
     check(order_ids[:len(expect_order)] == expect_order, '사이드바 메뉴 순서가 다릅니다: %s' % order_ids)
     check(not re.search(r"label: '\s*\d+\.", js), '메뉴 이름 앞에 숫자가 붙었습니다')
     check('loadHiraModule' in js and 'hiraBase' in js, '사전조회 초기 로딩이 없습니다')
@@ -169,7 +170,7 @@ def main():
         used = set(re.findall(r"runServer\('([A-Za-z_$][\w$]*)'", js))
         missing = sorted(u for u in used if u not in api)
         check(not missing, 'Code.gs 에 없는 서버 함수 호출: %s' % ', '.join(missing))
-        check("const APP_VERSION = 'v1.8'" in code, 'Code.gs 버전이 v1.8 이 아닙니다')
+        check("const APP_VERSION = 'v1.14'" in code, 'Code.gs 버전이 v1.14 가 아닙니다')
         check(re.search(r'getHiraPrevisitBriefing\s*:\s*getHiraPrevisitBriefing', code) is not None,
               'Code.gs apiFunctions_ 에 getHiraPrevisitBriefing 이 없습니다')
         check(re.search(r'checkHiraApi\s*:\s*checkHiraApi', code) is not None,
@@ -849,6 +850,8 @@ def main():
         ctx = quickjs.Context()
         ctx.eval('''
           var STATE = { orderTab: 'entry', orderClientCode: '', injPay: '', injMode: 'maxrate',
+                        guideIngQ: '', guideIngKey: '', guideIngData: null, guideIngOpen: {},
+                        guideIngLoading: false, guidePick: {},
                         injLimit: 20, injCat: '', injQuery: '', injProtoQuery: '', injData: null,
                         injProto: null, injSelected: {}, clients: [], guideDept: '', coverage: null };
           var document = { getElementById: function () { return null; } };
@@ -863,7 +866,9 @@ def main():
         ''')
         names = ['orderTabBar_', 'orderInjectStripHtml_', 'injCautionsHtml_', 'renderInjectPanelHtml_',
                  'renderInjectBody', 'renderInjectRecommend', 'renderInjectProtocols', 'renderInjectCards',
-                 'renderOrderPage', 'renderGuidePage', 'renderGuideOralHtml_', 'guideHospitalBarHtml_']
+                 'renderOrderPage', 'renderGuidePage', 'renderGuideOralHtml_', 'guideHospitalBarHtml_',
+                 'guideIngSearchCardHtml_', 'renderGuideIngResult', 'guideIngResultHtml_',
+                 'guideIngGroupHtml_', 'guideIngGroupKey_']
         blocks = [extract_fn(js, n) for n in names]
         missing = [n for n, b in zip(names, blocks) if b is None]
         check(not missing, '탭 렌더 함수를 추출하지 못했습니다: %s' % missing)
@@ -1324,6 +1329,414 @@ def main():
             check('🛒 선택 항목 매출 등록' in ibody, '주사제 셋팅에 선택 항목 매출 등록 버튼이 없습니다')
     except ImportError:
         print('(quickjs 없음 — v1.12 실행 검사 생략: pip install quickjs)')
+
+    # 13) v1.14 — 📢 공지사항 · 게시판 (가장 첫 번째 메뉴 · 첫 진입 화면)
+    check("id: 'board'" in js and 'renderBoardPage' in js and 'loadBoardModule' in js,
+          '📢 공지사항 · 게시판 메뉴가 없습니다')
+    check("label: '공지사항 · 게시판'" in js and "shortLabel: '공지'" in js,
+          '메뉴 이름이 공지사항 · 게시판이 아닙니다')
+    check("activeMenu: 'board'" in js, '로그인 후 첫 진입 화면이 공지사항이 아닙니다')
+    check("STATE.activeMenu = 'board';" in js, '로그아웃 후 기본 메뉴가 공지사항이 아닙니다')
+    check("icon: '📢'" in js, '공지사항 메뉴 아이콘이 없습니다')
+    for need in ['boardTabBar_', 'switchBoardTab', 'boardToolbarHtml_', 'onBoardSearch', 'setBoardCategory',
+                 'boardFiltered_', 'boardListHtml_', 'boardItemHtml_', 'boardComposerHtml_',
+                 'openBoardComposer', 'openBoardEdit', 'submitBoardPost', 'cancelBoardComposer',
+                 'toggleBoardPin', 'boardDeletePost', 'toggleBoardPost', 'boardPreview_']:
+        check(need in js, '공지사항·게시판에 %s 가 없습니다' % need)
+    check('📌 공지사항' in js and '💬 자유 게시판' in js, '공지사항·자유 게시판 두 탭이 없습니다')
+    check("'미지급 사유'" in js and "'특별 수수료율'" in js and "'일반 공지'" in js,
+          '공지사항 카테고리(미지급 사유·특별 수수료율·일반 공지)가 없습니다')
+    check("BOARD_FREE_CATS = ['전체', '일반', '질문', '공유', '건의']" in js,
+          '자유 게시판 말머리가 없습니다')
+    check('board-search' in js and 'oninput="onBoardSearch(this.value)"' in js,
+          '게시판 검색창이 없습니다')
+    check('제목·내용·작성자 검색' in js, '게시판 검색 안내가 없습니다')
+    check("runServer('boardList'" in js and "runServer('boardCreate'" in js and
+          "runServer('boardUpdate'" in js and "runServer('boardDelete'" in js,
+          '게시판 서버 호출이 빠졌습니다')
+    check('공지 작성은 MASTER만' in js, 'STAFF 에게 공지 작성 불가 안내가 없습니다')
+    check('boardDraft' in js and 'boardEditNo' in js, '게시판 작성/수정 상태가 없습니다')
+    check('data-board-no' in js, '게시판 글 카드 식별자가 없습니다')
+    # 메뉴가 실제로 가장 첫 번째인지
+    first_menu = re.search(r"const APP_MENUS = \[\s*\{\s*\n\s*id: '([a-z]+)'", js)
+    check(bool(first_menu) and first_menu.group(1) == 'board', 'APP_MENUS 첫 메뉴가 board 가 아닙니다')
+
+    # 13-a) 화면을 실제로 그려 보기 (MASTER / STAFF · 공지 / 자유)
+    try:
+        import quickjs
+
+        def q13(v):
+            return v.decode() if isinstance(v, bytes) else v
+
+        names13 = ['boardCurTab_', 'boardKindOf_', 'boardFindItem_', 'boardTabBar_', 'boardCatCount_',
+                   'boardToolbarHtml_', 'boardFiltered_', 'boardPreview_', 'boardItemHtml_',
+                   'boardListHtml_', 'boardComposerHtml_', 'openBoardComposer', 'setBoardCategory',
+                   'toggleBoardPost', 'cancelBoardComposer', 'onBoardSearch', 'renderBoardList_']
+        blocks13 = [extract_fn(js, n) for n in names13]
+        missing13 = [n for n, b in zip(names13, blocks13) if b is None]
+        check(not missing13, '게시판 렌더 함수를 추출하지 못했습니다: %s' % missing13)
+        if not missing13:
+            NOTICE_PINNED = {
+                '번호': 3, '구분': '공지', '카테고리': '미지급 사유',
+                '제목': '이엘파마 소액처 기준', '내용': '국제약품 소액처 정산 가능\n라온파마 직전 3개월',
+                '작성자아이디': 'master', '작성자명': '마스터', '고정여부': 'Y',
+                '작성일시': '2026-11-28 09:10:00', '수정일시': '',
+                '수정가능': True, '삭제가능': True, '고정가능': True,
+            }
+            NOTICE_NEW = {
+                '번호': 4, '구분': '공지', '카테고리': '특별 수수료율',
+                '제목': '<b>2026.12 EDI</b> 캠페인', '내용': '371품목 추가 수수료',
+                '작성자아이디': 'master', '작성자명': '마스터', '고정여부': 'N',
+                '작성일시': '2026-11-28 09:07:00', '수정일시': '2026-11-28 09:30:00',
+                '수정가능': True, '삭제가능': True, '고정가능': True,
+            }
+            FREE_MINE = {
+                '번호': 5, '구분': '자유', '카테고리': '질문', '제목': '수아의원 단가 문의',
+                '내용': '이번 달 단가 확인 부탁드립니다.', '작성자아이디': 'choi', '작성자명': '최충의',
+                '고정여부': 'N', '작성일시': '2026-11-28 10:00:00', '수정일시': '',
+                '수정가능': True, '삭제가능': True, '고정가능': False,
+            }
+            FREE_OTHER = {
+                '번호': 2, '구분': '자유', '카테고리': '공유', '제목': '타사 단가표 공유',
+                '내용': '받은 자료 올려 둡니다.', '작성자아이디': 'gii4', '작성자명': '정아름',
+                '고정여부': 'N', '작성일시': '2026-11-27 15:00:00', '수정일시': '',
+                '수정가능': False, '삭제가능': False, '고정가능': False,
+            }
+            def items_for(is_master):
+                out = []
+                for it in [FREE_OTHER, FREE_MINE, NOTICE_NEW, NOTICE_PINNED]:
+                    r = dict(it)
+                    if not is_master:
+                        if r['구분'] == '공지':
+                            r.update({'수정가능': False, '삭제가능': False, '고정가능': False})
+                        elif r['작성자아이디'] != 'choi':
+                            r.update({'수정가능': False, '삭제가능': False, '고정가능': False})
+                    out.append(r)
+                return out
+
+            def build_ctx(is_master, items):
+                c = quickjs.Context()
+                c.eval("""
+                var STATE = {
+                  boardTab: 'notice', boardCategory: '', boardQuery: '', boardOpen: {},
+                  boardDraft: null, boardEditNo: 0, boardSaving: false, boardError: '',
+                  isMaster: %s, user: { 아이디: 'choi', 담당자명: '최충의' },
+                  boardData: { items: %s, total: 4, counts: { '공지': 2, '자유': 2 },
+                               categories: { '공지': [{ 카테고리: '미지급 사유', 개수: 1 },
+                                                      { 카테고리: '특별 수수료율', 개수: 1 }],
+                                             '자유': [{ 카테고리: '질문', 개수: 1 }, { 카테고리: '공유', 개수: 1 }] },
+                               isMaster: %s, me: { 아이디: 'choi', 담당자명: '최충의' } }
+                };
+                var __toasts = [], __els = {};
+                function showToast(m) { __toasts.push(String(m)); }
+                function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+                function fmtNum(n) { return String(Math.round(Number(n || 0))); }
+                function renderActiveMenu() { __toasts.push('RENDER'); }
+                var document = { getElementById: function (id) {
+                  if (!__els[id]) __els[id] = { _h: '', value: '', focus: function () {},
+                    set innerHTML(v) { this._h = v; }, get innerHTML() { return this._h; } };
+                  return __els[id];
+                } };
+                """ % ('true' if is_master else 'false', json.dumps(items, ensure_ascii=False),
+                       'true' if is_master else 'false'))
+                c.eval("const BOARD_NOTICE_CATS = ['전체', '미지급 사유', '특별 수수료율', '일반 공지'];"
+                       " const BOARD_FREE_CATS = ['전체', '일반', '질문', '공유', '건의'];"
+                       " const BOARD_CONTENT_MAX = 45000;")
+                for b in blocks13:
+                    c.eval(b)
+                return c
+
+            # (A) MASTER — 공지 탭: 고정 글이 먼저, 카테고리 배지·작성자·수정일시·버튼
+            cm = build_ctx(True, items_for(True))
+            html_m = q13(cm.eval('boardListHtml_()'))
+            check(html_m.count('data-board-no') == 2, '공지 탭에 공지 2건만 그려지지 않았습니다')
+            check(html_m.index('data-board-no="3"') < html_m.index('data-board-no="4"'),
+                  '고정 글이 맨 위가 아닙니다')
+            for label in ['📌', '미지급 사유', '이엘파마 소액처 기준', '마스터', '2026-11-28 09:10',
+                          '펼치기 ▼', '📌 해제', '✏️', '🗑️']:
+                check(label in html_m, 'MASTER 공지 카드에 %s 가 없습니다' % label)
+            check('수정 2026-11-28 09:30' in html_m, '수정일시가 표시되지 않습니다')
+            check('&lt;b&gt;2026.12 EDI&lt;/b&gt;' in html_m, '제목이 이스케이프되지 않았습니다(XSS)')
+            check('white-space:pre-wrap' not in html_m, '접힌 글의 본문 상자가 그대로 그려집니다')
+            check('371품목 추가 수수료' in html_m, '미리보기 본문이 없습니다')
+
+            # 펼치기 — 본문 줄바꿈 유지
+            cm.eval('toggleBoardPost(3);')
+            open_html = q13(cm.eval('boardListHtml_()'))
+            check('라온파마 직전 3개월' in open_html, '펼쳐도 본문이 나오지 않습니다')
+            check('white-space:pre-wrap' in open_html, '본문 줄바꿈 처리가 없습니다')
+            check('접기 ▲' in open_html, '펼친 글의 접기 버튼이 없습니다')
+
+            # 탭 바·필터 칩·툴바 (MASTER)
+            tabbar = q13(cm.eval('boardTabBar_()'))
+            check('📌 공지사항 (2)' in tabbar and '💬 자유 게시판 (2)' in tabbar,
+                  '탭 바에 건수가 없습니다: %s' % tabbar)
+            check('subtab active" onclick="switchBoardTab(\'notice\')' in tabbar,
+                  '공지사항 탭이 기본 선택이 아닙니다')
+            bar_m = q13(cm.eval('boardToolbarHtml_()'))
+            for label in ['🔍 제목·내용·작성자 검색', '✏️ 새 글', '미지급 사유 1', '특별 수수료율 1',
+                          '전체 2', '일반 공지 0']:
+                check(label in bar_m, 'MASTER 공지 툴바에 %s 가 없습니다' % label)
+            check('onclick="setBoardCategory(\'미지급 사유\')"' in bar_m, '카테고리 필터 버튼이 없습니다')
+
+            # 검색·카테고리 거르기
+            cm.eval("STATE.boardQuery = 'EDI';")
+            check(q13(cm.eval('boardListHtml_()')).count('data-board-no') == 1, '검색이 동작하지 않습니다')
+            cm.eval("STATE.boardQuery = ''; STATE.boardCategory = '미지급 사유';")
+            check(q13(cm.eval('boardListHtml_()')).count('data-board-no') == 1, '카테고리 필터가 동작하지 않습니다')
+            cm.eval("STATE.boardCategory = '일반 공지';")
+            no_hit = q13(cm.eval('boardListHtml_()'))
+            check('조건에 맞는 글이 없습니다' in no_hit, '조건에 맞는 글이 없을 때 안내가 없습니다')
+            cm.eval("STATE.boardCategory = '';")
+
+            # (B) MASTER 글쓰기 — 공지 카테고리 선택지
+            cm.eval('openBoardComposer();')
+            composer = q13(cm.eval('boardListHtml_()'))
+            check('📌 공지 쓰기' in composer, 'MASTER 공지 작성 폼이 없습니다')
+            for label in ['board-cat', 'board-title', 'board-content', 'submitBoardPost()',
+                          'cancelBoardComposer()', '미지급 사유', '특별 수수료율', '일반 공지']:
+                check(label in composer, '작성 폼에 %s 가 없습니다' % label)
+            check('💾 저장' in composer, '저장 버튼이 없습니다')
+            cm.eval('cancelBoardComposer();')
+            check(q13(cm.eval('boardListHtml_()')).count('board-composer') == 0, '취소해도 작성 폼이 남습니다')
+
+            # (C) STAFF — 공지 탭: 작성·수정·삭제·고정 버튼 없음
+            cs = build_ctx(False, items_for(False))
+            html_s = q13(cs.eval('boardListHtml_()'))
+            check('🗑️' not in html_s and '📌 해제' not in html_s, 'STAFF 공지 카드에 관리 버튼이 보입니다')
+            check('✏️' not in html_s, 'STAFF 공지 카드에 수정 버튼이 보입니다')
+            bar_s = q13(cs.eval('boardToolbarHtml_()'))
+            check('공지 작성은 MASTER만' in bar_s and '✏️ 새 글' not in bar_s,
+                  'STAFF 에게 공지 작성 버튼이 보입니다')
+            cs.eval('openBoardComposer();')
+            check(q13(cs.eval('__toasts[__toasts.length - 1]')).find('MASTER') != -1,
+                  'STAFF 가 공지를 쓰려 하면 안내가 없습니다')
+            check(cs.eval('STATE.boardDraft === null'), 'STAFF 인데 공지 작성 폼이 열렸습니다')
+
+            # STAFF — 자유 게시판: 내 글만 수정·삭제, 글쓰기 가능
+            cs.eval("STATE.boardTab = 'free';")
+            free_html = q13(cs.eval('boardListHtml_()'))
+            check(free_html.count('data-board-no') == 2, '자유 게시판 글이 그려지지 않았습니다')
+            card_mine = free_html.split('data-board-no="5"')[1].split('data-board-no=')[0]
+            check('✏️' in card_mine and '🗑️' in card_mine, '내 자유 글에 수정·삭제 버튼이 없습니다')
+            card_other = free_html.split('data-board-no="2"')[1]
+            check('✏️' not in card_other and '🗑️' not in card_other, '남의 자유 글에 수정·삭제 버튼이 보입니다')
+            bar_free = q13(cs.eval('boardToolbarHtml_()'))
+            check('✏️ 새 글' in bar_free, '자유 게시판에 글쓰기 버튼이 없습니다')
+            check('질문 1' in bar_free and '공유 1' in bar_free, '자유 게시판 말머리 칩이 없습니다')
+            cs.eval('openBoardComposer();')
+            free_form = q13(cs.eval('boardListHtml_()'))
+            check('💬 글쓰기' in free_form, '자유 게시판 글쓰기 폼이 없습니다')
+            check('value="일반" selected' in free_form or 'selected' in free_form,
+                  '자유 게시판 기본 말머리가 선택되지 않습니다')
+
+            # (D) 서버 오류(재배포 전) 안내
+            c = build_ctx(True, items_for(True))
+            c.eval("STATE.boardError = 'SERVER_HINT'; STATE.boardData = null;")
+            err_html = q13(c.eval('boardListHtml_()'))
+            check('SERVER_HINT' in err_html and '불러오는 중' in err_html,
+                  '게시판 서버 오류 안내가 없습니다')
+    except ImportError:
+        print('(quickjs 없음 — 공지사항·게시판 실행 검사 생략: pip install quickjs)')
+
+    # 14) v1.14 — 처방 셋팅 성분 검색 (여러 제약사 품목 비교·선택)
+    check('guide-ing-q' in js and 'onGuideIngQuery' in js, '처방 셋팅에 성분 검색창이 없습니다')
+    check('guideIngSearchCardHtml_' in js and '🔎 성분 · 제약사 검색' in js,
+          '처방 셋팅 성분 검색 카드가 없습니다')
+    check("runServer('searchGuideIngredients'" in js, '성분 검색 서버 호출이 없습니다')
+    for need in ['loadGuideIngSearch', 'guideIngResultHtml_', 'guideIngGroupHtml_',
+                 'toggleGuideIngGroup', 'guideIngSelectAll', 'guideOpenIngredient',
+                 'clearGuideIngSearch', 'renderGuideIngResult']:
+        check(need in js, '성분 검색에 %s 가 없습니다' % need)
+    check("+' 외 ' + (it.경구제수 - 3) + ' 보기" in js or "외 ' + (it.경구제수 - 3) + ' 보기" in js,
+          '성분 줄의 [외 N 보기] 버튼이 없습니다')
+    check('guideOpenIngredient' in js and '성분키: key' in js, '성분키로 펼치는 요청이 없습니다')
+    check('data-guide-pick' in js and 'guideToggleProduct' in js, '검색 품목 체크가 선택 담기에 연결되지 않습니다')
+    check('guide-ing-bulk-add' in js, '검색 결과에서 바로 담는 버튼이 없습니다')
+    check('최고 ' in js and '최저 ' in js, '성분별 수수료율·약가 요약이 없습니다')
+    if os.path.exists(CODEGS):
+        check(re.search(r'searchGuideIngredients\s*:\s*searchGuideIngredients',
+                        open(CODEGS, encoding='utf-8').read()) is not None,
+              'Code.gs apiFunctions_ 에 searchGuideIngredients 가 없습니다')
+
+    # 14-a) 성분 검색 화면·선택 담기 실행 검사
+    try:
+        import quickjs
+
+        def q14(v):
+            return v.decode() if isinstance(v, bytes) else v
+
+        names14 = ['guideIngGroupKey_', 'guideIngGroupHtml_', 'guideIngResultHtml_', 'renderGuideIngResult',
+                   'toggleGuideIngGroup', 'guideIngSelectAll', 'onGuideIngQuery', 'clearGuideIngSearch',
+                   'guideOpenIngredient', 'loadGuideIngSearch', 'guideIngSearchCardHtml_',
+                   'rxCodeNorm_', 'rxCodeKey_', 'guideCacheProduct_', 'guideFindProduct_',
+                   'guidePickCodes_', 'guidePickCount_', 'guideBulkAddLabel_', 'guidePendingSet_',
+                   'guidePendingCount_', 'guideSendBtnLabel_', 'guideToggleProduct', 'guideAddSelected',
+                   'guideSyncPickUI_', 'guideSyncPendingUI_', 'guideAddItem', 'guidePrintRows_',
+                   'printItemRows_', 'makerOf_', 'makerFromName_', 'guideCodesOfIngredient_']
+        blocks14 = [extract_fn(js, n) for n in names14]
+        missing14 = [n for n, b in zip(names14, blocks14) if b is None]
+        check(not missing14, '성분 검색 함수를 추출하지 못했습니다: %s' % missing14)
+        if not missing14:
+            def drain(c, limit=40):
+                for _ in range(limit):
+                    try:
+                        if not c.execute_pending_job():
+                            break
+                    except Exception:  # noqa: BLE001
+                        break
+
+            def new_ctx():
+                c = quickjs.Context()
+                c.eval("""
+                var STATE = {
+                  guideIngQ: '', guideIngKey: '', guideIngData: null, guideIngOpen: {},
+                  guideIngLoading: false, guidePick: {}, guidePending: [], rxGuideCodes: [],
+                  rxClient: '', guideProductCache: {}, guideData: null, guideRec: null,
+                  guideDept: '', guideSelected: {}, products: [], clients: [],
+                  guideMaxMakers: 3, guideMode: 'maxrate'
+                };
+                var __toasts = [], __els = {}, __calls = [];
+                function showToast(m) { __toasts.push(String(m)); }
+                function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+                function fmtNum(n) { return String(Math.round(Number(n || 0))).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ','); }
+                function findClient(code) { return code ? { 거래처코드: code, 거래처명: '푸른정의원' } : null; }
+                function renderActiveMenu() {}
+                function switchMenu() {}
+                function v14ErrorText_(e) { return String((e && e.message) || e); }
+                var document = { querySelectorAll: function () { return []; },
+                  getElementById: function (id) {
+                    if (!__els[id]) __els[id] = { _h: '', value: '', focus: function () {},
+                      scrollIntoView: function () {},
+                      set innerHTML(v) { this._h = v; }, get innerHTML() { return this._h; } };
+                    return __els[id];
+                  } };
+                function runServer(fn, args) { __calls.push({ fn: fn, args: args }); return __RESULT[fn]; }
+                var __RESULT = {};
+                """)
+                c.eval('const SELF_MAKER_LABEL = "자사(페이서)";')
+                for b in blocks14:
+                    c.eval(b)
+                return c
+
+            ATOR = {
+                '성분키': 'atorvastatin', '성분명': '아토르바스타틴', '분류': '고지혈증치료제',
+                '품목수': 3, '제약사수': 3, '최고수수료율': 57, '최저약가': 345, '잘림': False,
+                'items': [
+                    {'표': '경구', '보험코드': '621804250', '품목명': '아토브정10/10mg', '규격': '10정',
+                     '제약사': '한국파비스제약', '약가': 1254, '수수료율': 57, '급여구분': '급여', '성분': '아토르바스타틴'},
+                    {'표': '경구', '보험코드': '640902490', '품목명': '아토타틴정10mg', '규격': '10정',
+                     '제약사': '(주)일화', '약가': 1971, '수수료율': 34, '급여구분': '급여', '성분': '아토르바스타틴'},
+                    {'표': '경구', '보험코드': '628800340', '품목명': '휴스타정10mg', '규격': '10정',
+                     '제약사': '휴비스트제약', '약가': 345, '수수료율': 42, '급여구분': '급여', '성분': '아토르바스타틴'},
+                ],
+            }
+            ROSU = {
+                '성분키': 'rosuvastatin', '성분명': '로수바스타틴', '분류': '고지혈증치료제',
+                '품목수': 1, '제약사수': 1, '최고수수료율': 40, '최저약가': 500, '잘림': False,
+                'items': [
+                    {'표': '경구', '보험코드': '641601230', '품목명': '로수정10mg', '규격': '10정',
+                     '제약사': '한화제약㈜', '약가': 500, '수수료율': 40, '급여구분': '급여', '성분': '로수바스타틴'},
+                ],
+            }
+
+            # (A) 성분 하나 = 여러 제약사 품목 표
+            c = new_ctx()
+            c.eval('STATE.guideIngData = %s; STATE.guideIngOpen = { atorvastatin: true, rosuvastatin: false };'
+                   % json.dumps({'q': '아토르', 'total성분': 2, 'total품목': 4, 'shown성분': 2,
+                                 'groups': [ATOR, ROSU]}, ensure_ascii=False))
+            html = q14(c.eval('guideIngResultHtml_()'))
+            check('성분 2개 · 품목 4개' in html, '성분·품목 합계가 없습니다: %s' % html[:200])
+            check('💊 아토르바스타틴' in html and '제약사 3곳 · 3품목' in html,
+                  '성분 헤더(제약사 수·품목 수)가 없습니다')
+            check('최고 57%' in html and '최저 345원' in html, '성분별 요약(최고 요율·최저 약가)이 없습니다')
+            for label in ['한국파비스제약', '(주)일화', '휴비스트제약', '아토브정10/10mg', '621804250',
+                          '1,254원', '57%', '+ 담기', 'data-guide-pick']:
+                check(label in html, '성분 표에 %s 가 없습니다' % label)
+            check(html.count('data-guide-pick') == 3, '펼친 성분의 품목만 그려지지 않았습니다')
+            check('로수정10mg' not in html, '접힌 성분의 품목이 그려졌습니다')
+            check('외 ' in js, '외 N 표기가 없습니다')
+
+            # (B) 접기/펼치기
+            c.eval("toggleGuideIngGroup('atorvastatin');")
+            folded = q14(c.eval('__els["guide-ing-result"].innerHTML'))
+            check('아토브정10/10mg' not in folded and '펼치기 ▼' in folded, '성분 접기가 동작하지 않습니다')
+            c.eval("toggleGuideIngGroup('atorvastatin');")
+            check('아토브정10/10mg' in q14(c.eval('__els["guide-ing-result"].innerHTML')),
+                  '다시 펼치기가 동작하지 않습니다')
+
+            # (C) 체크 → 선택 담기 → 담은 목록·처방전 유지목록
+            c.eval("guideToggleProduct('621804250', true);")
+            check(int(c.eval('guidePickCount_()')) == 1, '품목 체크가 선택 담기에 반영되지 않습니다')
+            check('(1)' in q14(c.eval('guideBulkAddLabel_()')), '담기 버튼 개수가 없습니다')
+            c.eval('guideIngSelectAll(true);')
+            check(int(c.eval('guidePickCount_()')) == 4, '결과 전체 체크가 동작하지 않습니다')
+            c.eval("STATE.rxClient = 'S001'; guideAddSelected();")
+            check(int(c.eval('STATE.guidePending.length')) == 4, '선택 항목이 담기지 않았습니다')
+            check(int(c.eval('STATE.rxGuideCodes.length')) == 4, '처방전 유지목록에 들어가지 않았습니다')
+            toast = q14(c.eval('__toasts[__toasts.length - 1]'))
+            check('4개 품목을 담았습니다' in toast, '담기 안내가 없습니다: %s' % toast)
+            check('푸른정의원' in toast, '담을 병원 안내가 없습니다')
+            c.eval('guideIngSelectAll(false);')
+            check(int(c.eval('guidePickCount_()')) == 0, '체크 해제가 동작하지 않습니다')
+
+            # (D) 검색 결과에서 고른 품목이 원장님 안내용 출력 대상에 들어간다
+            c.eval("STATE.guideIngData.groups.forEach(function (g) { (g.items || []).forEach(guideCacheProduct_); });")
+            c.eval("guideToggleProduct('640902490', true);")
+            rows = json.loads(q14(c.eval('JSON.stringify(guidePrintRows_())')))
+            check(len(rows) == 1 and rows[0]['보험코드'] == '640902490',
+                  '검색에서 고른 품목이 출력 대상이 아닙니다: %s' % rows)
+            check(rows[0]['제약사'] == '(주)일화', '출력물 제약사가 다릅니다: %s' % rows[0]['제약사'])
+            check(rows[0]['성분'] == '아토르바스타틴', '출력물 성분이 다릅니다: %s' % rows[0]['성분'])
+
+            # (E) 검색어 입력 → 서버 검색 호출 (입력란 값은 그대로 유지)
+            c2 = new_ctx()
+            c2.eval("__RESULT['searchGuideIngredients'] = %s;"
+                    % json.dumps({'q': '아토르', '성분키': '', 'total성분': 1, 'total품목': 3,
+                                  'shown성분': 1, 'groups': [ATOR]}, ensure_ascii=False))
+            c2.eval("STATE.guideIngQ = '아토르'; loadGuideIngSearch();")
+            drain(c2)
+            calls = json.loads(q14(c2.eval('JSON.stringify(__calls)')))
+            check(len(calls) == 1 and calls[0]['fn'] == 'searchGuideIngredients',
+                  '성분 검색 서버 호출이 없습니다: %s' % calls)
+            check(calls[0]['args'][0]['q'] == '아토르' and calls[0]['args'][0]['성분키'] == '',
+                  '검색어가 서버로 전달되지 않았습니다: %s' % calls[0]['args'][0])
+            check(int(c2.eval('STATE.guideIngData.total성분')) == 1, '검색 결과가 저장되지 않았습니다')
+            check(int(c2.eval('Object.keys(STATE.guideProductCache).length')) == 3,
+                  '검색 품목이 캐시되지 않았습니다')
+            check('로수' not in q14(c2.eval('STATE.guideIngQ')), '검색어가 바뀌었습니다')
+            check(int(c2.eval('STATE.guideIngOpen.atorvastatin ? 1 : 0')) == 1,
+                  '검색 결과 성분이 자동으로 펼쳐지지 않았습니다')
+
+            # (F) 성분 줄 '외 N 보기' → 성분키로 그 성분 전체 조회
+            c3 = new_ctx()
+            c3.eval("__RESULT['searchGuideIngredients'] = %s;"
+                    % json.dumps({'q': '', '성분키': 'atorvastatin', 'total성분': 1, 'total품목': 3,
+                                  'shown성분': 1, 'groups': [ATOR]}, ensure_ascii=False))
+            c3.eval("guideOpenIngredient('atorvastatin', '아토르바스타틴');")
+            drain(c3)
+            calls3 = json.loads(q14(c3.eval('JSON.stringify(__calls)')))
+            check(calls3[0]['args'][0]['성분키'] == 'atorvastatin' and calls3[0]['args'][0]['q'] == '',
+                  '성분키 조회가 아닙니다: %s' % calls3[0]['args'][0])
+            check(q14(c3.eval('STATE.guideIngQ')) == '아토르바스타틴', '검색창에 성분명이 안 들어갔습니다')
+            check(q14(c3.eval('__els["guide-ing-q"].value')) == '아토르바스타틴',
+                  '검색창 입력칸이 갱신되지 않았습니다')
+            check(int(c3.eval('STATE.guideIngOpen.atorvastatin ? 1 : 0')) == 1, '성분이 펼쳐지지 않았습니다')
+
+            # (G) 지우기·빈 검색어
+            c3.eval('clearGuideIngSearch();')
+            check(q14(c3.eval('STATE.guideIngQ')) == '' and c3.eval('STATE.guideIngData === null'),
+                  '지우기가 동작하지 않습니다')
+            hint = q14(c3.eval('guideIngResultHtml_()'))
+            check('로수바스타틴' in hint and '💊 선택 항목 담기' in hint, '검색 안내 문구가 없습니다')
+            c4 = new_ctx()
+            c4.eval("STATE.guideIngData = { q: '없는약', groups: [], total성분: 0, total품목: 0 };")
+            empty = q14(c4.eval('guideIngResultHtml_()'))
+            check('맞는 경구제가 없습니다' in empty, '검색 결과 없음 안내가 없습니다')
+    except ImportError:
+        print('(quickjs 없음 — 성분 검색 실행 검사 생략: pip install quickjs)')
 
     print('=' * 62)
     if fails:
