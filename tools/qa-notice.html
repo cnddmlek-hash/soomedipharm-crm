@@ -17,7 +17,7 @@
 </head>
 <body>
 <div id="wrap">
-  <div id="stage"><iframe id="app" src="../index.html?qa=notice"></iframe></div>
+  <div id="stage"><iframe id="app" src="about:blank"></iframe></div>
   <div id="panel">
     <h1>QA — v1.28 고시문·삭감통보서 읽기</h1>
     <div id="qa-log">준비 중…</div>
@@ -41,7 +41,10 @@
   }
 
   var frame = document.getElementById('app');
+  // GitHub Pages 가 index.html 을 10분간 캐시하므로, QA 판 번호를 붙여 항상 새 파일을 받습니다
+  var qv = (new URLSearchParams(location.search)).get('v') || '0';
   frame.addEventListener('load', function () {
+    if (!frame.contentWindow || !frame.contentWindow.document || frame.contentWindow.document.title.indexOf('QA') === -1 && !frame.contentWindow.document.getElementById('main-content')) return;
     var w = frame.contentWindow;
     var errors = [];
     w.addEventListener('error', function (e) { errors.push(String(e.message || e)); });
@@ -294,6 +297,7 @@
       window.__QA_DONE = (fails === 0);
     }
   });
+  frame.src = '../index.html?qa=notice&v=' + encodeURIComponent(qv);
 })();
 </script>
 </body>
