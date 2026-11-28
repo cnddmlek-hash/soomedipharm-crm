@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
- <title>수메디팜 미니 CRM v1.18</title>
+ <title>수메디팜 미니 CRM v1.19</title>
 
  <!-- ---------------- PWA (홈 화면 앱) 설정 ---------------- -->
  <meta name="description" content="수메디팜 미니 CRM — 거래처·주문·수금·회전일을 구글 시트로 실시간 관리하는 영업 앱" />
@@ -793,7 +793,7 @@
  <div id="login-overlay" class="login-overlay">
    <div class="login-card">
      <div class="login-brand">
-       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.18</span></div>
+       <div class="t"><img class="brand-mark" src="./icon-192.png" alt="SMP" />수메디팜 미니 CRM<span class="ver-chip dark">v1.19</span></div>
        <div class="s">담당자 아이디로 로그인해 주세요</div>
      </div>
      <div class="form-group" style="margin-bottom:10px;">
@@ -1177,7 +1177,7 @@
    <!-- PC 사이드바 -->
    <aside class="sidebar">
      <div class="sidebar-brand">
-       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.18</span></h1>
+       <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="brand-name">수메디팜</span> 미니 CRM<span class="ver-chip">v1.19</span></h1>
        <div class="sub" id="brand-sub">로딩 중...</div>
      </div>
      <nav class="sidebar-nav" id="sidebar-nav"></nav>
@@ -1194,7 +1194,7 @@
 
    <!-- 모바일 상단 헤더 -->
    <header class="mobile-header">
-     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.18</span></h1>
+     <h1><img class="brand-mark" src="./icon-192.png" alt="SMP" /><span id="mbrand-name">수메디팜</span> CRM<span class="ver-chip">v1.19</span></h1>
      <div style="display:flex;gap:6px;align-items:center;">
        <span id="m-user" class="ver-chip" style="display:none;" onclick="openPasswordModal()" title="내 계정 · 비밀번호 변경"></span>
        <button class="btn btn-sm" id="guest-login-btn" style="display:none;background:rgba(255,255,255,0.16);color:#fff;" onclick="exitGuestPreview()">🔑 로그인</button>
@@ -6014,14 +6014,15 @@
 
    /** 서버(Code.gs) 재배포 전 안내 — v1.14 미만이면 표시 (v1.14: 공지사항·게시판 · 성분 검색) */
    function v14NoticeHtml_() {
-     if (!STATE.serverVersion || serverAtLeast_('v1.14')) return '';
-     const old = !serverAtLeast_('v1.7')
-       ? '비거래처 심평원 사전조회 · 거래처코드 Sxxx 채번 · '
-       : '';
+     if (!STATE.serverVersion || serverAtLeast_('v1.19')) return '';
+     const missing = [];
+     if (!serverAtLeast_('v1.7')) missing.push('비거래처 심평원 사전조회 · 거래처코드 Sxxx 채번');
+     if (!serverAtLeast_('v1.14')) missing.push('📢 공지사항·게시판 · 🔎 처방 셋팅 성분 검색 · 🏷️ 제품마스터 실제 제약사');
+     missing.push('🏭 처방 셋팅 제약사 필터');
      return '<div class="card" style="border-color:#fde68a;background:#fffbeb;">' +
        '<div style="font-size:12.5px;line-height:1.6;color:#92400e;">' +
-         '⚠️ 시트 서버(Code.gs)가 <b>' + esc(STATE.serverVersion) + '</b> 로 연결되어 있어 새 기능(<b>' + old +
-         '📢 공지사항·게시판 · 🔎 처방 셋팅 성분 검색 · 🏷️ 제품마스터 실제 제약사</b>)이 아직 동작하지 않습니다.<br />' +
+         '⚠️ 시트 서버(Code.gs)가 <b>' + esc(STATE.serverVersion) + '</b> 로 연결되어 있어 새 기능(<b>' +
+         missing.join(' · ') + '</b>)이 아직 동작하지 않습니다.<br />' +
          '구글 시트 → 확장 프로그램 → Apps Script 에 최신 <b>Code.gs</b>를 넣고 [배포 관리 → 수정 → 새 버전]으로 한 번만 재배포하면 바로 켜집니다.' +
        '</div></div>';
    }
@@ -6944,7 +6945,11 @@
            : '성분을 누르면 그 성분의 품목 표가 펼쳐집니다') + '</span>' +
        '</div>';
      }
-     if (!makers.length) return '';
+     if (!makers.length) {
+       return '<div style="margin-top:6px;font-size:11.5px;color:#92400e;">' +
+         '🏭 제약사 목록을 서버에서 받지 못했습니다 — 시트 서버(Code.gs)를 새 버전으로 한 번 재배포하면 켜집니다.' +
+       '</div>';
+     }
      const q = guideNorm_(STATE.guideMakerQ || '');
      let show = makers;
      let label = '빠른 선택';
